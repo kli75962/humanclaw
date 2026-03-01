@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "launch_app",
+    "description": "Launch an installed Android app by its package name. Use the [INSTALLED APPS] list to find the correct package name.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "package_name": {
+          "type": "string",
+          "description": "The Android package name of the app to launch, e.g. 'com.google.android.youtube'"
+        }
+      },
+      "required": ["package_name"]
+    }
+  }
+}

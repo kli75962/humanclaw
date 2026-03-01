@@ -1,0 +1,24 @@
+{
+  "type": "function",
+  "function": {
+    "name": "tap",
+    "description": "Tap on a UI element on the screen. Prefer tapping by content description or text label. Falls back to coordinates if no label is available.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "The accessibility content description or visible text of the element to tap, e.g. 'Search', 'OK', 'Send'"
+        },
+        "x": {
+          "type": "number",
+          "description": "Screen X coordinate (pixels) to tap. Only use if description is unavailable."
+        },
+        "y": {
+          "type": "number",
+          "description": "Screen Y coordinate (pixels) to tap. Only use if description is unavailable."
+        }
+      }
+    }
+  }
+}

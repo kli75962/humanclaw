@@ -1,0 +1,11 @@
+{
+  "type": "function",
+  "function": {
+    "name": "get_screen",
+    "description": "Get the current screen content as a structured text summary from the Android Accessibility Service. Returns visible UI element labels, texts, and descriptions. Call this to observe the current state before or after an action.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+}

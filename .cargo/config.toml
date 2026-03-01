@@ -1,0 +1,32 @@
+# Android NDK cross-compilation toolchain configuration.
+# The NDK ships versioned clang binaries (e.g. x86_64-linux-android24-clang)
+# but cc-rs looks for the unversioned name, so we point it explicitly.
+
+[target.x86_64-linux-android]
+ar     = "/home/uty/Android/Sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+linker = "/home/uty/Android/Sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang"
+
+[target.aarch64-linux-android]
+ar     = "/home/uty/Android/Sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+linker = "/home/uty/Android/Sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
+
+[target.armv7-linux-androideabi]
+ar     = "/home/uty/Android/Sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+linker = "/home/uty/Android/Sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang"
+
+[target.i686-linux-android]
+ar     = "/home/uty/Android/Sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+linker = "/home/uty/Android/Sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android24-clang"
+
+[env]
+ANDROID_NDK_HOME              = "/home/uty/Android/Sdk/ndk/27.1.12297006"
+NDK_HOME                      = "/home/uty/Android/Sdk/ndk/27.1.12297006"
+# Explicit CC/AR per target for crates that call cc-rs (e.g. ring used by rustls)
+CC_x86_64_linux_android       = "/home/uty/Android/Sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang"
+AR_x86_64_linux_android       = "/home/uty/Android/Sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+CC_aarch64_linux_android      = "/home/uty/Android/Sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
+AR_aarch64_linux_android      = "/home/uty/Android/Sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+CC_armv7_linux_androideabi    = "/home/uty/Android/Sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang"
+AR_armv7_linux_androideabi    = "/home/uty/Android/Sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+CC_i686_linux_android         = "/home/uty/Android/Sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android24-clang"
+AR_i686_linux_android         = "/home/uty/Android/Sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"

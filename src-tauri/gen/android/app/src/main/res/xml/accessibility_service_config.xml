@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Accessibility service configuration for PhoneControlService.
+  - accessibilityEventTypes: NONE — we don't need to listen for events,
+    only query the window and dispatch gestures on demand.
+  - accessibilityFeedbackType: FEEDBACK_GENERIC — required field.
+  - canRetrieveWindowContent: true — needed for get_screen (reading UI nodes).
+  - canPerformGestures: true — needed for tap, swipe gestures.
+-->
+<accessibility-service
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault|flagReportViewIds"
+    android:canRetrieveWindowContent="true"
+    android:canPerformGestures="true"
+    android:description="@string/app_name"
+    android:notificationTimeout="100" />
