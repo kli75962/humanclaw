@@ -13,6 +13,7 @@ Template created! To get started run:
 
 For Desktop development, run:
   bun run tauri dev
+  WEBKIT_DISABLE_DMABUF_RENDERER=1 GDK_BACKEND=x11 bun run tauri dev
 
 For Android development, run:
   bun run tauri android dev

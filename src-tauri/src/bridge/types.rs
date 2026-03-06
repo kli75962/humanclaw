@@ -15,6 +15,30 @@ pub struct PingQuery {
     pub key: String,
 }
 
+/// Request body for `POST /register` — the caller registers itself as a peer.
+#[derive(Deserialize)]
+pub struct RegisterRequest {
+    pub key: String,
+    pub device_id: String,
+    pub label: String,
+    pub address: String,
+}
+
+/// Request body for `POST /tool` — execute a single tool on this device.
+#[derive(Deserialize)]
+pub struct ToolRequest {
+    pub key: String,
+    pub tool_name: String,
+    pub tool_args: serde_json::Value,
+}
+
+/// Response for `POST /tool`.
+#[derive(Serialize, Deserialize)]
+pub struct ToolResponse {
+    pub success: bool,
+    pub output: String,
+}
+
 /// Online status of a single peer, returned to the frontend.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PeerStatus {

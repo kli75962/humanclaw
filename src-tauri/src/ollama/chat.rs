@@ -5,6 +5,7 @@ use tauri::{AppHandle, Emitter};
 use crate::memory::{append_conversation, bootstrap_memory, build_core_prompt, execute_memory_write, memory_dir, read_core, read_recent_conversations, run_memory_command};
 use crate::phone::{execute_tool, get_installed_apps, hide_overlay, is_cancelled, show_overlay};
 use crate::loadskills::{build_skills_prompt, load_tool_schemas};
+use crate::web_search::web_search;
 
 use super::ollama_client;
 use super::types::{
@@ -21,11 +22,22 @@ async fn build_base_prompt(app: &AppHandle) -> String {
     let apps_list = if apps.is_empty() {
         "  (no apps found)".to_string()
     } else {
-        // Write directly into a pre-sized String to avoid an intermediate Vec allocation.
         let mut buf = String::with_capacity(apps.len() * 60);
         for (i, a) in apps.iter().enumerate() {
             if i > 0 { buf.push('\n'); }
             buf.push_str(&a.prompt_line());
+        }
+        buf
+    };
+
+    let cfg = crate::session::store::bootstrap(app);
+    let device_section = if cfg.paired_devices.is_empty() {
+        String::new()
+    } else {
+        let mut buf = String::from("\n\n[PAIRED DEVICES]\n");
+        buf.push_str("Phone tools (tap, swipe, get_screen, etc.) are forwarded to the paired Android device automatically.\n");
+        for p in &cfg.paired_devices {
+            buf.push_str(&format!("- {} ({})\n", p.label, p.device_id));
         }
         buf
     };
@@ -36,9 +48,10 @@ async fn build_base_prompt(app: &AppHandle) -> String {
         Be helpful, concise, and proactive. Break tasks into tool calls and execute them step by step. \n\
         Plain text only. NEVER use raw markdown symbols (`#`, `##`, `**`, `*`, `---`).
         
-        \n\n{skills}\n\n[INSTALLED APPS]\n{apps}",
+        \n\n{skills}\n\n[INSTALLED APPS]\n{apps}{devices}",
         skills = build_skills_prompt(),
         apps = apps_list,
+        devices = device_section,
     )
 }
 
@@ -287,8 +300,29 @@ pub async fn chat_ollama(
             })
             .ok();
 
+            // ── Intercept `device_status` — check peer reachability in Rust ──
+            let output = if tool_name == "device_status" {
+                let device_id = tool_args.get("device_id").and_then(Value::as_str).unwrap_or("");
+                let cfg = crate::session::store::bootstrap(&app);
+                if device_id.is_empty() || device_id == cfg.device.device_id {
+                    "online".to_string()
+                } else if let Some(peer) = cfg.paired_devices.iter().find(|p| p.device_id == device_id) {
+                    let reachable = crate::bridge::health::check_peer(&peer.address, &cfg.hash_key).await;
+                    if reachable { "online".to_string() } else { "offline".to_string() }
+                } else {
+                    "unknown device_id".to_string()
+                }
+            // ── Intercept `web_search` — run in Rust, not forwarded to phone ──
+            } else if tool_name == "web_search" {
+                let query = tool_args.get("query").and_then(Value::as_str).unwrap_or("");
+                if query.is_empty() {
+                    "error: missing 'query' argument".to_string()
+                } else {
+                    let max = tool_args.get("max_results").and_then(Value::as_u64).unwrap_or(5) as usize;
+                    web_search(query, max.clamp(1, 10)).await
+                }
             // ── Intercept `memory` tool calls in Rust — never forward to Kotlin ──
-            let output = if tool_name == "memory" {
+            } else if tool_name == "memory" {
                 let cmd     = tool_args.get("command").and_then(Value::as_str).unwrap_or("");
                 let path    = tool_args.get("path").and_then(Value::as_str);
                 let content = tool_args.get("content").and_then(Value::as_str);

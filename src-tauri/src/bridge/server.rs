@@ -6,7 +6,7 @@ use tauri::AppHandle;
 
 use crate::session::store;
 use super::exec::exec_handler;
-use super::types::{PingQuery, PingResponse};
+use super::types::{PingQuery, PingResponse, RegisterRequest, ToolRequest, ToolResponse};
 
 // ── Server state ─────────────────────────────────────────────────────────────
 
@@ -31,6 +31,48 @@ async fn ping_handler(
     }))
 }
 
+/// POST /register — a paired peer registers itself so this device knows its address.
+/// Body must include the shared hash key for authentication.
+async fn register_handler(
+    State(app): State<BridgeState>,
+    Json(body): Json<RegisterRequest>,
+) -> StatusCode {
+    let cfg = store::bootstrap(&app);
+    if body.key != cfg.hash_key {
+        return StatusCode::UNAUTHORIZED;
+    }
+    if body.device_id == cfg.device.device_id {
+        return StatusCode::OK; // self-registration is a no-op
+    }
+    let label: String = body.label.chars().take(64).collect();
+    let _ = store::upsert_peer(
+        &app,
+        crate::session::types::PairedDevice {
+            device_id: body.device_id,
+            address: body.address,
+            label,
+        },
+    );
+    StatusCode::OK
+}
+
+/// POST /tool — execute a single tool call on this device and return the result.
+/// Authenticated via the shared hash key.
+async fn tool_handler(
+    State(app): State<BridgeState>,
+    Json(body): Json<ToolRequest>,
+) -> Result<Json<ToolResponse>, StatusCode> {
+    let cfg = store::bootstrap(&app);
+    if body.key != cfg.hash_key {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    let result = crate::phone::execute_tool(&app, &body.tool_name, &body.tool_args).await;
+    Ok(Json(ToolResponse {
+        success: result.success,
+        output: result.output,
+    }))
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 /// Start the bridge HTTP server in the background.
@@ -47,6 +89,8 @@ pub fn start_bridge_server(app: AppHandle) {
 
         let router = Router::new()
             .route("/ping", get(ping_handler))
+            .route("/register", post(register_handler))
+            .route("/tool", post(tool_handler))
             .route("/exec", post(exec_handler))
             .with_state(state);
 

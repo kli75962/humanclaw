@@ -23,5 +23,11 @@ export function useSession() {
     return s;
   }, []);
 
-  return { session, refresh, setHashKey };
+  /** Remove a paired device by device_id. */
+  const removeLinkedDevice = useCallback(async (deviceId: string): Promise<void> => {
+    const s = await invoke<SessionConfig>('remove_paired_device', { deviceId });
+    setSession(s);
+  }, []);
+
+  return { session, refresh, setHashKey, removeLinkedDevice };
 }

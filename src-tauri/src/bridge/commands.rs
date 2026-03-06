@@ -146,16 +146,42 @@ pub async fn pair_from_qr(app: AppHandle, address: String, hash_key: String) -> 
         return Err("Cannot pair with yourself.".to_string());
     }
 
+    if resp.device_id == cfg.device.device_id {
+        return Err("Cannot pair with yourself.".to_string());
+    }
+
     // Only set the hash key and save the peer after a successful ping.
     store::set_hash_key(&app, &hash_key)?;
     store::upsert_peer(
         &app,
         crate::session::types::PairedDevice {
-            device_id: resp.device_id,
-            address,
+            device_id: resp.device_id.clone(),
+            address: address.clone(),
             label: resp.label.chars().take(64).collect(),
         },
     )?;
+
+    // Best-effort: tell the peer about us so it can save our address too.
+    // Re-read config so we get the updated hash key and our current address.
+    let updated = store::bootstrap(&app);
+    if let Ok(my_ip) = local_ip_address::local_ip() {
+        let my_address = format!("{my_ip}:{}", updated.bridge_port);
+        let register_url = format!("http://{address}/register");
+        let body = serde_json::json!({
+            "key": &hash_key,
+            "device_id": &updated.device.device_id,
+            "label": &updated.device.label,
+            "address": my_address,
+        });
+        let _ = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .ok()
+            .map(|c| tauri::async_runtime::spawn(async move {
+                let _ = c.post(&register_url).json(&body).send().await;
+            }));
+    }
+
     Ok(())
 }
 

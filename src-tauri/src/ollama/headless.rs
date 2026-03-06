@@ -37,13 +37,26 @@ async fn build_base_prompt(app: &AppHandle) -> String {
         buf
     };
 
+    let cfg = crate::session::store::bootstrap(app);
+    let device_section = if cfg.paired_devices.is_empty() {
+        String::new()
+    } else {
+        let mut buf = String::from("\n\n[PAIRED DEVICES]\n");
+        buf.push_str("Phone tools (tap, swipe, get_screen, etc.) are forwarded to the paired Android device automatically.\n");
+        for p in &cfg.paired_devices {
+            buf.push_str(&format!("- {} ({})\n", p.label, p.device_id));
+        }
+        buf
+    };
+
     format!(
         "You are PhoneClaw, an AI agent that controls devices on behalf of the user.\n\
         Be helpful, concise, and proactive. Break tasks into tool calls and execute them step by step.\n\
         Plain text only. NEVER use raw markdown symbols (`#`, `##`, `**`, `*`, `---`).\n\n\
-        {skills}\n\n[INSTALLED APPS]\n{apps}",
+        {skills}\n\n[INSTALLED APPS]\n{apps}{devices}",
         skills = build_skills_prompt(),
         apps = apps_list,
+        devices = device_section,
     )
 }
 

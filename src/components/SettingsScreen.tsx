@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { ArrowLeft, Camera, ChevronRight, ImagePlus, Save, QrCode, Cpu } from 'lucide-react';
+import { ArrowLeft, Camera, ChevronRight, ImagePlus, Monitor, Save, QrCode, Cpu, Smartphone, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { scan, Format } from '@tauri-apps/plugin-barcode-scanner';
 import jsQR from 'jsqr';
@@ -298,7 +298,7 @@ export function SettingsScreen({ model, availableModels, onModelChange, onBack }
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
-  const { session, refresh } = useSession();
+  const { session, refresh, removeLinkedDevice } = useSession();
   const isAndroid = session?.device.device_type === 'android';
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -425,6 +425,39 @@ export function SettingsScreen({ model, availableModels, onModelChange, onBack }
               <SectionFooter>
                 Pair devices to sync sessions automatically.
               </SectionFooter>
+
+              {/* Linked devices */}
+              {(session?.paired_devices ?? []).length > 0 && (
+                <>
+                  <SectionHeader>Linked devices</SectionHeader>
+                  <Card>
+                    {(session?.paired_devices ?? []).map((dev, i) => (
+                      <div key={dev.device_id}>
+                        {i > 0 && <CardDivider />}
+                        <div className="flex items-center justify-between px-4 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-[#2C2C2C] flex items-center justify-center shrink-0">
+                              {dev.label.toLowerCase().includes('phone') || dev.label.toLowerCase().includes('android')
+                                ? <Smartphone size={17} className="text-gray-400" />
+                                : <Monitor size={17} className="text-gray-400" />}
+                            </div>
+                            <div>
+                              <p className="text-[15px]">{dev.label}</p>
+                              <p className="text-[12px] text-gray-500 mt-0.5 font-mono">{dev.address}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={async () => { await removeLinkedDevice(dev.device_id); }}
+                            className="p-2 rounded-full hover:bg-red-500/10 transition-colors"
+                          >
+                            <Trash2 size={15} className="text-red-400" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </Card>
+                </>
+              )}
             </>
           ) : (
             <>
