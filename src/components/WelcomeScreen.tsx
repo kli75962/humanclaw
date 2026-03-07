@@ -1,8 +1,5 @@
 import { Compass, Code, Lightbulb } from 'lucide-react';
-
-interface WelcomeScreenProps {
-  onSend: (text: string) => void;
-}
+import type { WelcomeScreenProps } from '../types';
 
 const SUGGESTIONS = [
   { icon: Compass, text: 'Plan a trip to Tokyo', color: 'text-blue-400' },

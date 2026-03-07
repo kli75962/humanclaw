@@ -1,10 +1,5 @@
 import { Settings, Menu } from 'lucide-react';
-
-interface TopBarProps {
-  model: string;
-  onMenuOpen: () => void;
-  onSettingsOpen: () => void;
-}
+import type { TopBarProps } from '../types';
 
 /** Fixed top navigation bar. */
 export function TopBar({ model, onMenuOpen, onSettingsOpen }: TopBarProps) {

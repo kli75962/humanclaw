@@ -1,11 +1,5 @@
 import { Send, Mic } from 'lucide-react';
-
-interface InputBarProps {
-  value: string;
-  isThinking: boolean;
-  onChange: (value: string) => void;
-  onSend: (text: string) => void;
-}
+import type { InputBarProps } from '../types';
 
 /**
  * Fixed bottom input bar.

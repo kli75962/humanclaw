@@ -1,15 +1,5 @@
 import { Menu, PenSquare, Trash2 } from 'lucide-react';
-import type { ChatMeta } from '../types';
-
-interface SideMenuProps {
-  open: boolean;
-  onClose: () => void;
-  onNewChat: () => void;
-  chats: ChatMeta[];
-  activeChatId: string | null;
-  onSelectChat: (id: string) => void;
-  onDeleteChat: (id: string) => void;
-}
+import type { SideMenuProps } from '../types';
 
 export function SideMenu({ open, onClose, onNewChat, chats, activeChatId, onSelectChat, onDeleteChat }: SideMenuProps) {
   if (!open) return null;

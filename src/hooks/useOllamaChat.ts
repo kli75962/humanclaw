@@ -1,15 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { Message, StreamPayload, AgentStatusPayload } from '../types';
-
-interface UseOllamaChatReturn {
-  messages: Message[];
-  isThinking: boolean;
-  agentStatus: string | null;
-  error: string | null;
-  handleSend: (text: string) => Promise<void>;
-}
+import type { Message, StreamPayload, AgentStatusPayload, UseOllamaChatReturn } from '../types';
 
 /**
  * Manages the full Ollama agentic chat lifecycle.

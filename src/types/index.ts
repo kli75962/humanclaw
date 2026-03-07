@@ -1,8 +1,64 @@
+import type { ReactNode } from 'react';
+
 /** Metadata for a saved chat session. */
 export interface ChatMeta {
   id: string;
   title: string;
   createdAt: string;
+}
+
+export interface ChatMessageProps {
+  message: Message;
+  isLastMessage: boolean;
+  isThinking: boolean;
+}
+
+export interface InputBarProps {
+  value: string;
+  isThinking: boolean;
+  onChange: (value: string) => void;
+  onSend: (text: string) => void;
+}
+
+export interface ModalProps {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}
+
+export interface SettingsScreenProps {
+  model: string;
+  availableModels: string[];
+  onModelChange: (model: string) => void;
+  onBack: () => void;
+}
+
+export interface SideMenuProps {
+  open: boolean;
+  onClose: () => void;
+  onNewChat: () => void;
+  chats: ChatMeta[];
+  activeChatId: string | null;
+  onSelectChat: (id: string) => void;
+  onDeleteChat: (id: string) => void;
+}
+
+export interface WelcomeScreenProps {
+  onSend: (text: string) => void;
+}
+
+export interface UseOllamaChatReturn {
+  messages: Message[];
+  isThinking: boolean;
+  agentStatus: string | null;
+  error: string | null;
+  handleSend: (text: string) => Promise<void>;
+}
+
+export interface TopBarProps {
+  model: string;
+  onMenuOpen: () => void;
+  onSettingsOpen: () => void;
 }
 
 /** A single message in the Ollama chat conversation. */

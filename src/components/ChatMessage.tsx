@@ -1,12 +1,6 @@
 import { Fragment } from 'react';
 import { Sparkles } from 'lucide-react';
-import type { Message } from '../types';
-
-interface ChatMessageProps {
-  message: Message;
-  isLastMessage: boolean;
-  isThinking: boolean;
-}
+import type { ChatMessageProps } from '../types';
 
 /**
  * Normalize assistant text so it always displays with proper line breaks,

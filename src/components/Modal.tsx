@@ -1,11 +1,5 @@
-import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
-
-interface ModalProps {
-  title: string;
-  onClose: () => void;
-  children: ReactNode;
-}
+import type { ModalProps } from '../types';
 
 /** Reusable centered popup overlay. */
 export function Modal({ title, onClose, children }: ModalProps) {
