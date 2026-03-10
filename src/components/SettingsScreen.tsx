@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { ArrowLeft, Camera, ChevronRight, ImagePlus, Monitor, Save, QrCode, Cpu, Smartphone, Trash2 } from 'lucide-react';
+import { ArrowLeft, Camera, ChevronRight, ImagePlus, Monitor, Save, QrCode, Cpu, Smartphone, Trash2, Mic } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { scan, Format } from '@tauri-apps/plugin-barcode-scanner';
 import jsQR from 'jsqr';
@@ -120,37 +120,42 @@ function Radio({ active }: { active: boolean }) {
 
 function ShowQrView() {
   const [svg, setSvg] = useState('');
-  const [address, setAddress] = useState('');
+  const [allAddresses, setAllAddresses] = useState<string[]>([]);
+  const [customAddress, setCustomAddress] = useState('');
   const [error, setError] = useState('');
   const [fetchingPublicIp, setFetchingPublicIp] = useState(false);
 
-  // Load LAN address once on mount
+  // Load all detected addresses on mount
   useEffect(() => {
-    invoke<string>('get_local_address')
-      .then(setAddress)
-      .catch(() => setAddress(''));
+    invoke<string[]>('get_all_local_addresses')
+      .then(setAllAddresses)
+      .catch(() => setAllAddresses([]));
   }, []);
 
-  // Regenerate QR whenever address changes (debounced)
+  // Generate QR with all addresses (or custom override) on change
   useEffect(() => {
-    if (!address) return;
+    if (allAddresses.length === 0 && !customAddress) return;
     setSvg('');
     setError('');
     const timer = setTimeout(() => {
-      invoke<string>('get_qr_pair_svg', { customAddress: address })
+      // If custom address is set, use only that; otherwise auto-detect encodes all
+      const opts = customAddress.trim()
+        ? { customAddress: customAddress.trim() }
+        : {};
+      invoke<string>('get_qr_pair_svg', opts)
         .then(setSvg)
         .catch((e) => setError(String(e)));
     }, 400);
     return () => clearTimeout(timer);
-  }, [address]);
+  }, [allAddresses, customAddress]);
 
   async function fetchPublicIp() {
     setFetchingPublicIp(true);
     try {
       const resp = await fetch('https://api.ipify.org?format=text');
       const ip = (await resp.text()).trim();
-      const port = address.split(':')[1] ?? '';
-      setAddress(port ? `${ip}:${port}` : ip);
+      const port = allAddresses[0]?.split(':')[1] ?? '9876';
+      setCustomAddress(`${ip}:${port}`);
     } catch {
       setError('Could not fetch public IP.');
     } finally {
@@ -166,7 +171,7 @@ function ShowQrView() {
           dangerouslySetInnerHTML={{ __html: svg }}
         />
       ) : error ? (
-        <p className="text-xs text-red-400 text-center py-4">❌ {error}</p>
+        <p className="text-xs text-red-400 text-center py-4">{error}</p>
       ) : (
         <div className="flex items-center justify-center py-8">
           <QrCode size={48} className="text-gray-600 animate-pulse" />
@@ -174,12 +179,29 @@ function ShowQrView() {
       )}
 
       <div className="w-full flex flex-col gap-2">
-        <p className="text-xs text-gray-400">Address encoded in QR</p>
-        <div className="flex gap-2">
+        <p className="text-xs text-gray-400">
+          Detected addresses ({allAddresses.length})
+        </p>
+        {allAddresses.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {allAddresses.map((addr) => (
+              <span
+                key={addr}
+                className="px-2 py-1 text-xs rounded-lg bg-[#2C2C2C] text-gray-300"
+              >
+                {addr}
+              </span>
+            ))}
+          </div>
+        )}
+        <p className="text-xs text-gray-500 mt-1">
+          All addresses above are encoded in the QR. Phone will try each automatically.
+        </p>
+        <div className="flex gap-2 mt-1">
           <input
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="ip:port"
+            value={customAddress}
+            onChange={(e) => setCustomAddress(e.target.value)}
+            placeholder="Override with custom ip:port"
             className="flex-1 bg-[#2C2C2C] text-gray-200 text-sm px-3 py-2 rounded-xl outline-none focus:ring-1 focus:ring-purple-500"
           />
           <button
@@ -198,32 +220,26 @@ function ShowQrView() {
   );
 }
 
-function ScanView({ onPaired, isAndroid }: { onPaired: () => void; isAndroid: boolean }) {
+function ScanView({ onPaired }: { onPaired: () => void; isAndroid: boolean }) {
   const [status, setStatus] = useState<'idle' | 'scanning' | 'pairing' | 'done' | 'error'>('idle');
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function pairWithPayload(raw: string) {
-    let parsed: { address: string; hash_key: string };
+    let parsed: { addresses?: string[]; address?: string; pairing_token?: string; hash_key?: string };
     try {
       parsed = JSON.parse(raw);
     } catch {
       throw new Error('Invalid QR code — not a valid pairing code.');
     }
-    if (!parsed.address || !parsed.hash_key) {
-      throw new Error('Invalid QR code — missing address or hash key.');
+    // Support new token-based QR (pairing_token) and legacy hash_key QR.
+    const token = parsed.pairing_token ?? parsed.hash_key ?? null;
+    const addresses = parsed.addresses ?? (parsed.address ? [parsed.address] : []);
+    if (addresses.length === 0 || !token) {
+      throw new Error('Invalid QR code — missing address or pairing token.');
     }
     setStatus('pairing');
-    // Try the original LAN address first.
-    // On Android emulator the host is 10.0.2.2, so fall back to that if LAN fails.
-    try {
-      await invoke('pair_from_qr', { address: parsed.address, hashKey: parsed.hash_key });
-    } catch (e) {
-      if (!isAndroid) throw e;
-      const emulatorAddress = parsed.address.replace(/^[\d.]+/, '10.0.2.2');
-      if (emulatorAddress === parsed.address) throw e;
-      await invoke('pair_from_qr', { address: emulatorAddress, hashKey: parsed.hash_key });
-    }
+    await invoke('pair_from_qr', { addresses, hashKey: token });
     setStatus('done');
     onPaired();
   }
@@ -333,6 +349,13 @@ export function SettingsScreen({ model, availableModels, onModelChange, onBack }
   const [tab, setTab] = useState<SettingsTab>('general');
   const [showQrPair, setShowQrPair] = useState(false);
   const [showModelSelect, setShowModelSelect] = useState(false);
+  const [googleApiKey, setGoogleApiKey] = useState('');
+
+  useEffect(() => {
+    invoke<string | null>('load_secret', { key: 'google_api_key' })
+      .then((val) => { if (val) setGoogleApiKey(val); })
+      .catch(() => {});
+  }, []);
 
   const [activeMemTab, setActiveMemTab] = useState<MemoryFile>('core.md');
   const [fileContent, setFileContent] = useState('');
@@ -460,6 +483,42 @@ export function SettingsScreen({ model, availableModels, onModelChange, onBack }
               <SectionFooter>
                 Models are loaded from your local Ollama instance.
               </SectionFooter>
+
+              {/* STT — desktop only; Android uses native speech recognition */}
+              {!isAndroid && (
+                <>
+              <SectionHeader>Speech to Text</SectionHeader>
+              <Card>
+                <div className="px-4 py-3.5 flex flex-col gap-2">
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="w-9 h-9 rounded-xl bg-blue-500/15 flex items-center justify-center shrink-0">
+                      <Mic size={18} className="text-blue-400" />
+                    </div>
+                    <div>
+                      <p className="text-[15px]">Google API Key</p>
+                      <p className="text-[12px] text-gray-500 mt-0.5">Google Cloud Speech-to-Text API key</p>
+                    </div>
+                  </div>
+                  <input
+                    type="password"
+                    value={googleApiKey}
+                    onChange={(e) => {
+                      setGoogleApiKey(e.target.value);
+                      invoke('store_secret', { key: 'google_api_key', value: e.target.value }).catch(() => {});
+                    }}
+                    placeholder="AIzaSy..."
+                    autoComplete="off"
+                    className="bg-[#131314] border border-[#2C2C2C] rounded-xl px-4 py-2.5 text-sm font-mono text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                  />
+                </div>
+              </Card>
+              <SectionFooter>
+                Or set{' '}
+                <span className="font-mono text-gray-300">GOOGLE_API_KEY</span>{' '}
+                in <span className="font-mono text-gray-300">src-tauri/.secrets</span>.
+              </SectionFooter>
+                </>
+              )}
 
               {/* Session */}
               <SectionHeader>Session</SectionHeader>

@@ -143,8 +143,8 @@ pub fn ollama_host(app: &tauri::AppHandle) -> String {
                 return format!("http://{ip}:11434");
             }
         }
-        // fallback for emulator
-        "http://10.0.2.2:11434".to_string()
+        // No paired device — Ollama unreachable until the phone is paired with the desktop.
+        "http://127.0.0.1:11434".to_string()
     }
     #[cfg(not(target_os = "android"))]
     {

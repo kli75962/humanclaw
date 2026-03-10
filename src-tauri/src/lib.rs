@@ -6,11 +6,15 @@ mod web_search;
 mod session;
 mod bridge;
 mod queue;
+mod stt;
+mod secrets;
 
 use memory::{get_memory_file, set_memory_file, list_chats, load_chat_messages, create_chat, save_chat_messages, delete_chat};
 use ollama::{chat_ollama, list_models};
+use stt::{stt_start, stt_stop};
+use secrets::{store_secret, load_secret};
 use session::{add_paired_device, get_session, remove_paired_device, set_device_label, set_session_hash_key};
-use bridge::{check_peer_online, discover_and_pair, get_all_peer_status, get_local_address, get_qr_pair_svg, pair_from_qr, send_to_device, start_bridge_server, start_peer_monitor};
+use bridge::{check_peer_online, discover_and_pair, get_all_local_addresses, get_all_peer_status, get_local_address, get_qr_pair_svg, pair_from_qr, send_to_device, start_bridge_server, start_peer_monitor};
 use queue::{flush_all_pending, flush_queue, get_pending_queue, get_queue, queue_command};
 
 /// App entry point — registers Tauri commands and starts the event loop.
@@ -48,6 +52,25 @@ pub fn run() {
                 flush_all_pending(&handle).await;
             });
 
+            // 4. Grant microphone (and other media) permission requests from the WebView.
+            //    On Linux/WebKit, permission-request signals are silently ignored unless
+            //    we explicitly allow them here.
+            #[cfg(target_os = "linux")]
+            {
+                use tauri::Manager;
+                use webkit2gtk::{PermissionRequest, PermissionRequestExt, WebViewExt};
+                if let Some(window) = app.handle().get_webview_window("main") {
+                    let _ = window.with_webview(|wv| {
+                        wv.inner().connect_permission_request(
+                            |_wv: &webkit2gtk::WebView, request: &PermissionRequest| {
+                                request.allow();
+                                true
+                            },
+                        );
+                    });
+                }
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -71,6 +94,7 @@ pub fn run() {
             get_all_peer_status,
             send_to_device,
             get_local_address,
+            get_all_local_addresses,
             discover_and_pair,
             get_qr_pair_svg,
             pair_from_qr,
@@ -79,6 +103,12 @@ pub fn run() {
             get_pending_queue,
             queue_command,
             flush_queue,
+            // stt
+            stt_start,
+            stt_stop,
+            // secrets
+            store_secret,
+            load_secret,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

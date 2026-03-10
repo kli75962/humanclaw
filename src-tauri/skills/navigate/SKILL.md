@@ -52,7 +52,6 @@ Instagram                        ← target app
 8. **Give up** — report visible `[button]` sections to user
 
 Loop ends only when: toggle state confirmed · input submitted and results visible · action verified via `get_screen`.
-if goal needs premove(e.g permission), go and do the premove then continue to complete user request. Don't tell user to complete hiself.
 
 ---
 

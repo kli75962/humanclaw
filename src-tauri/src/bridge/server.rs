@@ -15,12 +15,36 @@ pub type BridgeState = Arc<AppHandle>;
 
 // ── Handlers ─────────────────────────────────────────────────────────────────
 
-/// GET /ping?key=<hash_key> — verify the caller knows the shared key, then return device info.
-/// Returns 401 if the key does not match. The hash key is never included in the response.
+/// GET /ping?key=<token_or_hash>
+///
+/// Two modes:
+/// 1. One-time pairing token — generate a fresh permanent hash_key, save it locally,
+///    return it in the response body. Token is immediately destroyed after use.
+/// 2. Permanent hash_key — standard peer-liveness check; hash_key is NOT echoed back.
+///
+/// Returns 401 if neither matches.
 async fn ping_handler(
     State(app): State<BridgeState>,
     Query(query): Query<PingQuery>,
 ) -> Result<Json<PingResponse>, StatusCode> {
+    // ── Mode 1: one-time pairing token ────────────────────────────────────────
+    if super::pairing_token::validate_and_consume(&query.key) {
+        // Generate a brand-new permanent hash_key and persist it.
+        let new_key = format!(
+            "{}{}",
+            uuid::Uuid::new_v4().simple(),
+            uuid::Uuid::new_v4().simple(),
+        );
+        store::set_hash_key(&app, &new_key).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let cfg = store::bootstrap(&app);
+        return Ok(Json(PingResponse {
+            device_id: cfg.device.device_id,
+            label: cfg.device.label,
+            hash_key: Some(new_key), // sent once, over HTTP, to the phone
+        }));
+    }
+
+    // ── Mode 2: permanent hash_key (ongoing peer-liveness checks) ────────────
     let cfg = store::bootstrap(&app);
     if query.key != cfg.hash_key {
         return Err(StatusCode::UNAUTHORIZED);
@@ -28,6 +52,7 @@ async fn ping_handler(
     Ok(Json(PingResponse {
         device_id: cfg.device.device_id,
         label: cfg.device.label,
+        hash_key: None,
     }))
 }
 

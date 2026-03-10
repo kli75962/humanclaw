@@ -1,11 +1,14 @@
 use serde::{Deserialize, Serialize};
 
 /// Response body for `GET /ping` — returned only when the caller's key matches.
-/// Does NOT include the hash key — the caller already knows it.
+/// `hash_key` is present ONLY when a one-time pairing token was used;
+/// it carries the freshly-generated permanent key back to the phone.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PingResponse {
     pub device_id: String,
     pub label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hash_key: Option<String>,
 }
 
 /// Query parameters for `GET /ping`.

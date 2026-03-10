@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useOllamaChat } from './hooks/useOllamaChat';
+import { useStt } from './hooks/useStt';
 import { TopBar } from './components/TopBar';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ChatMessage } from './components/ChatMessage';
@@ -47,6 +48,27 @@ function App() {
     model, activeChatId, initMessages, onChatCreated, onSave,
   );
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // STT: save input text before recording starts so transcript appends after it
+  const sttPrefixRef = useRef('');
+  const inputRef = useRef(input);
+  inputRef.current = input;
+
+  const handleSttTranscript = useCallback((text: string) => {
+    const prefix = sttPrefixRef.current;
+    setInput(prefix ? `${prefix} ${text}` : text);
+  }, []);
+
+  const { isListening, sttError, startListening, stopListening } = useStt(handleSttTranscript);
+
+  const handleSttToggle = useCallback(() => {
+    if (isListening) {
+      stopListening();
+    } else {
+      sttPrefixRef.current = inputRef.current;
+      startListening();
+    }
+  }, [isListening, startListening, stopListening]);
 
   const handleModelChange = useCallback((m: string) => {
     setModel(m);
@@ -107,9 +129,10 @@ function App() {
   }, [messages, isThinking, agentStatus]);
 
   const onSend = useCallback((text: string) => {
+    if (isListening) stopListening();
     handleSend(text);
     setInput('');
-  }, [handleSend]);
+  }, [handleSend, isListening, stopListening]);
 
   const handleMenuOpen = useCallback(() => setShowMenu((v) => !v), []);
   const handleMenuClose = useCallback(() => setShowMenu(false), []);
@@ -177,8 +200,11 @@ function App() {
       <InputBar
         value={input}
         isThinking={isThinking}
+        isListening={isListening}
+        sttError={sttError}
         onChange={setInput}
         onSend={onSend}
+        onSttToggle={handleSttToggle}
       />
     </div>
   );

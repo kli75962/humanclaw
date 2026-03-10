@@ -16,8 +16,11 @@ export interface ChatMessageProps {
 export interface InputBarProps {
   value: string;
   isThinking: boolean;
+  isListening: boolean;
+  sttError: string | null;
   onChange: (value: string) => void;
   onSend: (text: string) => void;
+  onSttToggle: () => void;
 }
 
 export interface ModalProps {
