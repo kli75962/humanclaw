@@ -14,6 +14,7 @@ use ollama::{chat_ollama, list_models};
 use stt::{stt_start, stt_stop};
 use secrets::{store_secret, load_secret};
 use session::{add_paired_device, get_session, remove_paired_device, set_device_label, set_session_hash_key};
+use phone::{check_accessibility_enabled, open_accessibility_settings};
 use bridge::{check_peer_online, discover_and_pair, get_all_local_addresses, get_all_peer_status, get_local_address, get_qr_pair_svg, pair_from_qr, send_to_device, start_bridge_server, start_peer_monitor};
 use queue::{flush_all_pending, flush_queue, get_pending_queue, get_queue, queue_command};
 
@@ -109,6 +110,9 @@ pub fn run() {
             // secrets
             store_secret,
             load_secret,
+            // phone
+            check_accessibility_enabled,
+            open_accessibility_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

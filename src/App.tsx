@@ -8,6 +8,7 @@ import { ChatMessage } from './components/ChatMessage';
 import { InputBar } from './components/InputBar';
 import { SettingsScreen } from './components/SettingsScreen';
 import { SideMenu } from './components/SideMenu';
+import { AccessibilityDialog } from './components/AccessibilityDialog';
 import type { ChatMeta, Message } from './types';
 
 const DEFAULT_MODEL = 'kimi-k2.5:cloud';
@@ -152,6 +153,7 @@ function App() {
 
   return (
     <div className="flex flex-col h-screen bg-[#131314] text-[#E3E3E3] font-sans">
+      <AccessibilityDialog />
       <SideMenu
         open={showMenu}
         onClose={handleMenuClose}

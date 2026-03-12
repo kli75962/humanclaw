@@ -23,10 +23,11 @@ debug:
 
 build android:
   bun run tauri android init
+  
+  rm -rf src-tauri/gen/android/app/build dist
   bun run tauri android build
   src-tauri/gen/android/app/build/outputs/apk/release/
 
-  rm -rf src-tauri/gen/android/app/build dist
   bun run tauri android build
 
 permission:

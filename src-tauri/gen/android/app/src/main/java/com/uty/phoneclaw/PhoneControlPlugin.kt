@@ -199,6 +199,26 @@ class PhoneControlPlugin(private val activity: Activity) : Plugin(activity) {
         invoke.resolve(JSObject().apply { put("value", cancelled) })
     }
 
+    // ----- Accessibility helpers -----
+
+    /** Returns { enabled: boolean } — whether the PhoneClaw accessibility service is active. */
+    @Command
+    fun checkAccessibility(invoke: Invoke) {
+        val am = activity.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE)
+                as android.view.accessibility.AccessibilityManager
+        val enabled = am.getEnabledAccessibilityServiceList(
+            android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK
+        ).any { it.resolveInfo.serviceInfo.packageName == activity.packageName }
+        invoke.resolve(JSObject().apply { put("enabled", enabled) })
+    }
+
+    /** Opens Android's Accessibility Settings screen. */
+    @Command
+    fun openAccessibilitySettings(invoke: Invoke) {
+        activity.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        invoke.resolve(JSObject())
+    }
+
     // ----- Internal helpers -----
 
     private fun resolveToolResult(
