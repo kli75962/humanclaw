@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
-use super::types::{DeviceInfo, DeviceType, PairedDevice, SessionConfig};
+use super::types::{default_ollama_port, DeviceInfo, DeviceType, PairedDevice, SessionConfig};
 
 const SESSION_FILE: &str = "session.json";
 
@@ -66,6 +66,8 @@ pub fn bootstrap(app: &AppHandle) -> SessionConfig {
         hash_key,
         paired_devices: Vec::new(),
         bridge_port: 9876,
+        ollama_host_override: None,
+        ollama_port: default_ollama_port(),
     };
     let _ = save(app, &cfg);
     cfg
@@ -119,6 +121,26 @@ pub fn upsert_peer(app: &AppHandle, peer: PairedDevice) -> Result<SessionConfig,
 pub fn remove_peer(app: &AppHandle, device_id: &str) -> Result<SessionConfig, String> {
     let mut cfg = load(app).ok_or("Session not initialised")?;
     cfg.paired_devices.retain(|p| p.device_id != device_id);
+    save(app, &cfg)?;
+    Ok(cfg)
+}
+
+/// Set the Ollama endpoint used for model listing and chat requests.
+pub fn set_ollama_endpoint(app: &AppHandle, host: &str, port: u16) -> Result<SessionConfig, String> {
+    let host = host.trim();
+    if host.is_empty() {
+        return Err("Host is required".to_string());
+    }
+    if host.contains(' ') || host.contains('/') {
+        return Err("Host must be an IP or hostname only (no protocol/path)".to_string());
+    }
+    if port == 0 {
+        return Err("Port must be between 1 and 65535".to_string());
+    }
+
+    let mut cfg = load(app).ok_or("Session not initialised")?;
+    cfg.ollama_host_override = Some(host.to_string());
+    cfg.ollama_port = port;
     save(app, &cfg)?;
     Ok(cfg)
 }

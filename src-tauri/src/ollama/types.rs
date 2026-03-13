@@ -130,27 +130,58 @@ pub struct AgentStatusPayload {
     pub message: String,
 }
 
+#[cfg(target_os = "android")]
+fn default_android_fallback_host(app: &tauri::AppHandle) -> String {
+    if let Some(cfg) = crate::session::store::load(app) {
+        if let Some(peer) = cfg.paired_devices.first() {
+            // peer.address is "ip:bridge_port", extract the ip part
+            return peer.address.split(':').next().unwrap_or(&peer.address).to_string();
+        }
+    }
+    // No paired device — Ollama unreachable until the phone is paired with the desktop.
+    "127.0.0.1".to_string()
+}
+
+#[cfg(not(target_os = "android"))]
+fn default_desktop_fallback_host() -> String {
+    "127.0.0.1".to_string()
+}
+
 /// Return the Ollama host for the current platform.
 /// - Android: uses the first paired device's address (the desktop running Ollama).
 /// - Desktop: uses localhost.
 pub fn ollama_host(app: &tauri::AppHandle) -> String {
-    #[cfg(target_os = "android")]
-    {
-        if let Some(cfg) = crate::session::store::load(app) {
-            if let Some(peer) = cfg.paired_devices.first() {
-                // peer.address is "ip:bridge_port", extract the ip part
-                let ip = peer.address.split(':').next().unwrap_or(&peer.address);
-                return format!("http://{ip}:11434");
+    let (host, port) = if let Some(cfg) = crate::session::store::load(app) {
+        let port = if cfg.ollama_port == 0 { 11434 } else { cfg.ollama_port };
+        if let Some(host) = cfg
+            .ollama_host_override
+            .as_deref()
+            .map(str::trim)
+            .filter(|h| !h.is_empty())
+        {
+            (host.to_string(), port)
+        } else {
+            #[cfg(target_os = "android")]
+            {
+                (default_android_fallback_host(app), port)
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                (default_desktop_fallback_host(), port)
             }
         }
-        // No paired device — Ollama unreachable until the phone is paired with the desktop.
-        "http://127.0.0.1:11434".to_string()
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        let _ = app;
-        "http://127.0.0.1:11434".to_string()
-    }
+    } else {
+        #[cfg(target_os = "android")]
+        {
+            (default_android_fallback_host(app), 11434)
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            (default_desktop_fallback_host(), 11434)
+        }
+    };
+
+    format!("http://{host}:{port}")
 }
 
 pub fn ollama_chat_url(app: &tauri::AppHandle) -> String {

@@ -39,8 +39,19 @@ pub struct SessionConfig {
     /// Port this device listens on for cross-device bridge requests (default 9876).
     #[serde(default = "default_port")]
     pub bridge_port: u16,
+    /// Optional manual override for the Ollama host/IP.
+    /// When unset, the app uses platform defaults (desktop localhost or paired desktop on Android).
+    #[serde(default)]
+    pub ollama_host_override: Option<String>,
+    /// Ollama API port (default 11434).
+    #[serde(default = "default_ollama_port")]
+    pub ollama_port: u16,
 }
 
 fn default_port() -> u16 {
     9876
+}
+
+pub fn default_ollama_port() -> u16 {
+    11434
 }

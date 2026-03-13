@@ -22,6 +22,7 @@ function App() {
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [ollamaEndpointRevision, setOllamaEndpointRevision] = useState(0);
 
   // Chat management
   const [chatMetas, setChatMetas] = useState<ChatMeta[]>([]);
@@ -104,7 +105,7 @@ function App() {
     }
   }, [activeChatId]);
 
-  // Fetch available Ollama models on first load
+  // Fetch available Ollama models on first load and when endpoint changes.
   useEffect(() => {
     invoke<{ name: string }[]>('list_models')
       .then((models) => {
@@ -123,7 +124,7 @@ function App() {
       .catch(() => {
         // Ollama unreachable — keep default, user will see error on send
       });
-  }, []);
+  }, [ollamaEndpointRevision]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -139,6 +140,9 @@ function App() {
   const handleMenuClose = useCallback(() => setShowMenu(false), []);
   const handleSettingsOpen = useCallback(() => setShowSettings(true), []);
   const handleSettingsBack = useCallback(() => setShowSettings(false), []);
+  const handleOllamaEndpointChanged = useCallback(() => {
+    setOllamaEndpointRevision((v) => v + 1);
+  }, []);
 
   if (showSettings) {
     return (
@@ -146,6 +150,7 @@ function App() {
         model={model}
         availableModels={availableModels}
         onModelChange={handleModelChange}
+        onOllamaEndpointChanged={handleOllamaEndpointChanged}
         onBack={handleSettingsBack}
       />
     );

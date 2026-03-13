@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { ArrowLeft, Camera, ChevronRight, ImagePlus, Monitor, Save, QrCode, Cpu, Smartphone, Trash2, Mic } from 'lucide-react';
+import { ArrowLeft, Camera, ChevronRight, ImagePlus, Monitor, Save, QrCode, Cpu, Smartphone, Trash2, Mic, Network } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { scan, Format } from '@tauri-apps/plugin-barcode-scanner';
 import jsQR from 'jsqr';
@@ -345,11 +345,15 @@ function ScanView({ onPaired }: { onPaired: () => void; isAndroid: boolean }) {
 
 // ── Main component ──────────────────────────────────────────────────────────────────
 
-export function SettingsScreen({ model, availableModels, onModelChange, onBack }: SettingsScreenProps) {
+export function SettingsScreen({ model, availableModels, onModelChange, onOllamaEndpointChanged, onBack }: SettingsScreenProps) {
   const [tab, setTab] = useState<SettingsTab>('general');
   const [showQrPair, setShowQrPair] = useState(false);
   const [showModelSelect, setShowModelSelect] = useState(false);
   const [googleApiKey, setGoogleApiKey] = useState('');
+  const [ollamaHost, setOllamaHost] = useState('127.0.0.1');
+  const [ollamaPort, setOllamaPort] = useState('11434');
+  const [ollamaSaving, setOllamaSaving] = useState(false);
+  const [ollamaSaveMsg, setOllamaSaveMsg] = useState('');
 
   useEffect(() => {
     invoke<string | null>('load_secret', { key: 'google_api_key' })
@@ -363,9 +367,18 @@ export function SettingsScreen({ model, availableModels, onModelChange, onBack }
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const [peerStatus, setPeerStatus] = useState<Record<string, boolean>>({});
-  const { session, refresh, removeLinkedDevice } = useSession();
+  const { session, refresh, removeLinkedDevice, setOllamaEndpoint } = useSession();
   const isAndroid = session?.device.device_type === 'android';
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const fallbackHost = isAndroid
+      ? (session?.paired_devices?.[0]?.address.split(':')[0] ?? '127.0.0.1')
+      : '127.0.0.1';
+    const host = (session?.ollama_host_override ?? '').trim();
+    setOllamaHost(host || fallbackHost);
+    setOllamaPort(String(session?.ollama_port ?? 11434));
+  }, [isAndroid, session?.ollama_host_override, session?.ollama_port, session?.paired_devices]);
 
   useEffect(() => {
     setDirty(false);
@@ -399,6 +412,32 @@ export function SettingsScreen({ model, availableModels, onModelChange, onBack }
       setSaveMsg('Error saving');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSaveOllamaEndpoint() {
+    const host = ollamaHost.trim();
+    const port = Number.parseInt(ollamaPort.trim(), 10);
+    if (!host) {
+      setOllamaSaveMsg('Host is required');
+      return;
+    }
+    if (!Number.isFinite(port) || port < 1 || port > 65535) {
+      setOllamaSaveMsg('Port must be 1-65535');
+      return;
+    }
+
+    setOllamaSaving(true);
+    setOllamaSaveMsg('');
+    try {
+      await setOllamaEndpoint(host, port);
+      onOllamaEndpointChanged();
+      setOllamaSaveMsg('Saved');
+      setTimeout(() => setOllamaSaveMsg(''), 2000);
+    } catch (e) {
+      setOllamaSaveMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOllamaSaving(false);
     }
   }
 
@@ -482,6 +521,53 @@ export function SettingsScreen({ model, availableModels, onModelChange, onBack }
               </Card>
               <SectionFooter>
                 Models are loaded from your local Ollama instance.
+              </SectionFooter>
+
+              <SectionHeader>Ollama Endpoint</SectionHeader>
+              <Card>
+                <div className="px-4 py-3.5 flex flex-col gap-3">
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/15 flex items-center justify-center shrink-0">
+                      <Network size={18} className="text-emerald-400" />
+                    </div>
+                    <div>
+                      <p className="text-[15px]">Host and Port</p>
+                      <p className="text-[12px] text-gray-500 mt-0.5">Used for model list and chat requests</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input
+                      value={ollamaHost}
+                      onChange={(e) => { setOllamaHost(e.target.value); setOllamaSaveMsg(''); }}
+                      placeholder="127.0.0.1"
+                      className="sm:col-span-2 bg-[#131314] border border-[#2C2C2C] rounded-xl px-4 py-2.5 text-sm font-mono text-gray-300 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                    />
+                    <input
+                      value={ollamaPort}
+                      onChange={(e) => { setOllamaPort(e.target.value); setOllamaSaveMsg(''); }}
+                      placeholder="11434"
+                      inputMode="numeric"
+                      className="bg-[#131314] border border-[#2C2C2C] rounded-xl px-4 py-2.5 text-sm font-mono text-gray-300 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3">
+                    <p className={`text-xs ${ollamaSaveMsg === 'Saved' ? 'text-green-400' : 'text-red-400'}`}>
+                      {ollamaSaveMsg || ' '}
+                    </p>
+                    <button
+                      onClick={handleSaveOllamaEndpoint}
+                      disabled={ollamaSaving}
+                      className="px-4 py-2 rounded-full text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-colors"
+                    >
+                      {ollamaSaving ? 'Saving…' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              </Card>
+              <SectionFooter>
+                Enter only host/IP and port. Example: 192.168.1.10 and 11434.
               </SectionFooter>
 
               {/* STT — desktop only; Android uses native speech recognition */}

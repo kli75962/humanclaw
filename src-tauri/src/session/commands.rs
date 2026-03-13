@@ -39,3 +39,9 @@ pub fn add_paired_device(
 pub fn remove_paired_device(app: AppHandle, device_id: String) -> Result<SessionConfig, String> {
     store::remove_peer(&app, &device_id)
 }
+
+/// Set Ollama endpoint host and port.
+#[tauri::command]
+pub fn set_ollama_endpoint(app: AppHandle, host: String, port: u16) -> Result<SessionConfig, String> {
+    store::set_ollama_endpoint(&app, &host, port)
+}

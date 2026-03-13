@@ -29,5 +29,12 @@ export function useSession() {
     setSession(s);
   }, []);
 
-  return { session, refresh, setHashKey, removeLinkedDevice };
+  /** Set Ollama endpoint host/IP and port. */
+  const setOllamaEndpoint = useCallback(async (host: string, port: number): Promise<SessionConfig> => {
+    const s = await invoke<SessionConfig>('set_ollama_endpoint', { host, port });
+    setSession(s);
+    return s;
+  }, []);
+
+  return { session, refresh, setHashKey, removeLinkedDevice, setOllamaEndpoint };
 }

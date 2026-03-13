@@ -35,6 +35,7 @@ export interface SettingsScreenProps {
   model: string;
   availableModels: string[];
   onModelChange: (model: string) => void;
+  onOllamaEndpointChanged: () => void;
   onBack: () => void;
 }
 
@@ -95,4 +96,6 @@ export interface SessionConfig {
   hash_key: string;
   paired_devices: { device_id: string; address: string; label: string }[];
   bridge_port: number;
+  ollama_host_override: string | null;
+  ollama_port: number;
 }
