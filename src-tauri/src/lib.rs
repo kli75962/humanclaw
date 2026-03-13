@@ -11,7 +11,7 @@ mod secrets;
 
 use memory::{get_memory_file, set_memory_file, list_chats, load_chat_messages, create_chat, save_chat_messages, delete_chat};
 use ollama::{cancel_chat, chat_ollama, list_models};
-use stt::{stt_android_once, stt_start, stt_stop};
+use stt::{stt_android_cancel, stt_android_once, stt_start, stt_stop};
 use secrets::{store_secret, load_secret};
 use session::{add_paired_device, get_session, remove_paired_device, set_device_label, set_ollama_endpoint, set_session_hash_key};
 use phone::{check_accessibility_enabled, open_accessibility_settings};
@@ -106,6 +106,7 @@ pub fn run() {
             queue_command,
             flush_queue,
             // stt
+            stt_android_cancel,
             stt_android_once,
             stt_start,
             stt_stop,

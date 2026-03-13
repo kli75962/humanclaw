@@ -1,5 +1,6 @@
 /// Resolve the Google Cloud API key for Speech-to-Text.
 /// Priority: provided UI override → GOOGLE_API_KEY env var from .secrets.
+#[cfg(not(target_os = "android"))]
 pub fn resolve_google_api_key(override_key: Option<&str>) -> Result<String, String> {
     match override_key {
         Some(k) if !k.trim().is_empty() => Ok(k.trim().to_string()),

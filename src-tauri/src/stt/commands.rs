@@ -1,10 +1,17 @@
 use std::sync::Mutex;
 use std::sync::atomic::Ordering;
-use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
-use super::capture::{self, CaptureHandle};
+#[cfg(not(target_os = "android"))]
+use serde::Serialize;
+#[cfg(not(target_os = "android"))]
+use tauri::Emitter;
+
+use super::capture::CaptureHandle;
 use super::transcribe;
+#[cfg(not(target_os = "android"))]
+use super::capture;
+#[cfg(not(target_os = "android"))]
 use super::types::resolve_google_api_key;
 
 struct SttSession {
@@ -14,6 +21,7 @@ struct SttSession {
 
 static CAPTURE: Mutex<Option<SttSession>> = Mutex::new(None);
 
+#[cfg(not(target_os = "android"))]
 #[derive(Serialize, Clone)]
 struct SttPartialPayload {
     text: String,
@@ -24,13 +32,14 @@ struct SttPartialPayload {
 /// The cpal::Stream is !Send, so it lives inside a dedicated OS thread.
 #[tauri::command]
 pub fn stt_start(app: AppHandle, api_key: Option<String>) -> Result<(), String> {
-    let mut guard = CAPTURE.lock().map_err(|e| e.to_string())?;
-    if guard.is_some() {
-        return Ok(()); // already recording
-    }
     #[cfg(not(target_os = "android"))]
     {
         use std::sync::mpsc;
+
+        let mut guard = CAPTURE.lock().map_err(|e| e.to_string())?;
+        if guard.is_some() {
+            return Ok(()); // already recording
+        }
 
         let key = resolve_google_api_key(api_key.as_deref())?;
         let (tx, rx) = mpsc::channel::<Result<CaptureHandle, String>>();
@@ -103,6 +112,7 @@ pub fn stt_start(app: AppHandle, api_key: Option<String>) -> Result<(), String> 
     }
     #[cfg(target_os = "android")]
     {
+        let _ = (app, api_key);
         Err("Native capture not available on Android".to_string())
     }
 }
@@ -158,5 +168,33 @@ pub async fn stt_android_once(app: AppHandle) -> Result<String, String> {
     {
         let _ = app;
         Err("stt_android_once is only available on Android".to_string())
+    }
+}
+
+/// Android-only: cancel active native speech recognition session.
+#[tauri::command]
+pub async fn stt_android_cancel(app: AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        use serde::Deserialize;
+        use serde_json::json;
+        use tauri::Manager;
+        use crate::phone::plugin::PhoneControlHandle;
+
+        #[derive(Deserialize)]
+        struct Resp {}
+
+        let handle = app.state::<PhoneControlHandle<tauri::Wry>>();
+        handle
+            .0
+            .run_mobile_plugin::<Resp>("cancelSpeechRecognition", json!({}))
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        Err("stt_android_cancel is only available on Android".to_string())
     }
 }

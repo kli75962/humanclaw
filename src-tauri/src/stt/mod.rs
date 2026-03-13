@@ -3,7 +3,7 @@ pub mod commands;
 pub mod transcribe;
 pub mod types;
 
-pub use commands::{stt_android_once, stt_start, stt_stop};
+pub use commands::{stt_android_cancel, stt_android_once, stt_start, stt_stop};
 
 use std::sync::OnceLock;
 

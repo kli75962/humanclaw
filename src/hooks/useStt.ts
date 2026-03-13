@@ -6,7 +6,7 @@ const isAndroid = () => /android/i.test(navigator.userAgent);
 
 /**
  * Speech-to-text with platform-aware backend:
- * - Android: native STT via Web Speech API (webkitSpeechRecognition)
+ * - Android: native STT loop via Tauri mobile plugin (stt_android_once)
  * - Desktop: Google Cloud STT API via Tauri command (stt_start / stt_stop)
  */
 export function useStt(onTranscript: (text: string) => void) {
@@ -17,8 +17,16 @@ export function useStt(onTranscript: (text: string) => void) {
   onTranscriptRef.current = onTranscript;
 
   const isListeningRef = useRef(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null);
+
+  const isTransientAndroidSttError = (msg: string) => {
+    const lower = msg.toLowerCase();
+    return (
+      lower.includes('no speech input') ||
+      lower.includes('no speech matched') ||
+      lower.includes('timed out') ||
+      lower.includes('client error')
+    );
+  };
 
   // Desktop only: listen for partial transcripts emitted by the Rust streaming task.
   useEffect(() => {
@@ -37,12 +45,33 @@ export function useStt(onTranscript: (text: string) => void) {
     setSttError(null);
 
     if (isAndroid()) {
-      // ── Android: native STT via Tauri mobile plugin ─────────────────────────
+      // ── Android: trigger-style native STT loop ───────────────────────────────
       try {
+        if (isListeningRef.current) return;
         isListeningRef.current = true;
         setIsListening(true);
-        const text = await invoke<string>('stt_android_once');
-        if (text) onTranscriptRef.current(text);
+        let runningTranscript = '';
+
+        while (isListeningRef.current) {
+          try {
+            const text = (await invoke<string>('stt_android_once')).trim();
+            if (!isListeningRef.current) break;
+            if (!text) continue;
+
+            runningTranscript = runningTranscript
+              ? `${runningTranscript} ${text}`
+              : text;
+            onTranscriptRef.current(runningTranscript);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (!isListeningRef.current) break;
+            if (isTransientAndroidSttError(msg)) {
+              continue;
+            }
+            setSttError(`STT error: ${msg}`);
+            break;
+          }
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setSttError(`STT error: ${msg}`);
@@ -69,8 +98,8 @@ export function useStt(onTranscript: (text: string) => void) {
     setIsListening(false);
 
     if (isAndroid()) {
-      // One-shot Android STT finishes by itself; no stop command needed.
-      recognitionRef.current = null;
+      // Cancel active native recognizer so stop is immediate.
+      invoke('stt_android_cancel').catch(() => {});
     } else {
       try {
         const text = await invoke<string>('stt_stop');

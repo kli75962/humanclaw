@@ -1,3 +1,4 @@
+#[cfg(not(target_os = "android"))]
 const SERVICE: &str = "phoneclaw";
 
 /// Store a secret in the OS keychain.

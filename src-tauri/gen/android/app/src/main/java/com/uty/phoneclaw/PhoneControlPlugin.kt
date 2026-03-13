@@ -40,6 +40,28 @@ class PhoneControlPlugin(private val activity: Activity) : Plugin(activity) {
         @Volatile private var appCacheTime = 0L
         @Volatile private var appCacheValue: JSObject? = null
         private const val APP_CACHE_TTL_MS = 60_000L
+
+        @Volatile private var activeRecognizer: SpeechRecognizer? = null
+    }
+
+    @Synchronized
+    private fun clearActiveRecognizer(recognizer: SpeechRecognizer) {
+        if (activeRecognizer === recognizer) {
+            activeRecognizer = null
+        }
+    }
+
+    @Synchronized
+    private fun cancelActiveRecognizer() {
+        try {
+            activeRecognizer?.stopListening()
+        } catch (_: Exception) {
+        }
+        try {
+            activeRecognizer?.destroy()
+        } catch (_: Exception) {
+        }
+        activeRecognizer = null
     }
 
     // ----- Native speech-to-text (Android) -----
@@ -50,6 +72,8 @@ class PhoneControlPlugin(private val activity: Activity) : Plugin(activity) {
      */
     @Command
     fun recognizeSpeech(invoke: Invoke) {
+        cancelActiveRecognizer()
+
         if (ContextCompat.checkSelfPermission(activity, android.Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
         ) {
@@ -63,6 +87,7 @@ class PhoneControlPlugin(private val activity: Activity) : Plugin(activity) {
         }
 
         val recognizer = SpeechRecognizer.createSpeechRecognizer(activity)
+        activeRecognizer = recognizer
         val settled = AtomicBoolean(false)
         val mainHandler = Handler(Looper.getMainLooper())
 
@@ -70,6 +95,7 @@ class PhoneControlPlugin(private val activity: Activity) : Plugin(activity) {
             if (!settled.compareAndSet(false, true)) return
             recognizer.stopListening()
             recognizer.destroy()
+            clearActiveRecognizer(recognizer)
             invoke.resolve(JSObject().apply { put("text", text) })
         }
 
@@ -77,6 +103,7 @@ class PhoneControlPlugin(private val activity: Activity) : Plugin(activity) {
             if (!settled.compareAndSet(false, true)) return
             recognizer.stopListening()
             recognizer.destroy()
+            clearActiveRecognizer(recognizer)
             invoke.reject(message)
         }
 
@@ -128,6 +155,13 @@ class PhoneControlPlugin(private val activity: Activity) : Plugin(activity) {
         }
 
         recognizer.startListening(intent)
+    }
+
+    /** Cancel active native speech recognition, if running. */
+    @Command
+    fun cancelSpeechRecognition(invoke: Invoke) {
+        cancelActiveRecognizer()
+        invoke.resolve(JSObject())
     }
 
     // ----- App list -----
