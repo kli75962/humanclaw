@@ -33,6 +33,9 @@ pub struct ExecRequest {
     pub hash_key: String,
     /// Brief label of who sent this (e.g. "discord_bot", peer device ID).
     pub source: String,
+    /// Optional source device type string ("pc" | "phone").
+    #[serde(default)]
+    pub source_device_type: Option<String>,
     /// User message to run through the LLM.
     pub message: String,
     /// Ollama model to use.
@@ -79,7 +82,15 @@ pub async fn exec_handler(
         tool_calls: None,
     });
 
-    match run_headless(&app, conversation, &req.model).await {
+    match run_headless(
+        &app,
+        conversation,
+        &req.model,
+        Some(req.source.clone()),
+        req.source_device_type.clone(),
+    )
+    .await
+    {
         Ok(text) => Json(ExecResponse {
             success: true,
             response: text,
@@ -117,7 +128,19 @@ pub async fn route_command(
             content: message.to_string(),
             tool_calls: None,
         });
-        return match run_headless(app, conversation, model).await {
+        let source_device_type = match cfg.device.device_type {
+            crate::session::types::DeviceType::Android => Some("phone".to_string()),
+            crate::session::types::DeviceType::Desktop => Some("pc".to_string()),
+        };
+        return match run_headless(
+            app,
+            conversation,
+            model,
+            Some(cfg.device.device_id.clone()),
+            source_device_type,
+        )
+        .await
+        {
             Ok(text) => ExecResponse { success: true, response: text, queued: false },
             Err(e) => ExecResponse { success: false, response: e, queued: false },
         };
@@ -141,6 +164,10 @@ pub async fn route_command(
         let payload = ExecRequest {
             hash_key: cfg.hash_key.clone(),
             source: cfg.device.device_id.clone(),
+            source_device_type: Some(match cfg.device.device_type {
+                crate::session::types::DeviceType::Android => "phone".to_string(),
+                crate::session::types::DeviceType::Desktop => "pc".to_string(),
+            }),
             message: message.to_string(),
             model: model.to_string(),
             history,
@@ -179,6 +206,7 @@ fn queue_for_peer(
     let payload = json!({
         "hash_key": hash_key,
         "source": "queued",
+        "source_device_type": serde_json::Value::Null,
         "message": message,
         "model": model,
         "history": [],

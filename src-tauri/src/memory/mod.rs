@@ -1,5 +1,7 @@
 mod fs;
-pub use fs::{bootstrap_memory, build_core_prompt, execute_memory_write, memory_dir, read_core, run_memory_command};
+pub use fs::{bootstrap_memory, memory_dir};
+pub use fs::{ALLOWED_FILES, CORE_FILE, normalize_memory_path};
+pub use fs::read_memory_file;
 pub use fs::{export_chat_sync_payload, import_chat_sync_payload, ChatSyncChat, ChatSyncPayload};
 
 fn emit_and_sync(app: &tauri::AppHandle) {

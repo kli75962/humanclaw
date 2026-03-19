@@ -1,21 +1,27 @@
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::AppHandle;
 #[cfg(target_os = "android")]
 use tauri::Manager;
 
-/// Result returned to the LLM after executing a tool.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ToolResult {
-    pub tool_name: String,
-    pub success: bool,
-    pub output: String,
+use super::ToolResult;
+
+#[cfg(not(target_os = "android"))]
+static PHONE_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+
+pub fn is_phone_control_tool(name: &str) -> bool {
+    matches!(
+        name,
+        "tap"
+            | "swipe"
+            | "type_text"
+            | "press_key"
+            | "launch_app"
+            | "get_screen"
+            | "get_screen_deep"
+    )
 }
 
-/// Dispatch a tool call from the LLM to the Kotlin accessibility layer.
-/// `name` is the function name, `args` is the parsed JSON arguments object.
-/// On desktop, phone tools are forwarded to a paired Android device via HTTP.
-pub async fn execute_tool(app: &AppHandle, name: &str, args: &Value) -> ToolResult {
+pub async fn execute_phone_control_tool(app: &AppHandle, name: &str, args: &Value) -> ToolResult {
     #[cfg(target_os = "android")]
     {
         call_kotlin_tool(app, name, args).await
@@ -27,14 +33,11 @@ pub async fn execute_tool(app: &AppHandle, name: &str, args: &Value) -> ToolResu
     }
 }
 
-#[cfg(not(target_os = "android"))]
-static PHONE_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
-
-/// Desktop: forward a phone tool call to the first paired Android device via POST /tool.
+/// Desktop: forward a phone-control tool call to the first paired Android device via POST /tool.
 #[cfg(not(target_os = "android"))]
 async fn forward_to_android(app: &AppHandle, name: &str, args: &Value) -> ToolResult {
-    use crate::session::store;
     use crate::bridge::types::ToolResponse;
+    use crate::session::store;
 
     let cfg = store::bootstrap(app);
     let peer = cfg.paired_devices.first();
@@ -42,7 +45,7 @@ async fn forward_to_android(app: &AppHandle, name: &str, args: &Value) -> ToolRe
         return ToolResult {
             tool_name: name.to_string(),
             success: false,
-            output: "No paired Android device. Pair a device first via Settings → Pair with QR code.".to_string(),
+            output: "No paired Android device. Pair a device first via Settings -> Pair with QR code.".to_string(),
         };
     };
 
@@ -57,24 +60,22 @@ async fn forward_to_android(app: &AppHandle, name: &str, args: &Value) -> ToolRe
         reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .unwrap()
+            .expect("failed to build phone forwarding client")
     });
 
     match client.post(&url).json(&body).send().await {
-        Ok(resp) if resp.status().is_success() => {
-            match resp.json::<ToolResponse>().await {
-                Ok(r) => ToolResult {
-                    tool_name: name.to_string(),
-                    success: r.success,
-                    output: r.output,
-                },
-                Err(e) => ToolResult {
-                    tool_name: name.to_string(),
-                    success: false,
-                    output: format!("Invalid response from phone: {e}"),
-                },
-            }
-        }
+        Ok(resp) if resp.status().is_success() => match resp.json::<ToolResponse>().await {
+            Ok(r) => ToolResult {
+                tool_name: name.to_string(),
+                success: r.success,
+                output: r.output,
+            },
+            Err(e) => ToolResult {
+                tool_name: name.to_string(),
+                success: false,
+                output: format!("Invalid response from phone: {e}"),
+            },
+        },
         Ok(resp) => ToolResult {
             tool_name: name.to_string(),
             success: false,

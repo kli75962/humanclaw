@@ -5,12 +5,12 @@ use futures_util::StreamExt;
 use serde_json::Value;
 use tauri::AppHandle;
 
-use crate::memory::{
-    bootstrap_memory, build_core_prompt, execute_memory_write,
-    memory_dir, read_core, run_memory_command,
+use crate::memory::bootstrap_memory;
+use crate::phone::get_installed_apps;
+use crate::skills::{build_skills_prompt, load_tool_schemas};
+use crate::tools::{
+    build_core_prompt, execute_tool_with_context, read_core, ToolExecutionContext,
 };
-use crate::phone::{execute_tool, get_installed_apps};
-use crate::loadskills::{build_skills_prompt, load_tool_schemas};
 
 use super::ollama_client;
 use super::types::{
@@ -140,11 +140,17 @@ pub async fn run_headless(
     app: &AppHandle,
     conversation: Vec<OllamaMessage>,
     model: &str,
+    source_device_id: Option<String>,
+    source_device_type: Option<String>,
 ) -> Result<String, String> {
     let tool_schemas = load_tool_schemas();
     bootstrap_memory(app);
 
     let base_prompt = build_base_prompt(app).await;
+    let tool_context = ToolExecutionContext {
+        source_device_id,
+        source_device_type,
+    };
 
     let mut history = conversation;
     let mut final_result: Result<String, String> =
@@ -184,30 +190,9 @@ pub async fn run_headless(
         for call in &tool_calls {
             let tool_name = &call.function.name;
             let tool_args = &call.function.arguments;
-
-            let output = if tool_name == "memory" {
-                let cmd     = tool_args.get("command").and_then(Value::as_str).unwrap_or("");
-                let path    = tool_args.get("path").and_then(Value::as_str);
-                let content = tool_args.get("content").and_then(Value::as_str);
-                let mode    = tool_args.get("mode").and_then(Value::as_str);
-                let query   = tool_args.get("query").and_then(Value::as_str);
-
-                if cmd == "create" || cmd == "update" {
-                    let dir       = memory_dir(app);
-                    let cmd_s     = cmd.to_string();
-                    let path_s    = path.map(String::from);
-                    let content_s = content.map(String::from);
-                    let mode_s    = mode.map(String::from);
-                    tokio::spawn(async move {
-                        let _ = execute_memory_write(dir, &cmd_s, path_s.as_deref(), content_s.as_deref(), mode_s.as_deref());
-                    });
-                    "ok: memory saved".to_string()
-                } else {
-                    run_memory_command(app, cmd, path, content, mode, query)
-                }
-            } else {
-                execute_tool(app, tool_name, tool_args).await.output
-            };
+            let output = execute_tool_with_context(app, tool_name, tool_args, &tool_context)
+                .await
+                .output;
 
             history.push(OllamaMessage {
                 role: "tool".to_string(),

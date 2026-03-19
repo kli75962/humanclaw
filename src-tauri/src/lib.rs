@@ -1,8 +1,8 @@
 mod memory;
 mod ollama;
 mod phone;
-mod loadskills;
-mod web_search;
+mod tools;
+mod skills;
 mod session;
 mod bridge;
 mod queue;

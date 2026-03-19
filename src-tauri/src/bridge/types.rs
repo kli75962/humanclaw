@@ -34,6 +34,10 @@ pub struct ToolRequest {
     pub key: String,
     pub tool_name: String,
     pub tool_args: serde_json::Value,
+    #[serde(default)]
+    pub source_device_id: Option<String>,
+    #[serde(default)]
+    pub source_device_type: Option<String>,
 }
 
 /// Response for `POST /tool`.

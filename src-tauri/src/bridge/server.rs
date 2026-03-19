@@ -143,7 +143,11 @@ async fn tool_handler(
     if body.key != cfg.hash_key {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    let result = crate::phone::execute_tool(&app, &body.tool_name, &body.tool_args).await;
+    let context = crate::tools::ToolExecutionContext {
+        source_device_id: body.source_device_id.clone(),
+        source_device_type: body.source_device_type.clone(),
+    };
+    let result = crate::tools::execute_tool_with_context(&app, &body.tool_name, &body.tool_args, &context).await;
     Ok(Json(ToolResponse {
         success: result.success,
         output: result.output,

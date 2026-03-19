@@ -8,7 +8,7 @@
       "required": ["command"],
       "properties": {
         "command": {
-          "type": "string",
+          "type": "string", 
           "enum": ["view", "create", "update", "search"],
           "description": "Memory action: view to read a file, create to write a new file, update to change an existing file, search to find relevant lines across files."
         },

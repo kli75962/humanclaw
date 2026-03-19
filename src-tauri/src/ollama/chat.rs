@@ -3,9 +3,10 @@ use serde_json::Value;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter};
 
-use crate::memory::{bootstrap_memory, build_core_prompt, execute_memory_write, memory_dir, read_core, run_memory_command};
-use crate::phone::{execute_tool, get_installed_apps, hide_overlay, is_cancelled, show_overlay};
-use crate::loadskills::{build_skills_prompt, load_tool_schemas};
+use crate::memory::bootstrap_memory;
+use crate::phone::{get_installed_apps, hide_overlay, is_cancelled, show_overlay};
+use crate::skills::{build_skills_prompt, load_tool_schemas};
+use crate::tools::{build_core_prompt, execute_tool_with_context, read_core, ToolExecutionContext};
 
 use super::types::{
     AgentStatusPayload, OllamaChunk, OllamaMessage, OllamaToolCall,
@@ -26,6 +27,20 @@ pub fn cancel_chat() {
 /// Returns true if either the overlay cancel button (Android) or the frontend stop button was pressed.
 fn should_cancel(app: &AppHandle) -> bool {
     CHAT_CANCEL.load(Ordering::Relaxed) || is_cancelled(app)
+}
+
+fn local_tool_context(app: &AppHandle) -> ToolExecutionContext {
+    let cfg = crate::session::store::bootstrap(app);
+    let source_device_type = match cfg.device.device_type {
+        crate::session::types::DeviceType::Android => "phone",
+        crate::session::types::DeviceType::Desktop => "pc",
+    }
+    .to_string();
+
+    ToolExecutionContext {
+        source_device_id: Some(cfg.device.device_id),
+        source_device_type: Some(source_device_type),
+    }
 }
 
 /// Build the static part of the system prompt (skills + installed apps).
@@ -182,6 +197,7 @@ pub async fn chat_ollama(
 
     // Conversation history without system message — system is prepended fresh each round.
     let mut conversation: Vec<OllamaMessage> = messages.into_iter().collect();
+    let tool_context = local_tool_context(&app);
 
     // Show overlay indicator above all apps while the agent loop is running
     show_overlay(&app);
@@ -278,39 +294,9 @@ pub async fn chat_ollama(
             })
             .ok();
 
-            // ── Intercept `memory` tool calls in Rust — never forward to Kotlin ──
-            let output = if tool_name == "memory" {
-                let cmd     = tool_args.get("command").and_then(Value::as_str).unwrap_or("");
-                let path    = tool_args.get("path").and_then(Value::as_str);
-                let content = tool_args.get("content").and_then(Value::as_str);
-                let mode    = tool_args.get("mode").and_then(Value::as_str);
-                let query   = tool_args.get("query").and_then(Value::as_str);
-
-                if cmd == "create" || cmd == "update" {
-                    // Fire-and-forget: write in background so the LLM loop never waits on disk I/O
-                    let dir      = memory_dir(&app);
-                    let cmd_s    = cmd.to_string();
-                    let path_s   = path.map(String::from);
-                    let content_s = content.map(String::from);
-                    let mode_s   = mode.map(String::from);
-                    tokio::spawn(async move {
-                        let _ = execute_memory_write(
-                            dir,
-                            &cmd_s,
-                            path_s.as_deref(),
-                            content_s.as_deref(),
-                            mode_s.as_deref(),
-                        );
-                    });
-                    "ok: memory saved".to_string()
-                } else {
-                    // view / search need the result synchronously
-                    run_memory_command(&app, cmd, path, content, mode, query)
-                }
-            } else {
-                let result = execute_tool(&app, tool_name, tool_args).await;
-                result.output
-            };
+            let output = execute_tool_with_context(&app, tool_name, tool_args, &tool_context)
+                .await
+                .output;
 
             conversation.push(OllamaMessage {
                 role: "tool".to_string(),
