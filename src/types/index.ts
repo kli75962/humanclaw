@@ -98,4 +98,5 @@ export interface SessionConfig {
   bridge_port: number;
   ollama_host_override: string | null;
   ollama_port: number;
+  persona: string;
 }

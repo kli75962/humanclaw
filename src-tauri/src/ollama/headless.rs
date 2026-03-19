@@ -7,7 +7,7 @@ use tauri::AppHandle;
 
 use crate::memory::bootstrap_memory;
 use crate::phone::get_installed_apps;
-use crate::skills::{build_skills_prompt, load_tool_schemas};
+use crate::skills::{build_persona_prompt, build_skills_prompt, load_tool_schemas};
 use crate::tools::{
     build_core_prompt, execute_tool_with_context, read_core, ToolExecutionContext,
 };
@@ -37,6 +37,7 @@ async fn build_base_prompt(app: &AppHandle) -> String {
     };
 
     let cfg = crate::session::store::bootstrap(app);
+    let persona = build_persona_prompt(Some(cfg.persona.as_str()));
     let device_section = if cfg.paired_devices.is_empty() {
         String::new()
     } else {
@@ -49,10 +50,8 @@ async fn build_base_prompt(app: &AppHandle) -> String {
     };
 
     format!(
-        "You are PhoneClaw, an AI agent that controls devices on behalf of the user.\n\
-        Be helpful, concise, and proactive. Break tasks into tool calls and execute them step by step.\n\
-        Plain text only. NEVER use raw markdown symbols (`#`, `##`, `**`, `*`, `---`).\n\n\
-        {skills}\n\n[INSTALLED APPS]\n{apps}{devices}",
+        "{persona}\n\n{skills}\n\n[INSTALLED APPS]\n{apps}{devices}",
+        persona = persona,
         skills = build_skills_prompt(),
         apps = apps_list,
         devices = device_section,

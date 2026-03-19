@@ -64,7 +64,3 @@ tap / type_text / swipe    ← interact
 press_key                  ← back / home / enter
 get_screen()               ← verify
 ```
-
-Browser priority for web tasks: `com.android.chrome` → `com.brave.browser` → `org.mozilla.firefox` → `com.microsoft.emmx`
-
-````

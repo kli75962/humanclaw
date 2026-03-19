@@ -8,6 +8,12 @@ pub enum DeviceType {
     Desktop,
 }
 
+pub const DEFAULT_PERSONA: &str = "persona_default";
+
+pub fn default_persona() -> String {
+    DEFAULT_PERSONA.to_string()
+}
+
 /// Static info about this device.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DeviceInfo {
@@ -46,6 +52,9 @@ pub struct SessionConfig {
     /// Ollama API port (default 11434).
     #[serde(default = "default_ollama_port")]
     pub ollama_port: u16,
+    /// Selected LLM persona skill name.
+    #[serde(default = "default_persona")]
+    pub persona: String,
 }
 
 fn default_port() -> u16 {

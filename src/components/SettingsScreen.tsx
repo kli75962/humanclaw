@@ -11,6 +11,22 @@ import type { SettingsScreenProps } from '../types';
 
 type SettingsTab = 'general' | 'connect';
 
+const FALLBACK_PERSONAS = [
+  'persona_default',
+  'persona_jk',
+  'persona_jobs_professional',
+  'persona_mentor',
+  'persona_concise',
+];
+
+function formatPersonaLabel(persona: string): string {
+  return persona
+    .replace(/^persona_/, '')
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 // ── Sub-components ──────────────────────────────────────────────────────────────────
 
 function SegmentControl<T extends string>({
@@ -332,6 +348,9 @@ export function SettingsScreen({ model, availableModels, onModelChange, onOllama
   const [showEndpointEdit, setShowEndpointEdit] = useState(false);
   const [showSttEdit, setShowSttEdit] = useState(false);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const [isPersonaMenuOpen, setIsPersonaMenuOpen] = useState(false);
+  const [personas, setPersonas] = useState<string[]>(FALLBACK_PERSONAS);
+  const [personaSaveMsg, setPersonaSaveMsg] = useState('');
   const [googleApiKey, setGoogleApiKey] = useState('');
   const [googleSttLanguages, setGoogleSttLanguages] = useState('en-US,yue-Hant-HK,cmn-Hans-CN');
   const [ollamaHost, setOllamaHost] = useState('127.0.0.1');
@@ -349,9 +368,22 @@ export function SettingsScreen({ model, availableModels, onModelChange, onOllama
       .catch(() => {});
   }, []);
   const [peerStatus, setPeerStatus] = useState<Record<string, boolean>>({});
-  const { session, refresh, removeLinkedDevice, setOllamaEndpoint } = useSession();
+  const { session, refresh, removeLinkedDevice, setOllamaEndpoint, listPersonas, setPersona } = useSession();
   const isAndroid = session?.device.device_type === 'android';
   const modelMenuRef = useRef<HTMLDivElement>(null);
+  const personaMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    listPersonas()
+      .then((names) => {
+        if (names.length > 0) {
+          setPersonas(names);
+        }
+      })
+      .catch(() => {
+        setPersonas(FALLBACK_PERSONAS);
+      });
+  }, [listPersonas]);
 
   useEffect(() => {
     const fallbackHost = isAndroid
@@ -377,9 +409,12 @@ export function SettingsScreen({ model, availableModels, onModelChange, onOllama
 
   useEffect(() => {
     function onPointerDown(event: PointerEvent) {
-      if (!modelMenuRef.current) return;
-      if (!modelMenuRef.current.contains(event.target as Node)) {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) {
         setIsModelMenuOpen(false);
+      }
+
+      if (personaMenuRef.current && !personaMenuRef.current.contains(event.target as Node)) {
+        setIsPersonaMenuOpen(false);
       }
     }
 
@@ -577,6 +612,71 @@ export function SettingsScreen({ model, availableModels, onModelChange, onOllama
               </Card>
               <SectionFooter>
                 Models are loaded from your local Ollama instance.
+              </SectionFooter>
+
+              {/* Persona */}
+              <SectionHeader>Persona</SectionHeader>
+              <Card>
+                <div className="px-4 py-3.5 flex flex-col gap-2">
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/15 flex items-center justify-center shrink-0">
+                      <Cpu size={18} className="text-emerald-300" />
+                    </div>
+                    <div>
+                      <p className="text-[15px]">Assistant persona</p>
+                      <p className="text-[12px] text-slate-400 mt-0.5">Choose response style and character</p>
+                    </div>
+                  </div>
+
+                  <div ref={personaMenuRef} className="settings-model-menu mt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsPersonaMenuOpen((v) => !v)}
+                      className={`settings-model-trigger ${isPersonaMenuOpen ? 'settings-model-trigger-open' : ''}`}
+                    >
+                      <span className="settings-model-trigger-label">
+                        {formatPersonaLabel(session?.persona || 'persona_default')}
+                      </span>
+                      <ChevronDown size={16} className={`settings-model-trigger-chevron ${isPersonaMenuOpen ? 'settings-model-trigger-chevron-open' : ''}`} />
+                    </button>
+
+                    {isPersonaMenuOpen && (
+                      <div className="settings-model-dropdown">
+                        {personas.length === 0 ? (
+                          <button type="button" className="settings-model-option" disabled>
+                            <span>No personas found</span>
+                          </button>
+                        ) : (
+                          personas.map((persona) => (
+                            <button
+                              key={persona}
+                              type="button"
+                              className={`settings-model-option ${persona === session?.persona ? 'settings-model-option-active' : ''}`}
+                              onClick={async () => {
+                                try {
+                                  await setPersona(persona);
+                                  setPersonaSaveMsg('Saved');
+                                  setTimeout(() => setPersonaSaveMsg(''), 1800);
+                                } catch (e) {
+                                  setPersonaSaveMsg(e instanceof Error ? e.message : String(e));
+                                } finally {
+                                  setIsPersonaMenuOpen(false);
+                                }
+                              }}
+                            >
+                              <span>{formatPersonaLabel(persona)}</span>
+                              {persona === session?.persona && <Check size={14} />}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Card>
+              <SectionFooter>
+                Persona controls the assistant character and tone used during tool-driven chat.
+                {personaSaveMsg ? ` ${personaSaveMsg}` : ''}
               </SectionFooter>
             </>
           )}

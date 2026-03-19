@@ -45,3 +45,18 @@ pub fn remove_paired_device(app: AppHandle, device_id: String) -> Result<Session
 pub fn set_ollama_endpoint(app: AppHandle, host: String, port: u16) -> Result<SessionConfig, String> {
     store::set_ollama_endpoint(&app, &host, port)
 }
+
+/// Return available persona skill names.
+#[tauri::command]
+pub fn list_personas() -> Vec<String> {
+    crate::skills::persona_skill_names()
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect()
+}
+
+/// Set selected persona by skill name.
+#[tauri::command]
+pub fn set_persona(app: AppHandle, persona: String) -> Result<SessionConfig, String> {
+    store::set_persona(&app, &persona)
+}

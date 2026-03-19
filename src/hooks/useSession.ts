@@ -36,5 +36,25 @@ export function useSession() {
     return s;
   }, []);
 
-  return { session, refresh, setHashKey, removeLinkedDevice, setOllamaEndpoint };
+  /** Return available persona names from backend skills registry. */
+  const listPersonas = useCallback(async (): Promise<string[]> => {
+    return invoke<string[]>('list_personas');
+  }, []);
+
+  /** Set active persona. */
+  const setPersona = useCallback(async (persona: string): Promise<SessionConfig> => {
+    const s = await invoke<SessionConfig>('set_persona', { persona });
+    setSession(s);
+    return s;
+  }, []);
+
+  return {
+    session,
+    refresh,
+    setHashKey,
+    removeLinkedDevice,
+    setOllamaEndpoint,
+    listPersonas,
+    setPersona,
+  };
 }

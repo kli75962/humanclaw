@@ -5,7 +5,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::memory::bootstrap_memory;
 use crate::phone::{get_installed_apps, hide_overlay, is_cancelled, show_overlay};
-use crate::skills::{build_skills_prompt, load_tool_schemas};
+use crate::skills::{build_persona_prompt, build_skills_prompt, load_tool_schemas};
 use crate::tools::{build_core_prompt, execute_tool_with_context, read_core, ToolExecutionContext};
 
 use super::types::{
@@ -59,11 +59,12 @@ async fn build_base_prompt(app: &AppHandle) -> String {
         buf
     };
 
+    let cfg = crate::session::store::bootstrap(app);
+    let persona = build_persona_prompt(Some(cfg.persona.as_str()));
+
     format!(
-        "You are PhoneClaw, an AI agent that controls an Android phone on behalf of the user.\n\
-        Be helpful, concise, and proactive. Break tasks into tool calls and execute them step by step.\n\
-        Plain text only. NEVER EVER use raw markdown symbols (`#`, `##`, `**`, `*`, `---`).
-        \n\n{skills}\n\n[INSTALLED APPS]\n{apps}",
+        "{persona}\n\n{skills}\n\n[INSTALLED APPS]\n{apps}",
+        persona = persona,
         skills = build_skills_prompt(),
         apps = apps_list,
     )

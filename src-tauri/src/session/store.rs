@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
-use super::types::{default_ollama_port, DeviceInfo, DeviceType, PairedDevice, SessionConfig};
+use super::types::{default_ollama_port, default_persona, DeviceInfo, DeviceType, PairedDevice, SessionConfig};
 
 const SESSION_FILE: &str = "session.json";
 
@@ -68,6 +68,7 @@ pub fn bootstrap(app: &AppHandle) -> SessionConfig {
         bridge_port: 9876,
         ollama_host_override: None,
         ollama_port: default_ollama_port(),
+        persona: default_persona(),
     };
     let _ = save(app, &cfg);
     cfg
@@ -141,6 +142,24 @@ pub fn set_ollama_endpoint(app: &AppHandle, host: &str, port: u16) -> Result<Ses
     let mut cfg = load(app).ok_or("Session not initialised")?;
     cfg.ollama_host_override = Some(host.to_string());
     cfg.ollama_port = port;
+    save(app, &cfg)?;
+    Ok(cfg)
+}
+
+/// Set the selected persona skill.
+pub fn set_persona(app: &AppHandle, persona: &str) -> Result<SessionConfig, String> {
+    let persona = persona.trim();
+    if persona.is_empty() {
+        return Err("Persona is required".to_string());
+    }
+
+    let allowed = crate::skills::persona_skill_names();
+    if !allowed.iter().any(|name| *name == persona) {
+        return Err(format!("Unknown persona: {persona}"));
+    }
+
+    let mut cfg = load(app).ok_or("Session not initialised")?;
+    cfg.persona = persona.to_string();
     save(app, &cfg)?;
     Ok(cfg)
 }
