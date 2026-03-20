@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { scan, Format } from '@tauri-apps/plugin-barcode-scanner';
 import jsQR from 'jsqr';
 import { Modal } from './Modal';
-import './SettingsScreen.css';
+import '../style/SettingsScreen.css';
 import { useSession } from '../hooks/useSession';
 import type { SettingsScreenProps } from '../types';
 

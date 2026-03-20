@@ -1,6 +1,6 @@
 import { X } from 'lucide-react';
 import type { ModalProps } from '../types';
-import './Modal.css';
+import '../style/Modal.css';
 
 /** Reusable centered popup overlay. */
 export function Modal({ title, onClose, children }: ModalProps) {
