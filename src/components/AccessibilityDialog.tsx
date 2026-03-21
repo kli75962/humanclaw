@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
 const DONT_SHOW_KEY = 'phoneclaw_accessibility_dont_show';
 const IS_ANDROID = navigator.userAgent.includes('Android');
 
-export function AccessibilityDialog() {
+export const AccessibilityDialog = memo(function AccessibilityDialog() {
   const [visible, setVisible] = useState(false);
   const [dontShow, setDontShow] = useState(false);
 
@@ -31,7 +31,7 @@ export function AccessibilityDialog() {
 
     // Android may not always fire focus reliably after returning from Settings.
     // Poll while mounted so the dialog disappears immediately once enabled.
-    const interval = window.setInterval(check, 1000);
+    const interval = window.setInterval(check, 3000);
 
     return () => {
       window.removeEventListener('focus', check);
@@ -120,4 +120,4 @@ export function AccessibilityDialog() {
       </div>
     </div>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useOllamaChat } from './hooks/useOllamaChat';
@@ -10,13 +10,12 @@ import { InputBar } from './components/InputBar';
 import { SettingsScreen } from './components/SettingsScreen';
 import { SideMenu } from './components/SideMenu';
 import { AccessibilityDialog } from './components/AccessibilityDialog';
-import type { ChatMeta, Message } from './types';
+import type { ChatMeta, InputBarHandle, Message } from './types';
 
 const DEFAULT_MODEL = 'kimi-k2.5:cloud';
 const MODEL_STORAGE_KEY = 'phoneclaw_model';
 
 function App() {
-  const [input, setInput] = useState('');
   const [model, setModel] = useState(
     () => localStorage.getItem(MODEL_STORAGE_KEY) ?? DEFAULT_MODEL
   );
@@ -29,6 +28,9 @@ function App() {
   const [chatMetas, setChatMetas] = useState<ChatMeta[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [initMessages, setInitMessages] = useState<Message[]>([]);
+
+  // InputBar imperative handle — lets us read/write input without owning the state
+  const inputBarRef = useRef<InputBarHandle>(null);
 
   // Load chat list on mount
   useEffect(() => {
@@ -69,12 +71,10 @@ function App() {
 
   // STT: save input text before recording starts so transcript appends after it
   const sttPrefixRef = useRef('');
-  const inputRef = useRef(input);
-  inputRef.current = input;
 
   const handleSttTranscript = useCallback((text: string) => {
     const prefix = sttPrefixRef.current;
-    setInput(prefix ? `${prefix} ${text}` : text);
+    inputBarRef.current?.setInput(prefix ? `${prefix} ${text}` : text);
   }, []);
 
   const { isListening, sttError, startListening, stopListening } = useStt(handleSttTranscript);
@@ -83,7 +83,7 @@ function App() {
     if (isListening) {
       stopListening();
     } else {
-      sttPrefixRef.current = inputRef.current;
+      sttPrefixRef.current = inputBarRef.current?.getInput() ?? '';
       startListening();
     }
   }, [isListening, startListening, stopListening]);
@@ -112,14 +112,18 @@ function App() {
     setShowMenu(false);
   }, []);
 
+  // Use ref to avoid recreating callback when activeChatId changes
+  const activeChatIdRef = useRef(activeChatId);
+  activeChatIdRef.current = activeChatId;
+
   const deleteChat = useCallback((id: string) => {
     invoke('delete_chat', { id }).catch(() => {});
     setChatMetas((prev) => prev.filter((m) => m.id !== id));
-    if (activeChatId === id) {
+    if (activeChatIdRef.current === id) {
       setActiveChatId(null);
       setInitMessages([]);
     }
-  }, [activeChatId]);
+  }, []);
 
   // Fetch available Ollama models on first load and when endpoint changes.
   useEffect(() => {
@@ -149,7 +153,6 @@ function App() {
   const onSend = useCallback((text: string) => {
     if (isListening) stopListening();
     handleSend(text);
-    setInput('');
   }, [handleSend, isListening, stopListening]);
 
   const handleMenuOpen = useCallback(() => setShowMenu((v) => !v), []);
@@ -159,6 +162,23 @@ function App() {
   const handleOllamaEndpointChanged = useCallback(() => {
     setOllamaEndpointRevision((v) => v + 1);
   }, []);
+
+  // Memoize the message list to avoid O(n) lastUserMsgIdx computation on every render
+  const messageList = useMemo(() => {
+    const lastUserMsgIdx = messages.reduce(
+      (acc, m, i) => (m.role === 'user' ? i : acc),
+      -1,
+    );
+    return messages.map((msg, idx) => (
+      <ChatMessage
+        key={idx}
+        message={msg}
+        isLastMessage={idx === messages.length - 1}
+        isThinking={isThinking}
+        onRetry={idx === lastUserMsgIdx && !isThinking ? handleRetry : undefined}
+      />
+    ));
+  }, [messages, isThinking, handleRetry]);
 
   if (showSettings) {
     return (
@@ -192,21 +212,7 @@ function App() {
           <WelcomeScreen onSend={onSend} />
         ) : (
           <div className="max-w-3xl mx-auto space-y-8 mt-4">
-            {(() => {
-              const lastUserMsgIdx = messages.reduce(
-                (acc, m, i) => (m.role === 'user' ? i : acc),
-                -1,
-              );
-              return messages.map((msg, idx) => (
-                <ChatMessage
-                  key={idx}
-                  message={msg}
-                  isLastMessage={idx === messages.length - 1}
-                  isThinking={isThinking}
-                  onRetry={idx === lastUserMsgIdx && !isThinking ? handleRetry : undefined}
-                />
-              ));
-            })()}
+            {messageList}
 
           {/* Agent tool-execution status */}
           {agentStatus && (
@@ -228,11 +234,10 @@ function App() {
       </div>
 
       <InputBar
-        value={input}
+        ref={inputBarRef}
         isThinking={isThinking}
         isListening={isListening}
         sttError={sttError}
-        onChange={setInput}
         onSend={onSend}
         onSttToggle={handleSttToggle}
         onStop={handleStop}
@@ -242,4 +247,3 @@ function App() {
 }
 
 export default App;
-

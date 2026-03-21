@@ -98,13 +98,7 @@ async fn probe_addresses(
         let tx = tx.clone();
         tokio::spawn(async move {
             let url = format!("http://{addr}/ping");
-            let Ok(client) = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(4))
-                .build()
-            else {
-                return;
-            };
-            let Ok(http_resp) = client.get(&url).query(&[("key", &key)]).send().await else {
+            let Ok(http_resp) = super::bridge_client().get(&url).query(&[("key", &key)]).send().await else {
                 return;
             };
             if !http_resp.status().is_success() {
@@ -135,10 +129,7 @@ pub async fn discover_and_pair(app: AppHandle, address: String) -> Result<(), St
     let cfg = store::bootstrap(&app);
     let url = format!("http://{address}/ping");
 
-    let http_resp = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .build()
-        .map_err(|e| e.to_string())?
+    let http_resp = super::bridge_client()
         .get(&url)
         .query(&[("key", &cfg.hash_key)])
         .send()
@@ -250,13 +241,10 @@ pub async fn pair_from_qr(
             "label": &updated.device.label,
             "address": my_address,
         });
-        let _ = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()
-            .ok()
-            .map(|c| tauri::async_runtime::spawn(async move {
-                let _ = c.post(&register_url).json(&body).send().await;
-            }));
+        let client = super::bridge_client().clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = client.post(&register_url).json(&body).send().await;
+        });
     }
 
     Ok(())

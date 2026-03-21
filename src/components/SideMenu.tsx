@@ -9,14 +9,13 @@ export const SideMenu = memo(function SideMenu({ open, onClose, onNewChat, chats
     <>
       {/* Dim backdrop */}
       <div
-        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50 }}
+        className="fixed inset-0 bg-black/50 z-50"
         onClick={onClose}
       />
 
       {/* Panel */}
       <div
-        style={{ position: 'fixed', top: 0, left: 0, height: '100%', width: '16rem', background: '#1C1C1E', zIndex: 60, overflowY: 'auto' }}
-        className="flex flex-col p-4 gap-2"
+        className="fixed top-0 left-0 h-full w-64 bg-[#1C1C1E] z-[60] overflow-y-auto flex flex-col p-4 gap-2"
       >
         {/* Close button — same position as the TopBar menu button */}
         <button
@@ -54,10 +53,7 @@ export const SideMenu = memo(function SideMenu({ open, onClose, onNewChat, chats
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onDeleteChat(chat.id); }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = '#3C3C3C')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = '')}
-              className="p-2 rounded-full transition-colors shrink-0"
-              style={{ color: '#9CA3AF' }}
+              className="p-2 rounded-full transition-colors shrink-0 text-[#9CA3AF] hover:bg-[#3C3C3C]"
             >
               <Trash2 size={14} />
             </button>

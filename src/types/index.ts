@@ -15,14 +15,18 @@ export interface ChatMessageProps {
 }
 
 export interface InputBarProps {
-  value: string;
   isThinking: boolean;
   isListening: boolean;
   sttError: string | null;
-  onChange: (value: string) => void;
   onSend: (text: string) => void;
   onSttToggle: () => void;
   onStop: () => void;
+}
+
+/** Imperative handle exposed by InputBar for STT integration. */
+export interface InputBarHandle {
+  setInput: (text: string) => void;
+  getInput: () => string;
 }
 
 export interface ModalProps {

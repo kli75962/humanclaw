@@ -1,10 +1,15 @@
 use std::path::PathBuf;
+use std::sync::RwLock;
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
 use super::types::{default_ollama_port, default_persona, DeviceInfo, DeviceType, PairedDevice, SessionConfig};
 
 const SESSION_FILE: &str = "session.json";
+
+/// In-memory cache for the session config.
+/// Avoids re-reading session.json from disk on every call.
+static CONFIG_CACHE: RwLock<Option<SessionConfig>> = RwLock::new(None);
 
 // ── Path ─────────────────────────────────────────────────────────────────────
 
@@ -31,11 +36,23 @@ fn detect_device_type() -> DeviceType {
 /// Load session config from disk.  Returns `None` if file doesn't exist or
 /// fails to parse (caller should call `bootstrap` to create a default).
 pub fn load(app: &AppHandle) -> Option<SessionConfig> {
+    // Check cache first
+    if let Ok(guard) = CONFIG_CACHE.read() {
+        if let Some(ref cfg) = *guard {
+            return Some(cfg.clone());
+        }
+    }
     let bytes = std::fs::read(session_path(app)).ok()?;
-    serde_json::from_slice(&bytes).ok()
+    let cfg: SessionConfig = serde_json::from_slice(&bytes).ok()?;
+    // Populate cache
+    if let Ok(mut guard) = CONFIG_CACHE.write() {
+        *guard = Some(cfg.clone());
+    }
+    Some(cfg)
 }
 
 /// Write session config to disk atomically (write-then-rename).
+/// Also updates the in-memory cache.
 pub fn save(app: &AppHandle, config: &SessionConfig) -> Result<(), String> {
     let path = session_path(app);
     let dir = session_dir(app);
@@ -46,7 +63,13 @@ pub fn save(app: &AppHandle, config: &SessionConfig) -> Result<(), String> {
     // Write to a temp file then rename so the file is never half-written.
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
+    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
+
+    // Update cache
+    if let Ok(mut guard) = CONFIG_CACHE.write() {
+        *guard = Some(config.clone());
+    }
+    Ok(())
 }
 
 /// Load or create a default session config.

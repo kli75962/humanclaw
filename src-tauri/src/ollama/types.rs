@@ -147,11 +147,9 @@ fn default_desktop_fallback_host() -> String {
     "127.0.0.1".to_string()
 }
 
-/// Return the Ollama host for the current platform.
-/// - Android: uses the first paired device's address (the desktop running Ollama).
-/// - Desktop: uses localhost.
-pub fn ollama_host(app: &tauri::AppHandle) -> String {
-    let (host, port) = if let Some(cfg) = crate::session::store::load(app) {
+/// Return (host, port) for the Ollama endpoint on the current platform.
+fn ollama_host_port(app: &tauri::AppHandle) -> (String, u16) {
+    if let Some(cfg) = crate::session::store::load(app) {
         let port = if cfg.ollama_port == 0 { 11434 } else { cfg.ollama_port };
         if let Some(host) = cfg
             .ollama_host_override
@@ -162,32 +160,24 @@ pub fn ollama_host(app: &tauri::AppHandle) -> String {
             (host.to_string(), port)
         } else {
             #[cfg(target_os = "android")]
-            {
-                (default_android_fallback_host(app), port)
-            }
+            { (default_android_fallback_host(app), port) }
             #[cfg(not(target_os = "android"))]
-            {
-                (default_desktop_fallback_host(), port)
-            }
+            { (default_desktop_fallback_host(), port) }
         }
     } else {
         #[cfg(target_os = "android")]
-        {
-            (default_android_fallback_host(app), 11434)
-        }
+        { (default_android_fallback_host(app), 11434) }
         #[cfg(not(target_os = "android"))]
-        {
-            (default_desktop_fallback_host(), 11434)
-        }
-    };
-
-    format!("http://{host}:{port}")
+        { (default_desktop_fallback_host(), 11434) }
+    }
 }
 
 pub fn ollama_chat_url(app: &tauri::AppHandle) -> String {
-    format!("{}/api/chat", ollama_host(app))
+    let (host, port) = ollama_host_port(app);
+    format!("http://{host}:{port}/api/chat")
 }
 
 pub fn ollama_tags_url(app: &tauri::AppHandle) -> String {
-    format!("{}/api/tags", ollama_host(app))
+    let (host, port) = ollama_host_port(app);
+    format!("http://{host}:{port}/api/tags")
 }

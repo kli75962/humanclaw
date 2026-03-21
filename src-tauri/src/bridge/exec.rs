@@ -128,10 +128,7 @@ pub async fn route_command(
             content: message.to_string(),
             tool_calls: None,
         });
-        let source_device_type = match cfg.device.device_type {
-            crate::session::types::DeviceType::Android => Some("phone".to_string()),
-            crate::session::types::DeviceType::Desktop => Some("pc".to_string()),
-        };
+        let source_device_type = Some(cfg.device.device_type.label().to_string());
         return match run_headless(
             app,
             conversation,
@@ -164,10 +161,7 @@ pub async fn route_command(
         let payload = ExecRequest {
             hash_key: cfg.hash_key.clone(),
             source: cfg.device.device_id.clone(),
-            source_device_type: Some(match cfg.device.device_type {
-                crate::session::types::DeviceType::Android => "phone".to_string(),
-                crate::session::types::DeviceType::Desktop => "pc".to_string(),
-            }),
+            source_device_type: Some(cfg.device.device_type.label().to_string()),
             message: message.to_string(),
             model: model.to_string(),
             history,

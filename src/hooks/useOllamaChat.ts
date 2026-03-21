@@ -166,6 +166,8 @@ export function useOllamaChat(
   };
 
   const handleStop = () => {
+    setIsThinking(false);
+    setAgentStatus(null);
     invoke('cancel_chat').catch(() => {});
   };
 

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-
 use tauri::AppHandle;
 
 use crate::memory::{
@@ -34,7 +33,7 @@ fn merge_chat_payloads(local: ChatSyncPayload, remote: ChatSyncPayload) -> ChatS
 pub async fn push_chat_sync_to_peer(
     app: &AppHandle,
     peer: &PairedDevice,
-    payload: ChatSyncPayload,
+    payload: &ChatSyncPayload,
     replace: bool,
 ) -> Result<(), String> {
     let key = store::bootstrap(app).hash_key;
@@ -45,12 +44,7 @@ pub async fn push_chat_sync_to_peer(
         "replace": replace,
     });
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(8))
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let resp = client
+    let resp = super::bridge_client()
         .post(url)
         .json(&body)
         .send()
@@ -67,12 +61,7 @@ async fn fetch_peer_chat_sync(app: &AppHandle, peer: &PairedDevice) -> Result<Ch
     let key = store::bootstrap(app).hash_key;
     let url = format!("http://{}/chat/export", peer.address);
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(8))
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let resp = client
+    let resp = super::bridge_client()
         .get(url)
         .query(&[("key", key)])
         .send()
@@ -94,8 +83,8 @@ pub async fn sync_after_pair(app: &AppHandle, peer: &PairedDevice) {
 
     let merged = merge_chat_payloads(local, remote);
 
-    let _ = import_chat_sync_payload(app, merged.clone(), true);
-    let _ = push_chat_sync_to_peer(app, peer, merged, true).await;
+    let _ = push_chat_sync_to_peer(app, peer, &merged, true).await;
+    let _ = import_chat_sync_payload(app, merged, true);
 }
 
 pub async fn sync_to_all_peers(app: &AppHandle) {
@@ -106,6 +95,6 @@ pub async fn sync_to_all_peers(app: &AppHandle) {
 
     let payload = export_chat_sync_payload(app);
     for peer in &cfg.paired_devices {
-        let _ = push_chat_sync_to_peer(app, peer, payload.clone(), true).await;
+        let _ = push_chat_sync_to_peer(app, peer, &payload, true).await;
     }
 }

@@ -173,15 +173,7 @@ async fn sync_write_to_peer(
         "source_device_type": context.source_device_type,
     });
 
-    let client = match reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(8))
-        .build()
-    {
-        Ok(c) => c,
-        Err(_) => return false,
-    };
-
-    match client.post(url).json(&body).send().await {
+    match crate::bridge::bridge_client().post(url).json(&body).send().await {
         Ok(resp) => resp.status().is_success(),
         Err(_) => false,
     }
@@ -286,14 +278,16 @@ fn run_memory_command(
             };
 
             let mut matches = Vec::new();
+            let mut lower_buf = String::new();
             for file_path in &files {
                 let Ok(text) = std::fs::read_to_string(file_path) else {
                     continue;
                 };
                 let fname = file_path.file_name().unwrap_or_default().to_string_lossy();
                 for (i, line) in text.lines().enumerate() {
-                    let lower = line.to_lowercase();
-                    if terms.iter().any(|t| lower.contains(*t)) {
+                    lower_buf.clear();
+                    lower_buf.extend(line.chars().map(|c| c.to_lowercase()).flatten());
+                    if terms.iter().any(|t| lower_buf.contains(*t)) {
                         matches.push(format!("{fname}:{}:{line}", i + 1));
                     }
                 }

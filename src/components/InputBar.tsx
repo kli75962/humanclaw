@@ -1,16 +1,35 @@
-import { memo } from 'react';
+import { forwardRef, memo, useImperativeHandle, useRef, useState } from 'react';
 import { Send, PhoneCall } from 'lucide-react';
-import type { InputBarProps } from '../types';
+import type { InputBarProps, InputBarHandle } from '../types';
 
 /**
  * Fixed bottom input bar.
  * - Enter (without Shift) sends the message.
  * - STT (PhoneCall) button is always visible, left of the send button.
  * - Send button turns into a square stop button while the AI is running.
+ *
+ * Input state is owned internally to avoid re-rendering the entire App on
+ * every keystroke.  Parent can read/write via the imperative handle.
  */
-export const InputBar = memo(function InputBar({
-  value, isThinking, isListening, sttError, onChange, onSend, onSttToggle, onStop,
-}: InputBarProps) {
+export const InputBar = memo(forwardRef<InputBarHandle, InputBarProps>(function InputBar(
+  { isThinking, isListening, sttError, onSend, onSttToggle, onStop },
+  ref,
+) {
+  const [value, setValue] = useState('');
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  useImperativeHandle(ref, () => ({
+    setInput: (text: string) => setValue(text),
+    getInput: () => valueRef.current,
+  }), []);
+
+  const handleSend = () => {
+    if (!value.trim() || isThinking) return;
+    onSend(value);
+    setValue('');
+  };
+
   return (
     <div className="w-full bg-[#131314] p-4 pb-6 shrink-0">
       {sttError && (
@@ -21,8 +40,8 @@ export const InputBar = memo(function InputBar({
       <div className="max-w-3xl mx-auto bg-[#1E1F20] rounded-full flex items-center px-2 py-2 border border-transparent focus-within:border-gray-600 transition-colors">
         <input
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && !isThinking && onSend(value)}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && !isThinking && handleSend()}
           placeholder={
             isListening ? 'Listening…' : isThinking ? 'Waiting for response…' : 'Enter a prompt here'
           }
@@ -56,7 +75,7 @@ export const InputBar = memo(function InputBar({
           </button>
         ) : (
           <button
-            onClick={() => onSend(value)}
+            onClick={handleSend}
             disabled={!value.trim()}
             className="p-3 hover:bg-[#2C2C2C] rounded-full text-blue-400 transition-colors disabled:opacity-40"
           >
@@ -66,4 +85,4 @@ export const InputBar = memo(function InputBar({
       </div>
     </div>
   );
-});
+}));

@@ -52,11 +52,13 @@ fn save_all(app: &AppHandle, entries: &[QueueEntry]) -> Result<(), String> {
     }
 
     let tmp = path.with_extension("jsonl.tmp");
-    let mut file = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+    let file = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+    let mut writer = std::io::BufWriter::new(file);
     for entry in entries {
         let line = serde_json::to_string(entry).map_err(|e| e.to_string())?;
-        writeln!(file, "{line}").map_err(|e| e.to_string())?;
+        writeln!(writer, "{line}").map_err(|e| e.to_string())?;
     }
+    drop(writer); // flush before rename
     std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
 }
 

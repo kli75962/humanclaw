@@ -31,15 +31,9 @@ fn should_cancel(app: &AppHandle) -> bool {
 
 fn local_tool_context(app: &AppHandle) -> ToolExecutionContext {
     let cfg = crate::session::store::bootstrap(app);
-    let source_device_type = match cfg.device.device_type {
-        crate::session::types::DeviceType::Android => "phone",
-        crate::session::types::DeviceType::Desktop => "pc",
-    }
-    .to_string();
-
     ToolExecutionContext {
         source_device_id: Some(cfg.device.device_id),
-        source_device_type: Some(source_device_type),
+        source_device_type: Some(cfg.device.device_type.label().to_string()),
     }
 }
 
@@ -47,27 +41,24 @@ fn local_tool_context(app: &AppHandle) -> ToolExecutionContext {
 /// Called once per chat. Core memory is injected separately each round via prepareCall.
 async fn build_base_prompt(app: &AppHandle) -> String {
     let apps = get_installed_apps(app).await;
-    let apps_list = if apps.is_empty() {
-        "  (no apps found)".to_string()
+    let cfg = crate::session::store::bootstrap(app);
+    let persona = build_persona_prompt(Some(cfg.persona.as_str()));
+    let skills = build_skills_prompt();
+
+    let mut buf = String::with_capacity(persona.len() + skills.len() + apps.len() * 60 + 64);
+    buf.push_str(&persona);
+    buf.push_str("\n\n");
+    buf.push_str(&skills);
+    buf.push_str("\n\n[INSTALLED APPS]\n");
+    if apps.is_empty() {
+        buf.push_str("  (no apps found)");
     } else {
-        // Write directly into a pre-sized String to avoid an intermediate Vec allocation.
-        let mut buf = String::with_capacity(apps.len() * 60);
         for (i, a) in apps.iter().enumerate() {
             if i > 0 { buf.push('\n'); }
             buf.push_str(&a.prompt_line());
         }
-        buf
-    };
-
-    let cfg = crate::session::store::bootstrap(app);
-    let persona = build_persona_prompt(Some(cfg.persona.as_str()));
-
-    format!(
-        "{persona}\n\n{skills}\n\n[INSTALLED APPS]\n{apps}",
-        persona = persona,
-        skills = build_skills_prompt(),
-        apps = apps_list,
-    )
+    }
+    buf
 }
 
 /// Assemble the full system prompt for one LLM round.
@@ -287,6 +278,19 @@ pub async fn chat_ollama(
 
         // Execute each tool and collect results
         for call in &tool_calls {
+            if should_cancel(&app) {
+                hide_overlay(&app);
+                app.emit(
+                    "ollama-stream",
+                    StreamPayload {
+                        content: "\n\n[Cancelled by user]".to_string(),
+                        done: true,
+                    },
+                )
+                .ok();
+                return Ok(());
+            }
+
             let tool_name = &call.function.name;
             let tool_args = &call.function.arguments;
 

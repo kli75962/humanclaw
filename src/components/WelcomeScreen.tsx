@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Compass, Code, Lightbulb } from 'lucide-react';
 import type { WelcomeScreenProps } from '../types';
 
@@ -11,7 +12,7 @@ const SUGGESTIONS = [
  * Shown when the conversation is empty.
  * Renders a greeting headline and quick-prompt suggestion cards.
  */
-export function WelcomeScreen({ onSend }: WelcomeScreenProps) {
+export const WelcomeScreen = memo(function WelcomeScreen({ onSend }: WelcomeScreenProps) {
   return (
     <div className="flex flex-col h-full justify-center max-w-2xl mx-auto opacity-0 animate-[fadeIn_0.5s_ease-out_forwards]">
       <div className="mb-12">
@@ -39,4 +40,4 @@ export function WelcomeScreen({ onSend }: WelcomeScreenProps) {
       </div>
     </div>
   );
-}
+});

@@ -8,6 +8,15 @@ pub enum DeviceType {
     Desktop,
 }
 
+impl DeviceType {
+    pub fn label(&self) -> &'static str {
+        match self {
+            DeviceType::Android => "phone",
+            DeviceType::Desktop => "pc",
+        }
+    }
+}
+
 pub const DEFAULT_PERSONA: &str = "persona_default";
 
 pub fn default_persona() -> String {

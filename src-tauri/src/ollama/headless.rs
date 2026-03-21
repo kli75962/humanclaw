@@ -23,39 +23,35 @@ const MAX_TOOL_ROUNDS: usize = 200;
 
 async fn build_base_prompt(app: &AppHandle) -> String {
     let apps = get_installed_apps(app).await;
-    let apps_list = if apps.is_empty() {
-        "  (no apps found)".to_string()
-    } else {
-        let mut buf = String::with_capacity(apps.len() * 60);
-        for (i, a) in apps.iter().enumerate() {
-            if i > 0 {
-                buf.push('\n');
-            }
-            buf.push_str(&a.prompt_line());
-        }
-        buf
-    };
-
     let cfg = crate::session::store::bootstrap(app);
     let persona = build_persona_prompt(Some(cfg.persona.as_str()));
-    let device_section = if cfg.paired_devices.is_empty() {
-        String::new()
+    let skills = build_skills_prompt();
+
+    let mut buf = String::with_capacity(persona.len() + skills.len() + apps.len() * 60 + 128);
+    buf.push_str(&persona);
+    buf.push_str("\n\n");
+    buf.push_str(&skills);
+    buf.push_str("\n\n[INSTALLED APPS]\n");
+    if apps.is_empty() {
+        buf.push_str("  (no apps found)");
     } else {
-        let mut buf = String::from("\n\n[PAIRED DEVICES]\n");
+        for (i, a) in apps.iter().enumerate() {
+            if i > 0 { buf.push('\n'); }
+            buf.push_str(&a.prompt_line());
+        }
+    }
+    if !cfg.paired_devices.is_empty() {
+        buf.push_str("\n\n[PAIRED DEVICES]\n");
         buf.push_str("Phone tools (tap, swipe, get_screen, etc.) are forwarded to the paired Android device automatically.\n");
         for p in &cfg.paired_devices {
-            buf.push_str(&format!("- {} ({})\n", p.label, p.device_id));
+            buf.push_str("- ");
+            buf.push_str(&p.label);
+            buf.push_str(" (");
+            buf.push_str(&p.device_id);
+            buf.push_str(")\n");
         }
-        buf
-    };
-
-    format!(
-        "{persona}\n\n{skills}\n\n[INSTALLED APPS]\n{apps}{devices}",
-        persona = persona,
-        skills = build_skills_prompt(),
-        apps = apps_list,
-        devices = device_section,
-    )
+    }
+    buf
 }
 
 fn prepare_system(base: &str, core: &str) -> String {
