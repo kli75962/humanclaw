@@ -1,0 +1,83 @@
+.welcome {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  justify-content: center;
+  max-width: 672px;
+  margin: 0 auto;
+  opacity: 0;
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+.welcome-header {
+  margin-bottom: 48px;
+}
+
+.welcome-title {
+  font-size: 48px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  background: linear-gradient(to right, #4285F4, #D96570);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  letter-spacing: -0.025em;
+}
+
+.welcome-subtitle {
+  font-size: 48px;
+  font-weight: 600;
+  color: #444746;
+}
+
+.welcome-suggestions {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 16px;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.welcome-suggestions::-webkit-scrollbar {
+  display: none;
+}
+
+.welcome-card {
+  min-width: 180px;
+  height: 192px;
+  background: #1E1F20;
+  padding: 16px;
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-align: left;
+  border: none;
+  color: inherit;
+  transition: background-color 0.15s;
+  flex-shrink: 0;
+}
+.welcome-card:hover {
+  background: #2C2C2C;
+}
+
+.welcome-card-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #E5E7EB;
+}
+
+.welcome-card-icon {
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 50%;
+  width: fit-content;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.welcome-icon--blue  { color: #60a5fa; }
+.welcome-icon--yellow { color: #facc15; }
+.welcome-icon--purple { color: #c084fc; }

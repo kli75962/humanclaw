@@ -11,6 +11,7 @@ import { SettingsScreen } from './components/SettingsScreen';
 import { SideMenu } from './components/SideMenu';
 import { AccessibilityDialog } from './components/AccessibilityDialog';
 import type { ChatMeta, InputBarHandle, Message } from './types';
+import './style/App.css';
 
 const DEFAULT_MODEL = 'kimi-k2.5:cloud';
 const MODEL_STORAGE_KEY = 'phoneclaw_model';
@@ -29,10 +30,8 @@ function App() {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [initMessages, setInitMessages] = useState<Message[]>([]);
 
-  // InputBar imperative handle — lets us read/write input without owning the state
   const inputBarRef = useRef<InputBarHandle>(null);
 
-  // Load chat list on mount
   useEffect(() => {
     invoke<ChatMeta[]>('list_chats').then(setChatMetas).catch(() => {});
   }, []);
@@ -47,9 +46,7 @@ function App() {
       setInitMessages(msgs);
     });
 
-    return () => {
-      unlisten.then((fn) => fn());
-    };
+    return () => { unlisten.then((fn) => fn()); };
   }, [activeChatId]);
 
   const onChatCreated = useCallback((id: string, title: string) => {
@@ -69,7 +66,6 @@ function App() {
   );
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // STT: save input text before recording starts so transcript appends after it
   const sttPrefixRef = useRef('');
 
   const handleSttTranscript = useCallback((text: string) => {
@@ -112,7 +108,6 @@ function App() {
     setShowMenu(false);
   }, []);
 
-  // Use ref to avoid recreating callback when activeChatId changes
   const activeChatIdRef = useRef(activeChatId);
   activeChatIdRef.current = activeChatId;
 
@@ -125,13 +120,11 @@ function App() {
     }
   }, []);
 
-  // Fetch available Ollama models on first load and when endpoint changes.
   useEffect(() => {
     invoke<{ name: string }[]>('list_models')
       .then((models) => {
         const names = models.map((m) => m.name);
         setAvailableModels(names);
-        // Auto-select first model if saved/default model is not available
         const saved = localStorage.getItem(MODEL_STORAGE_KEY);
         if (names.length > 0 && saved && !names.includes(saved)) {
           setModel(names[0]);
@@ -141,9 +134,7 @@ function App() {
           localStorage.setItem(MODEL_STORAGE_KEY, names[0]);
         }
       })
-      .catch(() => {
-        // Ollama unreachable — keep default, user will see error on send
-      });
+      .catch(() => {});
   }, [ollamaEndpointRevision, showSettings]);
 
   useEffect(() => {
@@ -163,7 +154,6 @@ function App() {
     setOllamaEndpointRevision((v) => v + 1);
   }, []);
 
-  // Memoize the message list to avoid O(n) lastUserMsgIdx computation on every render
   const messageList = useMemo(() => {
     const lastUserMsgIdx = messages.reduce(
       (acc, m, i) => (m.role === 'user' ? i : acc),
@@ -193,7 +183,7 @@ function App() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-[#131314] text-[#E3E3E3] font-sans">
+    <div className="app-root">
       <AccessibilityDialog />
       <SideMenu
         open={showMenu}
@@ -206,29 +196,25 @@ function App() {
       />
       <TopBar model={model} onMenuOpen={handleMenuOpen} onSettingsOpen={handleSettingsOpen} />
 
-      {/* Main Content Area */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 custom-scrollbar">
+      <div className="app-content custom-scrollbar">
         {messages.length === 0 ? (
           <WelcomeScreen onSend={onSend} />
         ) : (
-          <div className="max-w-3xl mx-auto space-y-8 mt-4">
+          <div className="app-messages">
             {messageList}
 
-          {/* Agent tool-execution status */}
-          {agentStatus && (
-            <div className="flex items-center gap-2 text-xs text-blue-400 animate-pulse px-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
-              {agentStatus}
-            </div>
-          )}
+            {agentStatus && (
+              <div className="app-agent-status">
+                <span className="app-agent-dot" />
+                {agentStatus}
+              </div>
+            )}
 
-          {error && (
-            <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-3 rounded-xl">
-              {error}
-            </div>
-          )}
+            {error && (
+              <div className="app-error">{error}</div>
+            )}
 
-          <div ref={scrollRef} />
+            <div ref={scrollRef} />
           </div>
         )}
       </div>

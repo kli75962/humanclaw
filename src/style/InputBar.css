@@ -1,0 +1,81 @@
+.inputbar {
+  width: 100%;
+  background: #131314;
+  padding: 16px 16px 24px;
+  flex-shrink: 0;
+}
+
+.inputbar-error {
+  max-width: 768px;
+  margin: 0 auto 8px;
+  font-size: 12px;
+  color: #f87171;
+  padding: 0 16px;
+}
+
+.inputbar-row {
+  max-width: 768px;
+  margin: 0 auto;
+  background: #1E1F20;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.inputbar-row:focus-within {
+  border-color: #4B5563;
+}
+
+.inputbar-input {
+  flex: 1;
+  background: transparent;
+  color: #ffffff;
+  padding: 0 16px;
+  outline: none;
+  border: none;
+  height: 100%;
+  font-size: 14px;
+}
+.inputbar-input::placeholder {
+  color: #9CA3AF;
+}
+.inputbar-input:disabled {
+  opacity: 0.5;
+}
+
+.inputbar-btn {
+  padding: 12px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s;
+  flex-shrink: 0;
+}
+.inputbar-btn:hover {
+  background: #2C2C2C;
+}
+.inputbar-btn:disabled {
+  opacity: 0.4;
+}
+
+.inputbar-stt-btn {
+  color: #9CA3AF;
+}
+.inputbar-stt-btn--listening {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.15);
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.inputbar-stop-btn {
+  color: #f87171;
+}
+
+.inputbar-send-btn {
+  color: #60a5fa;
+}

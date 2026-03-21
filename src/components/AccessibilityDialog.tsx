@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, memo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import '../style/AccessibilityDialog.css';
 
 const DONT_SHOW_KEY = 'phoneclaw_accessibility_dont_show';
 const IS_ANDROID = navigator.userAgent.includes('Android');
@@ -29,8 +30,6 @@ export const AccessibilityDialog = memo(function AccessibilityDialog() {
     window.addEventListener('pageshow', check);
     document.addEventListener('visibilitychange', check);
 
-    // Android may not always fire focus reliably after returning from Settings.
-    // Poll while mounted so the dialog disappears immediately once enabled.
     const interval = window.setInterval(check, 3000);
 
     return () => {
@@ -50,28 +49,20 @@ export const AccessibilityDialog = memo(function AccessibilityDialog() {
   };
 
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center bg-black/60 "
-      style={{ zIndex: 80, padding: '0 32px'}}
-    >
-      <div className="w-full max-w-sm bg-[#1E1F20] rounded-2xl shadow-2xl overflow-hidden">
-        <div style={{ padding: '28px 20px 20px' }}>
-          <h2 className="text-base font-semibold text-[#E3E3E3] mb-2">
-            Accessibility access needed
-          </h2>
-          <p className="text-sm text-[#A0A0A0] leading-relaxed">
+    <div className="a11y-backdrop">
+      <div className="a11y-dialog">
+        <div className="a11y-dialog-body">
+          <h2 className="a11y-dialog-title">Accessibility access needed</h2>
+          <p className="a11y-dialog-text">
             PhoneClaw needs the Accessibility Service to control your phone on your behalf.
             Enable it in{' '}
-            <span className="text-[#E3E3E3]">
+            <span className="a11y-dialog-highlight">
               Settings → Accessibility → PhoneClaw
             </span>
             .
           </p>
 
-          <div
-            onClick={() => setDontShow((v) => !v)}
-            className="flex items-center gap-3 mt-5 cursor-pointer select-none"
-          >
+          <div onClick={() => setDontShow((v) => !v)} className="a11y-checkbox-row">
             <div
               style={{
                 width: 20,
@@ -88,32 +79,20 @@ export const AccessibilityDialog = memo(function AccessibilityDialog() {
             >
               {dontShow && (
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path
-                    d="M2 6l3 3 5-5"
-                    stroke="white"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               )}
             </div>
-            <span className="text-sm text-[#A0A0A0]">Don't show again</span>
+            <span className="a11y-checkbox-label">Don't show again</span>
           </div>
         </div>
 
-        <div className="flex border-t border-[#2C2C2C]">
-          <button
-            onClick={() => dismiss(false)}
-            className="flex-1 py-3.5 text-sm font-medium text-[#A0A0A0] hover:bg-[#2C2C2C] transition-colors"
-          >
+        <div className="a11y-dialog-actions">
+          <button onClick={() => dismiss(false)} className="a11y-dialog-btn">
             Cancel
           </button>
-          <div className="w-px bg-[#2C2C2C]" />
-          <button
-            onClick={() => dismiss(true)}
-            className="flex-1 py-3.5 text-sm font-medium text-[#9B7BC4] hover:bg-[#2C2C2C] transition-colors"
-          >
+          <div className="a11y-dialog-divider" />
+          <button onClick={() => dismiss(true)} className="a11y-dialog-btn a11y-dialog-btn--confirm">
             Open Settings
           </button>
         </div>

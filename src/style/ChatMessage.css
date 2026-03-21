@@ -1,0 +1,68 @@
+.chat-message {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.chat-message--user {
+  flex-direction: row-reverse;
+}
+
+.chat-avatar {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  margin-top: 4px;
+  color: #60a5fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-avatar--spinning {
+  animation: spin 1s linear infinite;
+}
+
+.chat-bubble {
+  max-width: 85%;
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+.chat-bubble--user {
+  background: #2C2C2C;
+  padding: 12px 20px;
+  border-radius: 24px;
+  border-top-right-radius: 4px;
+}
+
+.chat-bubble--assistant {
+  color: #F3F4F6;
+}
+
+.chat-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: #60a5fa;
+  margin-left: 2px;
+  vertical-align: middle;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.chat-retry-btn {
+  flex-shrink: 0;
+  padding: 6px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #6B7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background-color 0.15s;
+}
+.chat-retry-btn:hover {
+  color: #D1D5DB;
+  background: #2C2C2C;
+}

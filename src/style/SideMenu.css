@@ -1,0 +1,108 @@
+.side-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 50;
+}
+
+.side-menu-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 256px;
+  max-width: 75vw;
+  background: #1C1C1E;
+  z-index: 60;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 8px;
+  box-sizing: border-box;
+}
+
+.side-menu-close-btn {
+  padding: 8px;
+  border-radius: 9999px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #9CA3AF;
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s;
+}
+.side-menu-close-btn:hover {
+  background: #2C2C2C;
+}
+
+.side-menu-new-chat-btn {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #E3E3E3;
+  text-align: left;
+  transition: background-color 0.15s;
+}
+.side-menu-new-chat-btn:hover {
+  background: #2C2C2C;
+}
+
+.side-menu-history-label {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  color: #6B7280;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.side-menu-chat-item {
+  display: flex;
+  align-items: center;
+  border-radius: 12px;
+}
+
+.side-menu-chat-btn {
+  flex: 1;
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.side-menu-chat-btn:hover {
+  background: #2C2C2C;
+}
+
+.side-menu-delete-btn {
+  padding: 8px;
+  border-radius: 9999px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  color: #9CA3AF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s;
+}
+.side-menu-delete-btn:hover {
+  background: #3C3C3C;
+}
