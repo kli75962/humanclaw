@@ -34,6 +34,15 @@ async fn fetch_models_from_url(url: &str) -> Result<Vec<OllamaModel>, String> {
     Ok(data.models)
 }
 
+/// Fetch Ollama models from a specific host:port without saving the endpoint.
+#[command]
+pub async fn list_models_at(host: String, port: u16) -> Result<Vec<String>, String> {
+    let url = format!("http://{}:{}/api/tags", host, port);
+    fetch_models_from_url(&url)
+        .await
+        .map(|models| models.into_iter().map(|m| m.name).collect())
+}
+
 /// Fetch the list of locally available Ollama models.
 #[command]
 pub async fn list_models(app: tauri::AppHandle) -> Result<Vec<OllamaModel>, String> {
@@ -51,7 +60,6 @@ pub async fn list_models(app: tauri::AppHandle) -> Result<Vec<OllamaModel>, Stri
                         .map_err(|fallback_err| format!("{primary_err}; fallback failed: {fallback_err}"));
                 }
             }
-
             Err(primary_err)
         }
     }

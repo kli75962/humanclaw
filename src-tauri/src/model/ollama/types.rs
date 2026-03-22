@@ -7,16 +7,12 @@ use serde_json::Value;
 pub struct OllamaMessage {
     pub role: String,
     /// Ollama may omit or set `content: null` for tool-call-only rounds.
-    /// Using a custom deserializer coerces null/absent → empty string so the
-    /// whole chunk is never silently dropped by the streaming parser.
     #[serde(default, deserialize_with = "deserialize_content")]
     pub content: String,
-    /// Tool calls requested by the assistant (Ollama function-calling format).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<OllamaToolCall>>,
 }
 
-/// A tool call issued by the LLM (function-calling).
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OllamaToolCall {
     pub function: OllamaToolCallFunction,
@@ -25,23 +21,14 @@ pub struct OllamaToolCall {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OllamaToolCallFunction {
     pub name: String,
-    /// Arguments may arrive as a JSON object OR as a JSON-encoded string —
-    /// `deserialize_arguments` handles both transparently.
     #[serde(deserialize_with = "deserialize_arguments")]
     pub arguments: Value,
 }
 
-/// Coerces `null` or a missing `content` field to an empty string.
-/// Without this, any Ollama chunk where `content` is null fails to deserialize,
-/// causing the streaming parser to silently skip the chunk — dropping tool_calls
-/// contained in that same chunk and making it look like the model made no tool call.
 fn deserialize_content<'de, D: Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
     Ok(Option::<String>::deserialize(deserializer)?.unwrap_or_default())
 }
 
-/// Deserializes LLM tool call arguments that may arrive as either:
-/// - A JSON object: `{"package_name": "com.foo.bar"}`
-/// - A JSON-encoded string: `"{\"package_name\": \"com.foo.bar\"}"`
 fn deserialize_arguments<'de, D>(deserializer: D) -> Result<Value, D::Error>
 where
     D: Deserializer<'de>,
@@ -55,11 +42,8 @@ where
     Ok(v)
 }
 
+// ── Zero-copy request builder ─────────────────────────────────────────────────
 
-// ── Zero-copy request builder for per-round LLM calls ───────────────────────
-
-/// Serializes [system_msg, history...] as a contiguous JSON array without
-/// cloning any message. Used instead of building a temporary Vec each round.
 struct RoundMessages<'a> {
     system: &'a OllamaMessage,
     history: &'a [OllamaMessage],
@@ -81,9 +65,6 @@ fn tools_is_empty<T>(s: &&[T]) -> bool {
     s.is_empty()
 }
 
-/// Borrowed request type — avoids cloning messages and tool schemas on every
-/// LLM round in the agentic loop. Use instead of `OllamaChatRequest` when the
-/// system message and conversation are already in separate owned structures.
 #[derive(Serialize)]
 pub struct OllamaRoundRequest<'a> {
     pub model: &'a str,
@@ -117,37 +98,18 @@ pub struct OllamaChunk {
     pub done: bool,
 }
 
-/// Payload emitted via the `ollama-stream` Tauri event for every token.
-#[derive(Clone, Serialize)]
-pub struct StreamPayload {
-    pub content: String,
-    pub done: bool,
-}
-
-/// Status update emitted while the agent is executing tools.
-#[derive(Clone, Serialize)]
-pub struct AgentStatusPayload {
-    pub message: String,
-}
+// ── URL helpers ───────────────────────────────────────────────────────────────
 
 #[cfg(target_os = "android")]
-fn default_android_fallback_host(app: &tauri::AppHandle) -> String {
+fn default_host(app: &tauri::AppHandle) -> String {
     if let Some(cfg) = crate::session::store::load(app) {
         if let Some(peer) = cfg.paired_devices.first() {
-            // peer.address is "ip:bridge_port", extract the ip part
             return peer.address.split(':').next().unwrap_or(&peer.address).to_string();
         }
     }
-    // No paired device — Ollama unreachable until the phone is paired with the desktop.
     "127.0.0.1".to_string()
 }
 
-#[cfg(not(target_os = "android"))]
-fn default_desktop_fallback_host() -> String {
-    "127.0.0.1".to_string()
-}
-
-/// Return (host, port) for the Ollama endpoint on the current platform.
 fn ollama_host_port(app: &tauri::AppHandle) -> (String, u16) {
     if let Some(cfg) = crate::session::store::load(app) {
         let port = if cfg.ollama_port == 0 { 11434 } else { cfg.ollama_port };
@@ -157,19 +119,17 @@ fn ollama_host_port(app: &tauri::AppHandle) -> (String, u16) {
             .map(str::trim)
             .filter(|h| !h.is_empty())
         {
-            (host.to_string(), port)
-        } else {
-            #[cfg(target_os = "android")]
-            { (default_android_fallback_host(app), port) }
-            #[cfg(not(target_os = "android"))]
-            { (default_desktop_fallback_host(), port) }
+            return (host.to_string(), port);
         }
-    } else {
         #[cfg(target_os = "android")]
-        { (default_android_fallback_host(app), 11434) }
+        return (default_host(app), port);
         #[cfg(not(target_os = "android"))]
-        { (default_desktop_fallback_host(), 11434) }
+        return ("127.0.0.1".to_string(), port);
     }
+    #[cfg(target_os = "android")]
+    { (default_host(app), 11434) }
+    #[cfg(not(target_os = "android"))]
+    { ("127.0.0.1".to_string(), 11434) }
 }
 
 pub fn ollama_chat_url(app: &tauri::AppHandle) -> String {

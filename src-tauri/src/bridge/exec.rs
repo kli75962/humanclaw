@@ -5,7 +5,7 @@ use tauri::AppHandle;
 use axum::{Json, extract::State};
 use reqwest::Client;
 
-use crate::ollama::{headless::run_headless, types::OllamaMessage};
+use crate::model::ollama::{headless::run_headless, types::OllamaMessage};
 use crate::queue::store::enqueue;
 use crate::session::store as session_store;
 use crate::bridge::health::check_peer;

@@ -58,6 +58,8 @@ export function SettingsScreen({ model, availableModels, onModelChange, onOllama
               session={session}
               listPersonas={listPersonas}
               setPersona={setPersona}
+              setOllamaEndpoint={setOllamaEndpoint}
+              onOllamaEndpointChanged={onOllamaEndpointChanged}
             />
           )}
           {tab === 'connect' && (
@@ -66,8 +68,6 @@ export function SettingsScreen({ model, availableModels, onModelChange, onOllama
               isAndroid={isAndroid}
               peerStatus={peerStatus}
               removeLinkedDevice={removeLinkedDevice}
-              setOllamaEndpoint={setOllamaEndpoint}
-              onOllamaEndpointChanged={onOllamaEndpointChanged}
               onPaired={refresh}
             />
           )}

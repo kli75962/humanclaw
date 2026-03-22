@@ -1,6 +1,6 @@
 use tauri::AppHandle;
 
-use crate::ollama::types::OllamaMessage;
+use crate::model::ollama::types::OllamaMessage;
 use crate::session::store;
 use super::exec::{route_command, ExecResponse};
 use super::health::{check_all_peers, check_peer};

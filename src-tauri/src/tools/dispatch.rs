@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 #[cfg(target_os = "android")]
 use tauri::Manager;
 
@@ -144,6 +144,17 @@ pub async fn execute_tool_with_context(
             success: true,
             output: execute_memory_tool(app, args, context),
         },
+        "send_message" => {
+            let content = args.get("content").and_then(Value::as_str).unwrap_or("");
+            if !content.is_empty() {
+                app.emit("ollama-injected-message", serde_json::json!({ "content": content })).ok();
+            }
+            ToolResult {
+                tool_name: name.to_string(),
+                success: true,
+                output: "ok: message delivered to user".to_string(),
+            }
+        }
         _ if is_phone_control_tool(name) => execute_phone_control_tool(app, name, args).await,
         _ => ToolResult {
             tool_name: name.to_string(),

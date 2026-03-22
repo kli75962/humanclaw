@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { ChevronRight, Mic, Monitor, Network, Pencil, QrCode, Smartphone, Trash2 } from 'lucide-react';
+import { ChevronRight, Mic, Monitor, Pencil, QrCode, Smartphone, Trash2 } from 'lucide-react';
 import { Modal } from './Modal';
 import { ShowQrView, ScanView } from './SettingsQrPairing';
 import { Card, CardDivider, CardRow, SectionHeader } from './SettingsUI';
@@ -11,8 +11,6 @@ interface ConnectTabProps {
   isAndroid: boolean;
   peerStatus: Record<string, boolean>;
   removeLinkedDevice: (deviceId: string) => Promise<void>;
-  setOllamaEndpoint: (host: string, port: number) => Promise<SessionConfig>;
-  onOllamaEndpointChanged: () => void;
   onPaired: () => void;
 }
 
@@ -21,18 +19,10 @@ export function ConnectTab({
   isAndroid,
   peerStatus,
   removeLinkedDevice,
-  setOllamaEndpoint,
-  onOllamaEndpointChanged,
   onPaired,
 }: ConnectTabProps) {
   const [showQrPair, setShowQrPair] = useState(false);
-  const [showEndpointEdit, setShowEndpointEdit] = useState(false);
   const [showSttEdit, setShowSttEdit] = useState(false);
-
-  const [ollamaHost, setOllamaHost] = useState('127.0.0.1');
-  const [ollamaPort, setOllamaPort] = useState('11434');
-  const [ollamaSaving, setOllamaSaving] = useState(false);
-  const [ollamaSaveMsg, setOllamaSaveMsg] = useState('');
 
   const [googleApiKey, setGoogleApiKey] = useState('');
   const [googleSttLanguages, setGoogleSttLanguages] = useState('en-US,yue-Hant-HK,cmn-Hans-CN');
@@ -46,35 +36,6 @@ export function ConnectTab({
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    const fallbackHost = isAndroid
-      ? (session?.paired_devices?.[0]?.address.split(':')[0] ?? '127.0.0.1')
-      : '127.0.0.1';
-    const host = (session?.ollama_host_override ?? '').trim();
-    setOllamaHost(host || fallbackHost);
-    setOllamaPort(String(session?.ollama_port ?? 11434));
-  }, [isAndroid, session?.ollama_host_override, session?.ollama_port, session?.paired_devices]);
-
-  async function handleSaveOllamaEndpoint() {
-    const host = ollamaHost.trim();
-    const port = Number.parseInt(ollamaPort.trim(), 10);
-    if (!host) { setOllamaSaveMsg('Host is required'); return; }
-    if (!Number.isFinite(port) || port < 1 || port > 65535) { setOllamaSaveMsg('Port must be 1-65535'); return; }
-
-    setOllamaSaving(true);
-    setOllamaSaveMsg('');
-    try {
-      await setOllamaEndpoint(host, port);
-      onOllamaEndpointChanged();
-      setOllamaSaveMsg('Saved');
-      setTimeout(() => setOllamaSaveMsg(''), 2000);
-    } catch (e) {
-      setOllamaSaveMsg(e instanceof Error ? e.message : String(e));
-    } finally {
-      setOllamaSaving(false);
-    }
-  }
-
   return (
     <>
       {showQrPair && (
@@ -84,40 +45,6 @@ export function ConnectTab({
           ) : (
             <ShowQrView />
           )}
-        </Modal>
-      )}
-
-      {showEndpointEdit && (
-        <Modal title="Edit Ollama Endpoint" onClose={() => setShowEndpointEdit(false)}>
-          <div className="settings-edit-modal-body">
-            <p>Host and port for model list and chat requests.</p>
-            <p>Enter only host/IP and port. Example: 192.168.1.10 and 11434.</p>
-            <div className="settings-endpoint-grid">
-              <input
-                value={ollamaHost}
-                onChange={(e) => { setOllamaHost(e.target.value); setOllamaSaveMsg(''); }}
-                placeholder="127.0.0.1"
-                className="settings-popup-input settings-endpoint-host"
-                style={{ marginTop: 0 }}
-              />
-              <input
-                value={ollamaPort}
-                onChange={(e) => { setOllamaPort(e.target.value); setOllamaSaveMsg(''); }}
-                placeholder="11434"
-                inputMode="numeric"
-                className="settings-popup-input"
-                style={{ marginTop: 0 }}
-              />
-            </div>
-            <div className="settings-edit-modal-actions">
-              <p className={ollamaSaveMsg === 'Saved' ? 'settings-save-msg--ok' : 'settings-save-msg--err'}>
-                {ollamaSaveMsg || ' '}
-              </p>
-              <button onClick={handleSaveOllamaEndpoint} disabled={ollamaSaving} className="settings-save-btn">
-                {ollamaSaving ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </div>
         </Modal>
       )}
 
@@ -155,29 +82,6 @@ export function ConnectTab({
           </div>
         </Modal>
       )}
-
-      <SectionHeader>Ollama Endpoint</SectionHeader>
-      <Card>
-        <div className="settings-card-body">
-          <div className="settings-item-header">
-            <div className="settings-icon-badge settings-icon-badge--blue">
-              <Network size={18} />
-            </div>
-            <div className="settings-item-info">
-              <p className="settings-item-title">Host and Port</p>
-              <p className="settings-item-subtitle">Used for model list and chat requests</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowEndpointEdit(true)}
-              className="settings-edit-icon"
-              aria-label="Edit Ollama endpoint"
-            >
-              <Pencil size={14} />
-            </button>
-          </div>
-        </div>
-      </Card>
 
       {!isAndroid && (
         <>

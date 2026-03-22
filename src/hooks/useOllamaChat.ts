@@ -20,6 +20,7 @@ export function useOllamaChat(
   const [error, setError] = useState<string | null>(null);
   const unlistenStreamRef = useRef<UnlistenFn | null>(null);
   const unlistenStatusRef = useRef<UnlistenFn | null>(null);
+  const unlistenInjectedRef = useRef<UnlistenFn | null>(null);
 
   // Ref that tracks the active chat ID inside async callbacks
   const currentChatIdRef = useRef<string | null>(chatId);
@@ -36,13 +37,13 @@ export function useOllamaChat(
   // Reset conversation when switching to a different chat (externally)
   useEffect(() => {
     if (internalCreateRef.current) {
-      // ID change was caused by this hook creating a new chat — don't wipe messages
       internalCreateRef.current = false;
       currentChatIdRef.current = chatId;
       return;
     }
     unlistenStreamRef.current?.();
     unlistenStatusRef.current?.();
+    unlistenInjectedRef.current?.();
     currentChatIdRef.current = chatId;
     setMessages(initialMessages);
     messagesRef.current = initialMessages;
@@ -55,6 +56,7 @@ export function useOllamaChat(
     return () => {
       unlistenStreamRef.current?.();
       unlistenStatusRef.current?.();
+      unlistenInjectedRef.current?.();
     };
   }, []);
 
@@ -68,6 +70,7 @@ export function useOllamaChat(
     try {
       unlistenStreamRef.current?.();
       unlistenStatusRef.current?.();
+      unlistenInjectedRef.current?.();
 
       unlistenStreamRef.current = await listen<StreamPayload>('ollama-stream', (event) => {
         const { content, done } = event.payload;
@@ -85,11 +88,21 @@ export function useOllamaChat(
         }
 
         if (done) {
+          // Remove trailing empty assistant placeholder if LLM ended via send_message only
+          setMessages((prev) => {
+            const copy = [...prev];
+            if (copy[copy.length - 1]?.role === 'assistant' && copy[copy.length - 1].content === '') {
+              copy.pop();
+            }
+            messagesRef.current = copy;
+            onSaveRef.current(activeChatId, copy);
+            return copy;
+          });
           setIsThinking(false);
           setAgentStatus(null);
-          onSaveRef.current(activeChatId, messagesRef.current);
           unlistenStreamRef.current?.();
           unlistenStatusRef.current?.();
+          unlistenInjectedRef.current?.();
         }
       });
 
@@ -97,7 +110,29 @@ export function useOllamaChat(
         setAgentStatus(event.payload.message);
       });
 
-      await invoke('chat_ollama', { messages: historyMessages, model });
+      // Listen for messages injected mid-loop via the send_message tool.
+      // Each injected message replaces the current empty placeholder and adds a new one.
+      unlistenInjectedRef.current = await listen<{ content: string }>('ollama-injected-message', (event) => {
+        const { content } = event.payload;
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          // Fill the current placeholder (or append if last isn't an empty placeholder)
+          if (last?.role === 'assistant' && last.content === '') {
+            copy[copy.length - 1] = { role: 'assistant', content };
+          } else {
+            copy.push({ role: 'assistant', content });
+          }
+          // Add a fresh placeholder for any subsequent streaming or injected messages
+          copy.push({ role: 'assistant', content: '' });
+          messagesRef.current = copy;
+          return copy;
+        });
+      });
+
+      const provider = localStorage.getItem('phoneclaw_provider') ?? 'ollama';
+      const command = provider === 'claude' ? 'chat_claude' : 'chat_ollama';
+      await invoke(command, { messages: historyMessages, model });
     } catch (err) {
       setIsThinking(false);
       setAgentStatus(null);
@@ -110,13 +145,13 @@ export function useOllamaChat(
       });
       unlistenStreamRef.current?.();
       unlistenStatusRef.current?.();
+      unlistenInjectedRef.current?.();
     }
   };
 
   const handleSend = async (text: string) => {
     if (!text.trim() || isThinking) return;
 
-    // Create a new chat ID on first message of a new chat
     if (currentChatIdRef.current === null) {
       const newId = crypto.randomUUID();
       currentChatIdRef.current = newId;
@@ -145,14 +180,12 @@ export function useOllamaChat(
     const activeChatId = currentChatIdRef.current;
     if (!activeChatId) return;
 
-    // Find the last user message index
     const lastUserIdx = messagesRef.current.reduce(
       (acc, m, i) => (m.role === 'user' ? i : acc),
       -1,
     );
     if (lastUserIdx === -1) return;
 
-    // Keep history up to and including the last user message, add empty assistant placeholder
     const historyUpToUser = messagesRef.current.slice(0, lastUserIdx + 1);
     const withPlaceholder = [...historyUpToUser, { role: 'assistant' as const, content: '' }];
 
@@ -173,4 +206,3 @@ export function useOllamaChat(
 
   return { messages, isThinking, agentStatus, error, handleSend, handleRetry, handleStop };
 }
-

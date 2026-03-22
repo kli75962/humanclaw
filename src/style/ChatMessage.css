@@ -38,6 +38,10 @@
 
 .chat-bubble--assistant {
   color: #F3F4F6;
+  background: #1E1F20;
+  padding: 12px 20px;
+  border-radius: 24px;
+  border-top-left-radius: 4px;
 }
 
 .chat-cursor {
