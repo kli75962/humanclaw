@@ -78,6 +78,46 @@
   flex-shrink: 0;
 }
 
+/* ── Mobile nav overlay (always hidden on desktop) ── */
+.mobile-nav {
+  display: none;
+}
+
+/* ── Phone layout ── */
+@media (max-width: 768px) {
+  /* Mobile nav: fixed at same position as side panel's top nav buttons */
+  .mobile-nav {
+    position: fixed;
+    top: 12px;
+    left: 16px;
+    z-index: 40;
+    display: flex;
+    gap: 4px;
+  }
+  /* Hide mobile nav when side panel is open (side panel has same buttons in same spot) */
+  .app-root.side-open .mobile-nav {
+    display: none;
+  }
+
+  /* Side panel: fixed full-screen, slides in from left */
+  .app-left {
+    position: fixed !important;
+    inset: 0;
+    z-index: 50;
+    width: 100% !important;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+  }
+  .app-root.side-open .app-left {
+    transform: translateX(0);
+  }
+
+  /* Divider: hidden on mobile */
+  .app-divider {
+    display: none !important;
+  }
+}
+
 .app-error {
   background: rgba(127, 29, 29, 0.3);
   border: 1px solid #b91c1c;

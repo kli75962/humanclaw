@@ -8,6 +8,7 @@ import { ChatMessage } from './components/ChatMessage';
 import { InputBar } from './components/InputBar';
 import { SideMenu } from './components/SideMenu';
 import { AccessibilityDialog } from './components/AccessibilityDialog';
+import { Menu, Settings } from 'lucide-react';
 import type { ChatMeta, InputBarHandle, Message } from './types';
 import './style/themes.css';
 import './style/App.css';
@@ -23,6 +24,12 @@ function App() {
     () => localStorage.getItem(MODEL_STORAGE_KEY) ?? DEFAULT_MODEL
   );
   const [sideView, setSideView] = useState<'history' | 'settings'>('history');
+  const [sideOpen, setSideOpen] = useState(false);
+
+  const handleSwitchView = useCallback((v: 'history' | 'settings') => {
+    setSideView(v);
+    setSideOpen(true);
+  }, []);
   const [sideWidth, setSideWidth] = useState(() => {
     const saved = localStorage.getItem(SIDE_WIDTH_KEY);
     return saved ? Number(saved) : Math.floor(window.innerWidth * 0.33);
@@ -175,14 +182,32 @@ function App() {
   }, [messages, isThinking, handleRetry]);
 
   return (
-    <div className="app-root">
+    <div className={`app-root${sideOpen ? ' side-open' : ''}`}>
       <AccessibilityDialog />
+
+      {/* ── Mobile nav overlay (phone only, shown when side panel is closed) ── */}
+      <div className="mobile-nav">
+        <button
+          className={`top-nav-btn${sideView === 'settings' ? ' top-nav-btn--active' : ''}`}
+          onClick={() => handleSwitchView('settings')}
+          aria-label="Settings"
+        >
+          <Settings size={22} />
+        </button>
+        <button
+          className={`top-nav-btn${sideView === 'history' ? ' top-nav-btn--active' : ''}`}
+          onClick={() => handleSwitchView('history')}
+          aria-label="Chat history"
+        >
+          <Menu size={22} />
+        </button>
+      </div>
 
       {/* ── Left panel ── */}
       <div className="app-left" style={{ width: sideWidth }}>
         <SideMenu
           view={sideView}
-          onSwitchView={setSideView}
+          onSwitchView={handleSwitchView}
           onNewChat={startNewChat}
           chats={chatMetas}
           activeChatId={activeChatId}
@@ -191,6 +216,8 @@ function App() {
           model={model}
           onModelChange={handleModelChange}
           onOllamaEndpointChanged={handleOllamaEndpointChanged}
+          isMobileOpen={sideOpen}
+          onCloseSide={() => setSideOpen(false)}
         />
       </div>
 

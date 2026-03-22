@@ -47,6 +47,8 @@ export interface SideMenuProps {
   model: string;
   onModelChange: (m: string) => void;
   onOllamaEndpointChanged: () => void;
+  isMobileOpen?: boolean;
+  onCloseSide?: () => void;
 }
 
 export interface WelcomeScreenProps {

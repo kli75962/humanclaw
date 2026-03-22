@@ -121,6 +121,15 @@
 .top-nav-btn--active {
   color: var(--color-text);
 }
+.top-nav-btn--back {
+  display: none;
+  margin-left: auto;
+}
+@media (max-width: 768px) {
+  .top-nav-btn--back {
+    display: flex;
+  }
+}
 
 /* ── Settings view inside sidebar ── */
 .side-menu-settings {

@@ -1,7 +1,7 @@
 import { memo, useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import { Menu, PenSquare, Settings, Trash2 } from 'lucide-react';
+import { ChevronRight, Menu, PenSquare, Settings, Trash2 } from 'lucide-react';
 import { useSession } from '../hooks/useSession';
 import { SegmentControl } from './SettingsUI';
 import { GeneralTab } from './SettingsGeneralTab';
@@ -82,6 +82,7 @@ export const SideMenu = memo(function SideMenu({
   view, onSwitchView,
   onNewChat, chats, activeChatId, onSelectChat, onDeleteChat,
   model, onModelChange, onOllamaEndpointChanged,
+  isMobileOpen, onCloseSide,
 }: SideMenuProps) {
   return (
     <div className="side-menu-panel">
@@ -101,6 +102,15 @@ export const SideMenu = memo(function SideMenu({
         >
           <Menu size={22} />
         </button>
+        {isMobileOpen && (
+          <button
+            className="top-nav-btn top-nav-btn--back"
+            onClick={onCloseSide}
+            aria-label="Back to chat"
+          >
+            <ChevronRight size={22} />
+          </button>
+        )}
       </div>
 
       {/* Scrollable content */}
