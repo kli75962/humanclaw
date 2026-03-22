@@ -1,6 +1,6 @@
 .inputbar {
   width: 100%;
-  background: #131314;
+  background: var(--color-bg);
   padding: 16px 16px 24px;
   flex-shrink: 0;
 }
@@ -16,7 +16,7 @@
 .inputbar-row {
   max-width: 768px;
   margin: 0 auto;
-  background: #1E1F20;
+  background: var(--color-surface);
   border-radius: 9999px;
   display: flex;
   align-items: center;
@@ -25,13 +25,13 @@
   transition: border-color 0.15s;
 }
 .inputbar-row:focus-within {
-  border-color: #4B5563;
+  border-color: var(--color-border);
 }
 
 .inputbar-input {
   flex: 1;
   background: transparent;
-  color: #ffffff;
+  color: var(--color-text);
   padding: 0 16px;
   outline: none;
   border: none;
@@ -39,7 +39,7 @@
   font-size: 14px;
 }
 .inputbar-input::placeholder {
-  color: #9CA3AF;
+  color: var(--color-text-2);
 }
 .inputbar-input:disabled {
   opacity: 0.5;
@@ -57,14 +57,14 @@
   flex-shrink: 0;
 }
 .inputbar-btn:hover {
-  background: #2C2C2C;
+  background: var(--color-hover);
 }
 .inputbar-btn:disabled {
   opacity: 0.4;
 }
 
 .inputbar-stt-btn {
-  color: #9CA3AF;
+  color: var(--color-text-2);
 }
 .inputbar-stt-btn--listening {
   color: #60a5fa;

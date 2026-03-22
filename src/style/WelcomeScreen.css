@@ -28,7 +28,7 @@
 .welcome-subtitle {
   font-size: 48px;
   font-weight: 600;
-  color: #444746;
+  color: var(--color-text-3);
 }
 
 .welcome-suggestions {
@@ -46,7 +46,7 @@
 .welcome-card {
   min-width: 180px;
   height: 192px;
-  background: #1E1F20;
+  background: var(--color-surface);
   padding: 16px;
   border-radius: 24px;
   display: flex;
@@ -59,13 +59,13 @@
   flex-shrink: 0;
 }
 .welcome-card:hover {
-  background: #2C2C2C;
+  background: var(--color-hover);
 }
 
 .welcome-card-text {
   font-size: 14px;
   font-weight: 500;
-  color: #E5E7EB;
+  color: var(--color-text);
 }
 
 .welcome-card-icon {
@@ -78,6 +78,6 @@
   justify-content: center;
 }
 
-.welcome-icon--blue  { color: #60a5fa; }
+.welcome-icon--blue   { color: #60a5fa; }
 .welcome-icon--yellow { color: #facc15; }
 .welcome-icon--purple { color: #c084fc; }

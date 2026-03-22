@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { ChevronRight, Mic, Monitor, Pencil, QrCode, Smartphone, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Mic, Monitor, Pencil, QrCode, Smartphone, Trash2 } from 'lucide-react';
 import { Modal } from './Modal';
 import { ShowQrView, ScanView } from './SettingsQrPairing';
 import { Card, CardDivider, CardRow, SectionHeader } from './SettingsUI';
@@ -38,16 +38,6 @@ export function ConnectTab({
 
   return (
     <>
-      {showQrPair && (
-        <Modal title={isAndroid ? 'Scan QR to Link' : 'Show QR to Link'} onClose={() => setShowQrPair(false)}>
-          {isAndroid ? (
-            <ScanView onPaired={() => { onPaired(); setShowQrPair(false); }} isAndroid={isAndroid} />
-          ) : (
-            <ShowQrView />
-          )}
-        </Modal>
-      )}
-
       {showSttEdit && !isAndroid && (
         <Modal title="Edit Speech to Text" onClose={() => setShowSttEdit(false)}>
           <div className="settings-edit-modal-body">
@@ -75,8 +65,8 @@ export function ConnectTab({
               className="settings-popup-input"
             />
             <p style={{ marginTop: 8 }}>
-              Or set <span style={{ fontFamily: 'monospace', color: '#CBD5E1' }}>GOOGLE_API_KEY</span> in{' '}
-              <span style={{ fontFamily: 'monospace', color: '#CBD5E1' }}>src-tauri/.secrets</span>.
+              Or set <span style={{ fontFamily: 'monospace', color: 'var(--color-text-2)' }}>GOOGLE_API_KEY</span> in{' '}
+              <span style={{ fontFamily: 'monospace', color: 'var(--color-text-2)' }}>src-tauri/.secrets</span>.
               Language codes are comma-separated, first is primary.
             </p>
           </div>
@@ -112,7 +102,7 @@ export function ConnectTab({
 
       <SectionHeader>Session</SectionHeader>
       <Card>
-        <CardRow onClick={() => setShowQrPair(true)}>
+        <CardRow onClick={() => setShowQrPair((v) => !v)}>
           <div className="settings-qr-row-left">
             <div className="settings-icon-badge settings-icon-badge--indigo">
               <QrCode size={18} />
@@ -122,8 +112,21 @@ export function ConnectTab({
               <p className="settings-item-subtitle">Scan or display a QR code to link devices</p>
             </div>
           </div>
-          <ChevronRight size={18} className="settings-chevron" />
+          {showQrPair
+            ? <ChevronDown size={18} className="settings-chevron" />
+            : <ChevronRight size={18} className="settings-chevron" />
+          }
         </CardRow>
+
+        {showQrPair && (
+          <div className="settings-inline-expand">
+            {isAndroid ? (
+              <ScanView onPaired={() => { onPaired(); setShowQrPair(false); }} isAndroid={isAndroid} />
+            ) : (
+              <ShowQrView />
+            )}
+          </div>
+        )}
       </Card>
 
       {(session?.paired_devices ?? []).length > 0 && (

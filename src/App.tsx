@@ -3,27 +3,56 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useOllamaChat } from './hooks/useOllamaChat';
 import { useStt } from './hooks/useStt';
-import { TopBar } from './components/TopBar';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ChatMessage } from './components/ChatMessage';
 import { InputBar } from './components/InputBar';
-import { SettingsScreen } from './components/SettingsScreen';
 import { SideMenu } from './components/SideMenu';
 import { AccessibilityDialog } from './components/AccessibilityDialog';
 import type { ChatMeta, InputBarHandle, Message } from './types';
+import './style/themes.css';
 import './style/App.css';
 
 const DEFAULT_MODEL = 'kimi-k2.5:cloud';
 const MODEL_STORAGE_KEY = 'phoneclaw_model';
+const SIDE_WIDTH_KEY = 'phoneclaw_side_width';
+const MIN_SIDE = 200;
+const MAX_SIDE_RATIO = 0.6;
 
 function App() {
   const [model, setModel] = useState(
     () => localStorage.getItem(MODEL_STORAGE_KEY) ?? DEFAULT_MODEL
   );
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
-  const [ollamaEndpointRevision, setOllamaEndpointRevision] = useState(0);
+  const [sideView, setSideView] = useState<'history' | 'settings'>('history');
+  const [sideWidth, setSideWidth] = useState(() => {
+    const saved = localStorage.getItem(SIDE_WIDTH_KEY);
+    return saved ? Number(saved) : Math.floor(window.innerWidth * 0.33);
+  });
+
+  const dragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartW = useRef(0);
+
+  const handleDividerPointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    dragStartX.current = e.clientX;
+    dragStartW.current = sideWidth;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }, [sideWidth]);
+
+  const handleDividerPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragging.current) return;
+    const delta = e.clientX - dragStartX.current;
+    const maxSide = Math.floor(window.innerWidth * MAX_SIDE_RATIO);
+    const next = Math.max(MIN_SIDE, Math.min(maxSide, dragStartW.current + delta));
+    setSideWidth(next);
+  }, []);
+
+  const handleDividerPointerUp = useCallback(() => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    setSideWidth((w) => { localStorage.setItem(SIDE_WIDTH_KEY, String(w)); return w; });
+  }, []);
 
   // Chat management
   const [chatMetas, setChatMetas] = useState<ChatMeta[]>([]);
@@ -92,7 +121,6 @@ function App() {
   const startNewChat = useCallback(() => {
     setActiveChatId(null);
     setInitMessages([]);
-    setShowMenu(false);
   }, []);
 
   const switchChat = useCallback((id: string) => {
@@ -105,7 +133,6 @@ function App() {
         setActiveChatId(id);
         setInitMessages([]);
       });
-    setShowMenu(false);
   }, []);
 
   const activeChatIdRef = useRef(activeChatId);
@@ -121,23 +148,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    invoke<{ name: string }[]>('list_models')
-      .then((models) => {
-        const names = models.map((m) => m.name);
-        setAvailableModels(names);
-        const saved = localStorage.getItem(MODEL_STORAGE_KEY);
-        if (names.length > 0 && saved && !names.includes(saved)) {
-          setModel(names[0]);
-          localStorage.setItem(MODEL_STORAGE_KEY, names[0]);
-        } else if (names.length > 0 && !saved && !names.includes(DEFAULT_MODEL)) {
-          setModel(names[0]);
-          localStorage.setItem(MODEL_STORAGE_KEY, names[0]);
-        }
-      })
-      .catch(() => {});
-  }, [ollamaEndpointRevision, showSettings]);
-
-  useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isThinking, agentStatus]);
 
@@ -146,13 +156,7 @@ function App() {
     handleSend(text);
   }, [handleSend, isListening, stopListening]);
 
-  const handleMenuOpen = useCallback(() => setShowMenu((v) => !v), []);
-  const handleMenuClose = useCallback(() => setShowMenu(false), []);
-  const handleSettingsOpen = useCallback(() => setShowSettings(true), []);
-  const handleSettingsBack = useCallback(() => setShowSettings(false), []);
-  const handleOllamaEndpointChanged = useCallback(() => {
-    setOllamaEndpointRevision((v) => v + 1);
-  }, []);
+  const handleOllamaEndpointChanged = useCallback(() => {}, []);
 
   const messageList = useMemo(() => {
     const lastUserMsgIdx = messages.reduce(
@@ -170,64 +174,70 @@ function App() {
     ));
   }, [messages, isThinking, handleRetry]);
 
-  if (showSettings) {
-    return (
-      <SettingsScreen
-        model={model}
-        availableModels={availableModels}
-        onModelChange={handleModelChange}
-        onOllamaEndpointChanged={handleOllamaEndpointChanged}
-        onBack={handleSettingsBack}
-      />
-    );
-  }
-
   return (
     <div className="app-root">
       <AccessibilityDialog />
-      <SideMenu
-        open={showMenu}
-        onClose={handleMenuClose}
-        onNewChat={startNewChat}
-        chats={chatMetas}
-        activeChatId={activeChatId}
-        onSelectChat={switchChat}
-        onDeleteChat={deleteChat}
-      />
-      <TopBar model={model} onMenuOpen={handleMenuOpen} onSettingsOpen={handleSettingsOpen} />
 
-      <div className="app-content custom-scrollbar">
-        {messages.length === 0 ? (
-          <WelcomeScreen onSend={onSend} />
-        ) : (
-          <div className="app-messages">
-            {messageList}
-
-            {agentStatus && (
-              <div className="app-agent-status">
-                <span className="app-agent-dot" />
-                {agentStatus}
-              </div>
-            )}
-
-            {error && (
-              <div className="app-error">{error}</div>
-            )}
-
-            <div ref={scrollRef} />
-          </div>
-        )}
+      {/* ── Left panel ── */}
+      <div className="app-left" style={{ width: sideWidth }}>
+        <SideMenu
+          view={sideView}
+          onSwitchView={setSideView}
+          onNewChat={startNewChat}
+          chats={chatMetas}
+          activeChatId={activeChatId}
+          onSelectChat={switchChat}
+          onDeleteChat={deleteChat}
+          model={model}
+          onModelChange={handleModelChange}
+          onOllamaEndpointChanged={handleOllamaEndpointChanged}
+        />
       </div>
 
-      <InputBar
-        ref={inputBarRef}
-        isThinking={isThinking}
-        isListening={isListening}
-        sttError={sttError}
-        onSend={onSend}
-        onSttToggle={handleSttToggle}
-        onStop={handleStop}
+      {/* ── Draggable divider ── */}
+      <div
+        className="app-divider"
+        onPointerDown={handleDividerPointerDown}
+        onPointerMove={handleDividerPointerMove}
+        onPointerUp={handleDividerPointerUp}
+        onPointerCancel={handleDividerPointerUp}
       />
+
+      {/* ── Right: chat ── */}
+      <div className="app-right">
+        <div className="app-content custom-scrollbar">
+          {messages.length === 0 ? (
+            <WelcomeScreen onSend={onSend} />
+          ) : (
+            <div className="app-messages">
+              {messageList}
+
+              {agentStatus && (
+                <div className="app-agent-status">
+                  <span className="app-agent-dot" />
+                  {agentStatus}
+                </div>
+              )}
+
+              {error && (
+                <div className="app-error">{error}</div>
+              )}
+
+              <div ref={scrollRef} />
+            </div>
+          )}
+        </div>
+
+        <InputBar
+          ref={inputBarRef}
+          isThinking={isThinking}
+          isListening={isListening}
+          sttError={sttError}
+          onSend={onSend}
+          onSttToggle={handleSttToggle}
+          onStop={handleStop}
+        />
+      </div>
     </div>
   );
 }

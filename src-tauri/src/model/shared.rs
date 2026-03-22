@@ -1,3 +1,4 @@
+use chrono::Local;
 use serde::Serialize;
 use tauri::AppHandle;
 
@@ -62,10 +63,12 @@ pub async fn build_base_prompt(app: &AppHandle) -> String {
 pub fn prepare_system(app: &AppHandle, base: &str) -> String {
     let core = read_core(app);
     let core_block = build_core_prompt(&core);
+    let now = Local::now().format("%Y-%m-%d %H:%M:%S %Z").to_string();
+    let datetime_block = format!("[CURRENT DATETIME]\n{now}");
     if core_block.is_empty() {
-        base.to_string()
+        format!("{datetime_block}\n\n{base}")
     } else {
-        format!("{core_block}\n\n{base}")
+        format!("{datetime_block}\n\n{core_block}\n\n{base}")
     }
 }
 

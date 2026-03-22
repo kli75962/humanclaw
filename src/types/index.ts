@@ -35,22 +35,18 @@ export interface ModalProps {
   children: ReactNode;
 }
 
-export interface SettingsScreenProps {
-  model: string;
-  availableModels: string[];
-  onModelChange: (model: string) => void;
-  onOllamaEndpointChanged: () => void;
-  onBack: () => void;
-}
 
 export interface SideMenuProps {
-  open: boolean;
-  onClose: () => void;
+  view: 'history' | 'settings';
+  onSwitchView: (v: 'history' | 'settings') => void;
   onNewChat: () => void;
   chats: ChatMeta[];
   activeChatId: string | null;
   onSelectChat: (id: string) => void;
   onDeleteChat: (id: string) => void;
+  model: string;
+  onModelChange: (m: string) => void;
+  onOllamaEndpointChanged: () => void;
 }
 
 export interface WelcomeScreenProps {
@@ -69,8 +65,6 @@ export interface UseOllamaChatReturn {
 
 export interface TopBarProps {
   model: string;
-  onMenuOpen: () => void;
-  onSettingsOpen: () => void;
 }
 
 /** A single message in the Ollama chat conversation. */

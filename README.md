@@ -26,8 +26,3 @@ build android:
   bun run tauri android build
   
   src-tauri/gen/android/app/build/outputs/apk/release/
-
-  bun run tauri android build
-
-permission:
- src-tauri/gen/android/app/src/main/androidManifest.xml

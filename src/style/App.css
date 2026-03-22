@@ -1,10 +1,46 @@
 .app-root {
   display: flex;
+  flex-direction: row;
+  height: 100%;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  overflow: hidden;
+}
+
+/* ── Left column (side panel) ── */
+.app-left {
+  flex-shrink: 0;
+  height: 100%;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Draggable divider ── */
+.app-divider {
+  width: 2px;
+  flex-shrink: 0;
+  height: 100%;
+  background: var(--color-border);
+  cursor: col-resize;
+  transition: background 0.15s;
+  user-select: none;
+  touch-action: none;
+}
+.app-divider:hover,
+.app-divider:active {
+  background: var(--color-accent-2);
+}
+
+/* ── Right column (chat) ── */
+.app-right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
   flex-direction: column;
   height: 100%;
-  background: #131314;
-  color: #E3E3E3;
-  font-family: ui-sans-serif, system-ui, sans-serif;
+  overflow: hidden;
 }
 
 .app-content {
