@@ -51,7 +51,6 @@ function ModelConfigPanel({
   onModelChange,
   setOllamaEndpoint,
   onOllamaEndpointChanged,
-  onClose,
   onSaved,
 }: {
   session: SessionConfig | null;
@@ -59,7 +58,6 @@ function ModelConfigPanel({
   onModelChange: (m: string) => void;
   setOllamaEndpoint: (host: string, port: number) => Promise<SessionConfig>;
   onOllamaEndpointChanged: () => void;
-  onClose: () => void;
   onSaved: (provider: Provider) => void;
 }) {
   const [provider, setProvider] = useState<Provider>(
@@ -80,8 +78,12 @@ function ModelConfigPanel({
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [ollamaModelsLoading, setOllamaModelsLoading] = useState(false);
   const [ollamaModelsError, setOllamaModelsError] = useState('');
-  const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+
+  function flashSaved(msg = 'Saved') {
+    setSaveMsg(msg);
+    setTimeout(() => setSaveMsg(''), 1800);
+  }
 
   useEffect(() => {
     invoke<string | null>('load_secret', { key: 'claude_api_key' })
@@ -122,37 +124,55 @@ function ModelConfigPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider]);
 
-  async function handleSave() {
-    setSaving(true);
-    setSaveMsg('');
+  function handleProviderChange(p: Provider) {
+    setProvider(p);
+    localStorage.setItem(PROVIDER_KEY, p);
+    onSaved(p);
+  }
+
+  async function handleApiKeyBlur() {
+    if (!claudeApiKey.trim()) return;
     try {
-      localStorage.setItem(PROVIDER_KEY, provider);
-      if (provider === 'claude') {
-        if (claudeApiKey.trim()) {
-          await invoke('store_secret', { key: 'claude_api_key', value: claudeApiKey.trim() });
-        }
-        localStorage.setItem(CLAUDE_MODEL_KEY, claudeModel);
-        onModelChange(claudeModel);
-        onSaved('claude');
-      } else {
-        const colonIdx = ollamaHostPort.lastIndexOf(':');
-        const host = colonIdx > 0 ? ollamaHostPort.slice(0, colonIdx).trim() : ollamaHostPort.trim();
-        const port = colonIdx > 0 ? parseInt(ollamaHostPort.slice(colonIdx + 1), 10) : 11434;
-        if (!host || !Number.isFinite(port) || port < 1 || port > 65535) {
-          setSaveMsg('Invalid IP:Port'); return;
-        }
-        await setOllamaEndpoint(host, port);
-        onOllamaEndpointChanged();
-        onModelChange(ollamaModel);
-        onSaved('ollama');
-      }
-      setSaveMsg('Saved');
-      setTimeout(onClose, 700);
+      await invoke('store_secret', { key: 'claude_api_key', value: claudeApiKey.trim() });
+      flashSaved();
     } catch (e) {
-      setSaveMsg(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSaving(false);
+      flashSaved(e instanceof Error ? e.message : String(e));
     }
+  }
+
+  function handleClaudeModelSelect(id: string) {
+    setClaudeModel(id);
+    setIsModelMenuOpen(false);
+    localStorage.setItem(PROVIDER_KEY, 'claude');
+    localStorage.setItem(CLAUDE_MODEL_KEY, id);
+    onModelChange(id);
+    onSaved('claude');
+    flashSaved();
+  }
+
+  async function handleOllamaHostBlur() {
+    const colonIdx = ollamaHostPort.lastIndexOf(':');
+    const host = colonIdx > 0 ? ollamaHostPort.slice(0, colonIdx).trim() : ollamaHostPort.trim();
+    const port = colonIdx > 0 ? parseInt(ollamaHostPort.slice(colonIdx + 1), 10) : 11434;
+    if (!host || !Number.isFinite(port) || port < 1 || port > 65535) {
+      flashSaved('Invalid IP:Port'); return;
+    }
+    try {
+      await setOllamaEndpoint(host, port);
+      onOllamaEndpointChanged();
+      flashSaved();
+    } catch (e) {
+      flashSaved(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  function handleOllamaModelSelect(m: string) {
+    setOllamaModel(m);
+    setIsModelMenuOpen(false);
+    localStorage.setItem(PROVIDER_KEY, 'ollama');
+    onModelChange(m);
+    onSaved('ollama');
+    flashSaved();
   }
 
   return (
@@ -162,7 +182,7 @@ function ModelConfigPanel({
         {(['claude', 'ollama'] as Provider[]).map((p) => (
           <button
             key={p}
-            onClick={() => setProvider(p)}
+            onClick={() => handleProviderChange(p)}
             className={`settings-provider-btn${provider === p ? ' settings-provider-btn--active' : ''}`}
           >
             {p === 'claude' ? 'Claude' : 'Ollama'}
@@ -177,23 +197,21 @@ function ModelConfigPanel({
             type="password"
             value={claudeApiKey}
             onChange={(e) => setClaudeApiKey(e.target.value)}
+            onBlur={handleApiKeyBlur}
             placeholder="sk-ant-..."
             autoComplete="off"
             className="settings-popup-input"
             style={{ marginTop: 6 }}
           />
           <p className="settings-modal-field-label">Model</p>
-          <div ref={modelMenuRef} className="settings-model-menu" style={{ marginTop: 6 }}>
+          <div ref={modelMenuRef} className={`settings-model-menu${isModelMenuOpen ? ' settings-model-menu--open' : ''}`} style={{ marginTop: 6 }}>
             <button
               type="button"
               onClick={() => setIsModelMenuOpen((v) => !v)}
               className={`settings-model-trigger${isModelMenuOpen ? ' settings-model-trigger-open' : ''}`}
             >
               <span className="settings-model-trigger-label">{formatModelLabel(claudeModel)}</span>
-              <ChevronDown
-                size={16}
-                className={`settings-model-trigger-chevron${isModelMenuOpen ? ' settings-model-trigger-chevron-open' : ''}`}
-              />
+              <ChevronDown size={16} className={`settings-model-trigger-chevron${isModelMenuOpen ? ' settings-model-trigger-chevron-open' : ''}`} />
             </button>
             {isModelMenuOpen && (
               <div className="settings-model-dropdown">
@@ -202,7 +220,7 @@ function ModelConfigPanel({
                     key={m.id}
                     type="button"
                     className={`settings-model-option${claudeModel === m.id ? ' settings-model-option-active' : ''}`}
-                    onClick={() => { setClaudeModel(m.id); setIsModelMenuOpen(false); }}
+                    onClick={() => handleClaudeModelSelect(m.id)}
                   >
                     <span>{m.label}</span>
                     {claudeModel === m.id && <Check size={14} />}
@@ -221,6 +239,7 @@ function ModelConfigPanel({
             <input
               value={ollamaHostPort}
               onChange={(e) => setOllamaHostPort(e.target.value)}
+              onBlur={handleOllamaHostBlur}
               placeholder="127.0.0.1:11434"
               className="settings-popup-input"
               style={{ marginTop: 6, flex: 1 }}
@@ -242,17 +261,14 @@ function ModelConfigPanel({
             </p>
           )}
           {ollamaModels.length > 0 ? (
-            <div ref={modelMenuRef} className="settings-model-menu" style={{ marginTop: 6 }}>
+            <div ref={modelMenuRef} className={`settings-model-menu${isModelMenuOpen ? ' settings-model-menu--open' : ''}`} style={{ marginTop: 6 }}>
               <button
                 type="button"
                 onClick={() => setIsModelMenuOpen((v) => !v)}
                 className={`settings-model-trigger${isModelMenuOpen ? ' settings-model-trigger-open' : ''}`}
               >
                 <span className="settings-model-trigger-label">{ollamaModel}</span>
-                <ChevronDown
-                  size={16}
-                  className={`settings-model-trigger-chevron${isModelMenuOpen ? ' settings-model-trigger-chevron-open' : ''}`}
-                />
+                <ChevronDown size={16} className={`settings-model-trigger-chevron${isModelMenuOpen ? ' settings-model-trigger-chevron-open' : ''}`} />
               </button>
               {isModelMenuOpen && (
                 <div className="settings-model-dropdown">
@@ -261,7 +277,7 @@ function ModelConfigPanel({
                       key={m}
                       type="button"
                       className={`settings-model-option${ollamaModel === m ? ' settings-model-option-active' : ''}`}
-                      onClick={() => { setOllamaModel(m); setIsModelMenuOpen(false); }}
+                      onClick={() => handleOllamaModelSelect(m)}
                     >
                       <span>{m}</span>
                       {ollamaModel === m && <Check size={14} />}
@@ -274,6 +290,7 @@ function ModelConfigPanel({
             <input
               value={ollamaModel}
               onChange={(e) => setOllamaModel(e.target.value)}
+              onBlur={() => handleOllamaModelSelect(ollamaModel)}
               placeholder="llama3.2:latest"
               className="settings-popup-input"
               style={{ marginTop: 6 }}
@@ -282,14 +299,11 @@ function ModelConfigPanel({
         </>
       )}
 
-      <div className="settings-edit-modal-actions">
-        <p className={saveMsg === 'Saved' ? 'settings-save-msg--ok' : 'settings-save-msg--err'}>
-          {saveMsg || ' '}
+      {saveMsg && (
+        <p className={saveMsg === 'Saved' ? 'settings-save-msg--ok' : 'settings-save-msg--err'} style={{ marginTop: 8, fontSize: 12 }}>
+          {saveMsg}
         </p>
-        <button onClick={handleSave} disabled={saving} className="settings-save-btn">
-          {saving ? 'Saving…' : 'Save'}
-        </button>
-      </div>
+      )}
     </div>
   );
 }
@@ -378,7 +392,7 @@ export function GeneralTab({
             onModelChange={onModelChange}
             setOllamaEndpoint={setOllamaEndpoint}
             onOllamaEndpointChanged={onOllamaEndpointChanged}
-            onClose={() => setShowModelConfig(false)}
+
             onSaved={(p) => setActiveProvider(p)}
           />
         )}
@@ -400,7 +414,7 @@ export function GeneralTab({
             </div>
           </div>
 
-          <div ref={personaMenuRef} className="settings-model-menu">
+          <div ref={personaMenuRef} className={`settings-model-menu${isPersonaMenuOpen ? ' settings-model-menu--open' : ''}`}>
             <button
               type="button"
               onClick={() => setIsPersonaMenuOpen((v) => !v)}
@@ -464,7 +478,7 @@ export function GeneralTab({
             </div>
           </div>
 
-          <div ref={themeMenuRef} className="settings-model-menu">
+          <div ref={themeMenuRef} className={`settings-model-menu${isThemeMenuOpen ? ' settings-model-menu--open' : ''}`}>
             <button
               type="button"
               onClick={() => setIsThemeMenuOpen((v) => !v)}
