@@ -63,3 +63,10 @@ pub struct ChatImportRequest {
     pub payload: ChatSyncPayload,
     pub replace: bool,
 }
+
+/// Request body for `POST /unpair` — a peer requests to be removed from our paired list.
+#[derive(Deserialize)]
+pub struct UnpairRequest {
+    pub key: String,
+    pub device_id: String,
+}

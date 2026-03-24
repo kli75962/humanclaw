@@ -6,7 +6,7 @@ use tauri::AppHandle;
 
 use crate::session::store;
 use super::exec::exec_handler;
-use super::types::{ChatImportRequest, PingQuery, PingResponse, RegisterRequest, ToolRequest, ToolResponse};
+use super::types::{ChatImportRequest, PingQuery, PingResponse, RegisterRequest, ToolRequest, ToolResponse, UnpairRequest};
 
 // ── Server state ─────────────────────────────────────────────────────────────
 
@@ -133,6 +133,21 @@ async fn chat_import_handler(
     }
 }
 
+/// POST /unpair — a peer requests us to remove it from our paired devices list.
+async fn unpair_handler(
+    State(app): State<BridgeState>,
+    Json(body): Json<UnpairRequest>,
+) -> StatusCode {
+    let cfg = store::bootstrap(&app);
+    if body.key != cfg.hash_key {
+        return StatusCode::UNAUTHORIZED;
+    }
+    let _ = store::remove_peer(&app, &body.device_id);
+    use tauri::Emitter;
+    app.emit("session-changed", serde_json::json!({})).ok();
+    StatusCode::OK
+}
+
 /// POST /tool — execute a single tool call on this device and return the result.
 /// Authenticated via the shared hash key.
 async fn tool_handler(
@@ -171,6 +186,7 @@ pub fn start_bridge_server(app: AppHandle) {
         let router = Router::new()
             .route("/ping", get(ping_handler))
             .route("/register", post(register_handler))
+            .route("/unpair", post(unpair_handler))
             .route("/tool", post(tool_handler))
             .route("/chat/export", get(chat_export_handler))
             .route("/chat/import", post(chat_import_handler))

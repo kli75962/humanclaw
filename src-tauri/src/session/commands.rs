@@ -35,9 +35,33 @@ pub fn add_paired_device(
 }
 
 /// Remove a paired peer by its device ID.
+/// Also notifies the removed peer so it can remove us from its own list.
 #[tauri::command]
 pub fn remove_paired_device(app: AppHandle, device_id: String) -> Result<SessionConfig, String> {
-    store::remove_peer(&app, &device_id)
+    let cfg = store::bootstrap(&app);
+    let peer = cfg.paired_devices.iter().find(|d| d.device_id == device_id).cloned();
+    let hash_key = cfg.hash_key.clone();
+    let my_device_id = cfg.device.device_id.clone();
+
+    let result = store::remove_peer(&app, &device_id)?;
+
+    // Fire-and-forget: tell the removed peer to drop us from its list too.
+    if let Some(peer) = peer {
+        tauri::async_runtime::spawn(async move {
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(5))
+                .build();
+            if let Ok(client) = client {
+                let _ = client
+                    .post(format!("http://{}/unpair", peer.address))
+                    .json(&serde_json::json!({ "key": hash_key, "device_id": my_device_id }))
+                    .send()
+                    .await;
+            }
+        });
+    }
+
+    Ok(result)
 }
 
 /// Set Ollama endpoint host and port.

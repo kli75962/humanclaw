@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { useCallback, useEffect, useState } from 'react';
 import type { SessionConfig } from '../types';
 
@@ -15,6 +16,12 @@ export function useSession() {
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Re-sync when the backend emits session-changed (e.g. a peer unpaired us).
+  useEffect(() => {
+    const unlisten = listen('session-changed', () => { refresh(); });
+    return () => { unlisten.then((fn) => fn()); };
+  }, [refresh]);
 
   /** Set the session hash key (must be the 64-char hex key from the app). */
   const setHashKey = useCallback(async (hashKey: string): Promise<SessionConfig> => {
