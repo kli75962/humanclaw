@@ -79,3 +79,39 @@
 .inputbar-send-btn {
   color: #60a5fa;
 }
+
+.inputbar-quote-preview {
+  max-width: 768px;
+  margin: 0 auto 8px;
+  padding: 8px 12px;
+  background: var(--color-surface);
+  border-left: 3px solid #60a5fa;
+  border-radius: 6px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.inputbar-quote-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--color-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inputbar-quote-clear {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-3);
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.inputbar-quote-clear:hover {
+  color: var(--color-text-2);
+}

@@ -1,5 +1,6 @@
 mod memory;
 mod characters;
+mod posts;
 mod model;
 mod phone;
 mod tools;
@@ -12,6 +13,7 @@ mod secrets;
 
 use memory::{get_memory_file, set_memory_file, list_chats, load_chat_messages, create_chat, save_chat_messages, delete_chat};
 use characters::{list_characters, save_character, delete_character};
+use posts::{list_posts, save_post, delete_post, like_post, unlike_post, list_comments, add_comment, generate_character_post, trigger_character_reactions, generate_character_dm, react_to_user_post};
 use model::{cancel_chat, chat_claude, chat_ollama, list_models, list_models_at};
 use stt::{stt_android_cancel, stt_android_once, stt_start, stt_stop};
 use secrets::{store_secret, load_secret};
@@ -92,6 +94,18 @@ pub fn run() {
             list_characters,
             save_character,
             delete_character,
+            // posts
+            list_posts,
+            save_post,
+            delete_post,
+            like_post,
+            unlike_post,
+            list_comments,
+            add_comment,
+            generate_character_post,
+            trigger_character_reactions,
+            generate_character_dm,
+            react_to_user_post,
             // session / pairing
             get_session,
             set_device_label,

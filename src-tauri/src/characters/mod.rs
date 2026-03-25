@@ -1,5 +1,5 @@
 mod fs;
-pub use fs::{CharacterMeta, CharacterSyncPayload, export_character_sync_payload, import_character_sync_payload};
+pub use fs::{CharacterMeta, CharacterSyncPayload, export_character_sync_payload, import_character_sync_payload, list_characters as list_characters_fs};
 
 fn emit_and_sync(app: &tauri::AppHandle) {
     use tauri::Emitter;

@@ -1,12 +1,13 @@
 import { memo, useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import { ChevronRight, Menu, PenSquare, Settings, Trash2, UserPlus } from 'lucide-react';
+import { ChevronRight, LayoutGrid, Menu, PenSquare, Settings, Trash2, UserPlus } from 'lucide-react';
 import { useSession } from '../hooks/useSession';
 import { SegmentControl } from './SettingsUI';
 import { GeneralTab } from './SettingsGeneralTab';
 import { ConnectTab } from './SettingsConnectTab';
 import { CreateFriendInline } from './CreateFriendInline';
+import { PostFeed } from './PostFeed';
 import type { SideMenuProps } from '../types';
 import '../style/SideMenu.css';
 import '../style/SettingsScreen.css';
@@ -19,12 +20,16 @@ function SettingsPanel({
   onOllamaEndpointChanged,
   chatMode,
   onChatModeChange,
+  igMode,
+  onIgModeChange,
 }: {
   model: string;
   onModelChange: (m: string) => void;
   onOllamaEndpointChanged: () => void;
   chatMode: boolean;
   onChatModeChange: (v: boolean) => void;
+  igMode: boolean;
+  onIgModeChange: (v: boolean) => void;
 }) {
   const [tab, setTab] = useState<SettingsTab>('general');
   const [peerStatus, setPeerStatus] = useState<Record<string, boolean>>({});
@@ -68,6 +73,8 @@ function SettingsPanel({
               onOllamaEndpointChanged={onOllamaEndpointChanged}
               chatMode={chatMode}
               onChatModeChange={onChatModeChange}
+              igMode={igMode}
+              onIgModeChange={onIgModeChange}
             />
           )}
           {tab === 'connect' && (
@@ -92,6 +99,7 @@ export const SideMenu = memo(function SideMenu({
   isMobileOpen, onCloseSide,
   chatMode, onChatModeChange,
   characters, activeCharacterId, onSelectCharacter, onCreateCharacter, onDeleteCharacter,
+  igMode, onIgModeChange, posts, likedPostIds, onLikePost, onDeletePost, onDmCharacter,
 }: SideMenuProps) {
   const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -113,6 +121,15 @@ export const SideMenu = memo(function SideMenu({
         >
           <Menu size={22} />
         </button>
+        {chatMode && igMode && (
+          <button
+            className={`top-nav-btn${view === 'posts' ? ' top-nav-btn--active' : ''}`}
+            onClick={() => onSwitchView('posts')}
+            aria-label="Posts feed"
+          >
+            <LayoutGrid size={22} />
+          </button>
+        )}
         {isMobileOpen && (
           <button
             className="top-nav-btn top-nav-btn--back"
@@ -203,6 +220,19 @@ export const SideMenu = memo(function SideMenu({
             onOllamaEndpointChanged={onOllamaEndpointChanged}
             chatMode={chatMode}
             onChatModeChange={onChatModeChange}
+            igMode={igMode}
+            onIgModeChange={onIgModeChange}
+          />
+        )}
+
+        {view === 'posts' && (
+          <PostFeed
+            posts={posts}
+            characters={characters}
+            likedPostIds={likedPostIds}
+            onLike={onLikePost}
+            onDelete={onDeletePost}
+            onDmCharacter={onDmCharacter}
           />
         )}
       </div>

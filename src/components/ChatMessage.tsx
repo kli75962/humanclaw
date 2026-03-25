@@ -44,12 +44,22 @@ function formatAssistantText(raw: string): string {
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+function parseQuoteBlock(content: string): { authorName: string; quoteText: string; rest: string } | null {
+  const match = content.match(/^\[postquote:([^\]]*)\]([\s\S]*?)\[\/postquote\]\n?([\s\S]*)$/);
+  if (match) return { authorName: match[1], quoteText: match[2], rest: match[3] };
+  return null;
+}
+
 export const ChatMessage = memo(function ChatMessage({ message, isLastMessage, isThinking, onRetry }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const isStreaming = isThinking && isLastMessage && !isUser;
+
+  const parsed = useMemo(() => isUser ? parseQuoteBlock(message.content) : null, [isUser, message.content]);
+  const bodyContent = parsed ? parsed.rest : message.content;
+
   const displayContent = useMemo(
-    () => (isUser ? message.content : formatAssistantText(message.content)),
-    [isUser, message.content],
+    () => (isUser ? bodyContent : formatAssistantText(bodyContent)),
+    [isUser, bodyContent],
   );
 
   return (
@@ -61,6 +71,12 @@ export const ChatMessage = memo(function ChatMessage({ message, isLastMessage, i
       )}
 
       <div className={`chat-bubble${isUser ? ' chat-bubble--user' : ' chat-bubble--assistant'}`}>
+        {parsed && (
+          <div className="chat-post-quote">
+            <span className="chat-post-quote-author">{parsed.authorName}</span>
+            <span className="chat-post-quote-text">{parsed.quoteText}</span>
+          </div>
+        )}
         {displayContent.split('\n').map((line, i, arr) => (
           <Fragment key={i}>
             {line}

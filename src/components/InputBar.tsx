@@ -1,10 +1,10 @@
 import { forwardRef, memo, useImperativeHandle, useRef, useState } from 'react';
-import { Send, PhoneCall } from 'lucide-react';
+import { Send, PhoneCall, X } from 'lucide-react';
 import type { InputBarProps, InputBarHandle } from '../types';
 import '../style/InputBar.css';
 
 export const InputBar = memo(forwardRef<InputBarHandle, InputBarProps>(function InputBar(
-  { isThinking, isListening, sttError, onSend, onSttToggle, onStop },
+  { isThinking, isListening, sttError, onSend, onSttToggle, onStop, quotedPost, onClearQuote },
   ref,
 ) {
   const [value, setValue] = useState('');
@@ -26,6 +26,14 @@ export const InputBar = memo(forwardRef<InputBarHandle, InputBarProps>(function 
     <div className="inputbar">
       {sttError && (
         <div className="inputbar-error">{sttError}</div>
+      )}
+      {quotedPost && (
+        <div className="inputbar-quote-preview">
+          <span className="inputbar-quote-text">{quotedPost.text}</span>
+          <button className="inputbar-quote-clear" onClick={onClearQuote} aria-label="Clear quote">
+            <X size={14} />
+          </button>
+        </div>
       )}
       <div className="inputbar-row">
         <input

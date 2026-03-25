@@ -3,14 +3,16 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useOllamaChat } from './hooks/useOllamaChat';
 import { useCharacters } from './hooks/useCharacters';
+import { usePosts } from './hooks/usePosts';
+import { usePostGeneration } from './hooks/usePostGeneration';
 import { useStt } from './hooks/useStt';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ChatMessage } from './components/ChatMessage';
 import { InputBar } from './components/InputBar';
 import { SideMenu } from './components/SideMenu';
 import { AccessibilityDialog } from './components/AccessibilityDialog';
-import { Menu, Settings } from 'lucide-react';
-import type { ChatMeta, InputBarHandle, Message } from './types';
+import { LayoutGrid, Menu, Settings } from 'lucide-react';
+import type { ChatMeta, InputBarHandle, Message, Post } from './types';
 import './style/themes.css';
 import './style/App.css';
 
@@ -18,6 +20,7 @@ const DEFAULT_MODEL = 'kimi-k2.5:cloud';
 const MODEL_STORAGE_KEY = 'phoneclaw_model';
 const SIDE_WIDTH_KEY = 'phoneclaw_side_width';
 const CHAT_MODE_KEY = 'phoneclaw_chat_mode';
+const IG_MODE_KEY = 'phoneclaw_ig_mode';
 const MIN_SIDE = 200;
 const MAX_SIDE_RATIO = 0.6;
 
@@ -28,8 +31,20 @@ function App() {
   const [chatMode, setChatMode] = useState(
     () => localStorage.getItem(CHAT_MODE_KEY) === 'true'
   );
+  const [igMode, setIgMode] = useState(
+    () => localStorage.getItem(IG_MODE_KEY) === 'true'
+  );
   const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);
   const { characters, addCharacter, deleteCharacter } = useCharacters();
+  const { posts, likedPostIds, toggleLike, deletePost, refresh: refreshPosts } = usePosts();
+  const [quotedPost, setQuotedPost] = useState<Post | null>(null);
+
+  usePostGeneration({
+    characters,
+    igMode,
+    chatMode,
+    onPostGenerated: () => refreshPosts(),
+  });
 
   const activeCharacter = useMemo(
     () => characters.find((c) => c.id === activeCharacterId) ?? null,
@@ -37,12 +52,17 @@ function App() {
   );
   const characterModel = activeCharacter?.model ?? model;
 
-  const [sideView, setSideView] = useState<'history' | 'settings'>('history');
+  const [sideView, setSideView] = useState<'history' | 'settings' | 'posts'>('history');
   const [sideOpen, setSideOpen] = useState(false);
 
-  const handleSwitchView = useCallback((v: 'history' | 'settings') => {
+  const handleSwitchView = useCallback((v: 'history' | 'settings' | 'posts') => {
     setSideView(v);
     setSideOpen(true);
+  }, []);
+
+  const handleIgModeChange = useCallback((enabled: boolean) => {
+    setIgMode(enabled);
+    localStorage.setItem(IG_MODE_KEY, String(enabled));
   }, []);
   const [sideWidth, setSideWidth] = useState(() => {
     const saved = localStorage.getItem(SIDE_WIDTH_KEY);
@@ -167,6 +187,12 @@ function App() {
       });
   }, []);
 
+  const handleDmCharacter = useCallback((id: string, post: Post) => {
+    selectCharacter(id);
+    setQuotedPost(post);
+    handleSwitchView('history');
+  }, [selectCharacter, handleSwitchView]);
+
   const startNewChat = useCallback(() => {
     setActiveChatId(null);
     setInitMessages([]);
@@ -202,8 +228,15 @@ function App() {
 
   const onSend = useCallback((text: string) => {
     if (isListening) stopListening();
-    handleSend(text);
-  }, [handleSend, isListening, stopListening]);
+    if (quotedPost) {
+      const character = characters.find((c) => c.id === quotedPost.characterId);
+      const authorName = character?.name ?? 'Unknown';
+      handleSend(`[postquote:${authorName}]${quotedPost.text}[/postquote]\n${text}`);
+      setQuotedPost(null);
+    } else {
+      handleSend(text);
+    }
+  }, [handleSend, isListening, stopListening, quotedPost, characters]);
 
   const handleOllamaEndpointChanged = useCallback(() => {}, []);
 
@@ -243,6 +276,15 @@ function App() {
         >
           <Menu size={22} />
         </button>
+        {chatMode && igMode && (
+          <button
+            className={`top-nav-btn${sideView === 'posts' ? ' top-nav-btn--active' : ''}`}
+            onClick={() => handleSwitchView('posts')}
+            aria-label="Posts feed"
+          >
+            <LayoutGrid size={22} />
+          </button>
+        )}
       </div>
 
       {/* ── Left panel ── */}
@@ -267,6 +309,13 @@ function App() {
           onSelectCharacter={selectCharacter}
           onCreateCharacter={addCharacter}
           onDeleteCharacter={deleteCharacter}
+          igMode={igMode}
+          onIgModeChange={handleIgModeChange}
+          posts={posts}
+          likedPostIds={likedPostIds}
+          onLikePost={toggleLike}
+          onDeletePost={deletePost}
+          onDmCharacter={handleDmCharacter}
         />
       </div>
 
@@ -312,6 +361,8 @@ function App() {
           onSend={onSend}
           onSttToggle={handleSttToggle}
           onStop={handleStop}
+          quotedPost={quotedPost}
+          onClearQuote={() => setQuotedPost(null)}
         />
       </div>
     </div>

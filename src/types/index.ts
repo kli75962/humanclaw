@@ -7,6 +7,33 @@ export interface ChatMeta {
   createdAt: string;
 }
 
+/** A post created by a Chat Mode character. */
+export interface Post {
+  id: string;
+  characterId: string;
+  text: string;
+  image?: string;      // base64 data URL, optional
+  createdAt: string;   // ISO datetime
+  likeCount: number;
+}
+
+/** A comment on a post. authorId is a characterId or "user". */
+export interface PostComment {
+  id: string;
+  postId: string;
+  authorId: string;
+  text: string;
+  createdAt: string;
+}
+
+/** Returned by react_to_user_post. action="dm" means text should be injected into chat; action="comment" means it was already saved. */
+export interface ReactResult {
+  characterId: string;
+  action: 'dm' | 'comment';
+  text: string;
+  commentId?: string;
+}
+
 /** A Chat Mode character/friend. */
 export interface Character {
   id: string;
@@ -32,6 +59,8 @@ export interface InputBarProps {
   onSend: (text: string) => void;
   onSttToggle: () => void;
   onStop: () => void;
+  quotedPost?: Post | null;
+  onClearQuote?: () => void;
 }
 
 /** Imperative handle exposed by InputBar for STT integration. */
@@ -48,8 +77,8 @@ export interface ModalProps {
 
 
 export interface SideMenuProps {
-  view: 'history' | 'settings';
-  onSwitchView: (v: 'history' | 'settings') => void;
+  view: 'history' | 'settings' | 'posts';
+  onSwitchView: (v: 'history' | 'settings' | 'posts') => void;
   onNewChat: () => void;
   chats: ChatMeta[];
   activeChatId: string | null;
@@ -67,6 +96,13 @@ export interface SideMenuProps {
   onSelectCharacter: (id: string) => void;
   onCreateCharacter: (data: Omit<Character, 'id' | 'createdAt'>) => void;
   onDeleteCharacter: (id: string) => void;
+  igMode: boolean;
+  onIgModeChange: (v: boolean) => void;
+  posts: Post[];
+  likedPostIds: Set<string>;
+  onLikePost: (id: string) => void;
+  onDeletePost: (id: string) => void;
+  onDmCharacter: (characterId: string, post: Post) => void;
 }
 
 export interface WelcomeScreenProps {

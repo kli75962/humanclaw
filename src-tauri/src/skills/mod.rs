@@ -13,13 +13,22 @@ fn is_persona_skill(name: &str) -> bool {
     name.starts_with("persona_")
 }
 
+fn is_ig_skill(name: &str) -> bool {
+    matches!(name, "generate_post" | "post_comment" | "post_dm")
+}
+
+/// Look up a skill's content by exact name. Returns None if not found.
+pub fn get_skill_content(name: &str) -> Option<&'static str> {
+    SKILLS.iter().find(|s| s.name == name).map(|s| s.content)
+}
+
 /// All SKILL.md files joined as a single text block for the system prompt.
 /// Computed once and cached for the lifetime of the process.
 pub fn build_skills_prompt() -> &'static str {
     SKILLS_PROMPT.get_or_init(|| {
         let mut out = String::new();
         let mut first = true;
-        for s in SKILLS.iter().filter(|s| !is_persona_skill(s.name)) {
+        for s in SKILLS.iter().filter(|s| !is_persona_skill(s.name) && !is_ig_skill(s.name)) {
             if !first {
                 out.push_str("\n\n---\n\n");
             }

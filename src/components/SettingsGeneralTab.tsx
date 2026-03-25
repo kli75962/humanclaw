@@ -321,6 +321,8 @@ interface GeneralTabProps {
   onOllamaEndpointChanged: () => void;
   chatMode: boolean;
   onChatModeChange: (v: boolean) => void;
+  igMode: boolean;
+  onIgModeChange: (v: boolean) => void;
 }
 
 export function GeneralTab({
@@ -334,6 +336,8 @@ export function GeneralTab({
   onOllamaEndpointChanged,
   chatMode,
   onChatModeChange,
+  igMode,
+  onIgModeChange,
 }: GeneralTabProps) {
   const [showModelConfig, setShowModelConfig] = useState(false);
   const [activeProvider, setActiveProvider] = useState<Provider>(
@@ -385,6 +389,25 @@ export function GeneralTab({
         </div>
       </Card>
       <SectionFooter>Chat mode lets you create AI friends with custom personas.</SectionFooter>
+
+      {chatMode && (
+        <>
+          <SectionHeader>IG Mode</SectionHeader>
+          <Card>
+            <div className="settings-card-body">
+              <SegmentControl
+                options={[
+                  { value: 'off' as const, label: 'Off' },
+                  { value: 'on' as const, label: 'On' },
+                ]}
+                value={igMode ? 'on' : 'off'}
+                onChange={(v) => onIgModeChange(v === 'on')}
+              />
+            </div>
+          </Card>
+          <SectionFooter>Characters can share posts visible in the feed.</SectionFooter>
+        </>
+      )}
 
       {!chatMode && <><SectionHeader>Model</SectionHeader>
       <Card>
