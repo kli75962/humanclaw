@@ -95,14 +95,18 @@ pub async fn chat_ollama(
     app: AppHandle,
     messages: Vec<OllamaMessage>,
     model: String,
+    character: Option<crate::model::shared::CharacterOverride>,
 ) -> Result<(), String> {
     crate::model::CHAT_CANCEL.store(false, std::sync::atomic::Ordering::Relaxed);
 
     let tool_schemas = load_tool_schemas();
     bootstrap_memory(&app);
 
-    let base_prompt = build_base_prompt(&app).await;
-    let mut conversation: Vec<OllamaMessage> = messages;
+    let base_prompt = build_base_prompt(&app, character.as_ref()).await;
+    let mut conversation: Vec<OllamaMessage> = messages
+        .into_iter()
+        .filter(|m| m.role != "system")
+        .collect();
     let tool_context = local_tool_context(&app);
 
     show_overlay(&app);

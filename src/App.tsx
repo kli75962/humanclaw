@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useOllamaChat } from './hooks/useOllamaChat';
+import { useCharacters } from './hooks/useCharacters';
 import { useStt } from './hooks/useStt';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ChatMessage } from './components/ChatMessage';
@@ -16,6 +17,7 @@ import './style/App.css';
 const DEFAULT_MODEL = 'kimi-k2.5:cloud';
 const MODEL_STORAGE_KEY = 'phoneclaw_model';
 const SIDE_WIDTH_KEY = 'phoneclaw_side_width';
+const CHAT_MODE_KEY = 'phoneclaw_chat_mode';
 const MIN_SIDE = 200;
 const MAX_SIDE_RATIO = 0.6;
 
@@ -23,6 +25,18 @@ function App() {
   const [model, setModel] = useState(
     () => localStorage.getItem(MODEL_STORAGE_KEY) ?? DEFAULT_MODEL
   );
+  const [chatMode, setChatMode] = useState(
+    () => localStorage.getItem(CHAT_MODE_KEY) === 'true'
+  );
+  const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);
+  const { characters, addCharacter, deleteCharacter } = useCharacters();
+
+  const activeCharacter = useMemo(
+    () => characters.find((c) => c.id === activeCharacterId) ?? null,
+    [characters, activeCharacterId],
+  );
+  const characterModel = activeCharacter?.model ?? model;
+
   const [sideView, setSideView] = useState<'history' | 'settings'>('history');
   const [sideOpen, setSideOpen] = useState(false);
 
@@ -68,6 +82,12 @@ function App() {
 
   const inputBarRef = useRef<InputBarHandle>(null);
 
+  // Only show normal chats (exclude character threads prefixed with "char_")
+  const visibleChatMetas = useMemo(
+    () => chatMetas.filter((m) => !m.id.startsWith('char_')),
+    [chatMetas],
+  );
+
   useEffect(() => {
     invoke<ChatMeta[]>('list_chats').then(setChatMetas).catch(() => {});
   }, []);
@@ -98,7 +118,7 @@ function App() {
   }, []);
 
   const { messages, isThinking, agentStatus, error, handleSend, handleRetry, handleStop } = useOllamaChat(
-    model, activeChatId, initMessages, onChatCreated, onSave,
+    characterModel, activeChatId, initMessages, onChatCreated, onSave, activeCharacter,
   );
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -123,6 +143,28 @@ function App() {
   const handleModelChange = useCallback((m: string) => {
     setModel(m);
     localStorage.setItem(MODEL_STORAGE_KEY, m);
+  }, []);
+
+  const handleChatModeChange = useCallback((enabled: boolean) => {
+    setChatMode(enabled);
+    localStorage.setItem(CHAT_MODE_KEY, String(enabled));
+    setActiveChatId(null);
+    setInitMessages([]);
+    setActiveCharacterId(null);
+  }, []);
+
+  const selectCharacter = useCallback((id: string) => {
+    const charChatId = `char_${id}`;
+    setActiveCharacterId(id);
+    invoke<Message[]>('load_chat_messages', { id: charChatId })
+      .then((msgs) => {
+        setActiveChatId(charChatId);
+        setInitMessages(msgs);
+      })
+      .catch(() => {
+        setActiveChatId(charChatId);
+        setInitMessages([]);
+      });
   }, []);
 
   const startNewChat = useCallback(() => {
@@ -209,7 +251,7 @@ function App() {
           view={sideView}
           onSwitchView={handleSwitchView}
           onNewChat={startNewChat}
-          chats={chatMetas}
+          chats={visibleChatMetas}
           activeChatId={activeChatId}
           onSelectChat={switchChat}
           onDeleteChat={deleteChat}
@@ -218,6 +260,13 @@ function App() {
           onOllamaEndpointChanged={handleOllamaEndpointChanged}
           isMobileOpen={sideOpen}
           onCloseSide={() => setSideOpen(false)}
+          chatMode={chatMode}
+          onChatModeChange={handleChatModeChange}
+          characters={characters}
+          activeCharacterId={activeCharacterId}
+          onSelectCharacter={selectCharacter}
+          onCreateCharacter={addCharacter}
+          onDeleteCharacter={deleteCharacter}
         />
       </div>
 

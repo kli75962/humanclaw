@@ -154,3 +154,82 @@
 .side-menu-settings-content {
   padding-bottom: 32px;
 }
+
+.side-menu-char-avatar {
+  margin-right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+/* ── Inline create-friend form ── */
+.side-menu-new-chat-btn--active {
+  background: var(--color-hover);
+}
+
+.friend-inline-form {
+  border-top: 1px solid var(--color-border);
+  padding: 12px 4px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.friend-inline-icon-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.friend-inline-icon-preview {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border-2);
+}
+
+.friend-inline-icon-placeholder {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  border: 1.5px dashed var(--color-border-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.friend-inline-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.friend-inline-save-btn {
+  flex: 1;
+  padding: 8px;
+  border-radius: 8px;
+  border: none;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.friend-inline-save-btn:hover { opacity: 0.85; }
+
+.friend-inline-cancel-btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-2);
+  background: transparent;
+  color: var(--color-text-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+.friend-inline-cancel-btn:hover { background: var(--color-hover); }

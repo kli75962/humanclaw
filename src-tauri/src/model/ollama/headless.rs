@@ -76,7 +76,7 @@ pub async fn run_headless(
     let tool_schemas = load_tool_schemas();
     bootstrap_memory(app);
 
-    let base_prompt = build_base_prompt(app).await;
+    let base_prompt = build_base_prompt(app, None).await;
     let tool_context = ToolExecutionContext { source_device_id, source_device_type };
 
     let mut history = conversation;

@@ -207,6 +207,7 @@ pub async fn chat_claude(
     app: AppHandle,
     messages: Vec<InputMessage>,
     model: String,
+    character: Option<crate::model::shared::CharacterOverride>,
 ) -> Result<(), String> {
     crate::model::CHAT_CANCEL.store(false, std::sync::atomic::Ordering::Relaxed);
 
@@ -214,12 +215,14 @@ pub async fn chat_claude(
     let tool_schemas = load_tool_schemas();
     bootstrap_memory(&app);
 
-    let base_prompt = build_base_prompt(&app).await;
+    let base_prompt = build_base_prompt(&app, character.as_ref()).await;
     let tool_context = local_tool_context(&app);
 
-    // Convert simple input messages to Claude format
+    // Convert simple input messages to Claude format, filtering system messages
+    // (system prompt is handled separately via build_base_prompt)
     let mut history: Vec<ClaudeMessage> = messages
         .into_iter()
+        .filter(|m| m.role != "system")
         .map(|m| ClaudeMessage {
             role: m.role,
             content: ClaudeContent::Text(m.content),

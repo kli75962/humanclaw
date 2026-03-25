@@ -3,6 +3,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { Message, StreamPayload, AgentStatusPayload, UseOllamaChatReturn } from '../types';
 
+type CharacterOverride = { name: string; persona: string; background: string };
+
 /**
  * Manages the full Ollama agentic chat lifecycle.
  * Persists messages per chat ID; creates a new chat on first send when chatId is null.
@@ -13,6 +15,7 @@ export function useOllamaChat(
   initialMessages: Message[],
   onChatCreated: (id: string, title: string) => void,
   onSave: (id: string, messages: Message[]) => void,
+  character?: CharacterOverride | null,
 ): UseOllamaChatReturn {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isThinking, setIsThinking] = useState(false);
@@ -132,7 +135,7 @@ export function useOllamaChat(
 
       const provider = localStorage.getItem('phoneclaw_provider') ?? 'ollama';
       const command = provider === 'claude' ? 'chat_claude' : 'chat_ollama';
-      await invoke(command, { messages: historyMessages, model });
+      await invoke(command, { messages: historyMessages, model, character: character ?? null });
     } catch (err) {
       setIsThinking(false);
       setAgentStatus(null);
@@ -168,7 +171,7 @@ export function useOllamaChat(
     setMessages(withPlaceholder);
     messagesRef.current = withPlaceholder;
 
-    const historyMessages = updatedMessages.filter(
+    const historyMessages: Message[] = updatedMessages.filter(
       (m) => m.role === 'user' || m.role === 'assistant',
     );
     await runChat(historyMessages, activeChatId);
@@ -192,7 +195,7 @@ export function useOllamaChat(
     setMessages(withPlaceholder);
     messagesRef.current = withPlaceholder;
 
-    const historyMessages = historyUpToUser.filter(
+    const historyMessages: Message[] = historyUpToUser.filter(
       (m) => m.role === 'user' || m.role === 'assistant',
     );
     await runChat(historyMessages, activeChatId);

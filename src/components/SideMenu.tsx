@@ -1,11 +1,12 @@
 import { memo, useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import { ChevronRight, Menu, PenSquare, Settings, Trash2 } from 'lucide-react';
+import { ChevronRight, Menu, PenSquare, Settings, Trash2, UserPlus } from 'lucide-react';
 import { useSession } from '../hooks/useSession';
 import { SegmentControl } from './SettingsUI';
 import { GeneralTab } from './SettingsGeneralTab';
 import { ConnectTab } from './SettingsConnectTab';
+import { CreateFriendInline } from './CreateFriendInline';
 import type { SideMenuProps } from '../types';
 import '../style/SideMenu.css';
 import '../style/SettingsScreen.css';
@@ -16,10 +17,14 @@ function SettingsPanel({
   model,
   onModelChange,
   onOllamaEndpointChanged,
+  chatMode,
+  onChatModeChange,
 }: {
   model: string;
   onModelChange: (m: string) => void;
   onOllamaEndpointChanged: () => void;
+  chatMode: boolean;
+  onChatModeChange: (v: boolean) => void;
 }) {
   const [tab, setTab] = useState<SettingsTab>('general');
   const [peerStatus, setPeerStatus] = useState<Record<string, boolean>>({});
@@ -61,6 +66,8 @@ function SettingsPanel({
               setPersona={setPersona}
               setOllamaEndpoint={setOllamaEndpoint}
               onOllamaEndpointChanged={onOllamaEndpointChanged}
+              chatMode={chatMode}
+              onChatModeChange={onChatModeChange}
             />
           )}
           {tab === 'connect' && (
@@ -83,7 +90,11 @@ export const SideMenu = memo(function SideMenu({
   onNewChat, chats, activeChatId, onSelectChat, onDeleteChat,
   model, onModelChange, onOllamaEndpointChanged,
   isMobileOpen, onCloseSide,
+  chatMode, onChatModeChange,
+  characters, activeCharacterId, onSelectCharacter, onCreateCharacter, onDeleteCharacter,
 }: SideMenuProps) {
+  const [showCreateForm, setShowCreateForm] = useState(false);
+
   return (
     <div className="side-menu-panel">
       {/* Top nav */}
@@ -115,7 +126,7 @@ export const SideMenu = memo(function SideMenu({
 
       {/* Scrollable content */}
       <div className="side-menu-scroll">
-        {view === 'history' && (
+        {view === 'history' && !chatMode && (
           <>
             <button onClick={onNewChat} className="side-menu-new-chat-btn">
               <PenSquare size={17} style={{ marginRight: 12, color: 'var(--color-text-2)', flexShrink: 0 }} />
@@ -143,11 +154,55 @@ export const SideMenu = memo(function SideMenu({
           </>
         )}
 
+        {view === 'history' && chatMode && (
+          <>
+            <button
+              onClick={() => setShowCreateForm((v) => !v)}
+              className={`side-menu-new-chat-btn${showCreateForm ? ' side-menu-new-chat-btn--active' : ''}`}
+            >
+              <UserPlus size={17} style={{ marginRight: 12, color: 'var(--color-text-2)', flexShrink: 0 }} />
+              Add New Friend
+            </button>
+
+            {showCreateForm && (
+              <CreateFriendInline
+                defaultModel={model}
+                onSave={(data) => { onCreateCharacter(data); setShowCreateForm(false); }}
+                onCancel={() => setShowCreateForm(false)}
+              />
+            )}
+
+            <span className="side-menu-history-label">Friends</span>
+
+            {characters.map((char) => (
+              <div key={char.id} className="side-menu-chat-item">
+                <button
+                  onClick={() => onSelectCharacter(char.id)}
+                  className={`side-menu-chat-btn${char.id === activeCharacterId ? ' side-menu-chat-btn--active' : ''}`}
+                >
+                  {char.icon && (
+                    <img src={char.icon} className="side-menu-char-avatar" alt="" />
+                  )}
+                  {char.name}
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDeleteCharacter(char.id); }}
+                  className="side-menu-delete-btn"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </>
+        )}
+
         {view === 'settings' && (
           <SettingsPanel
             model={model}
             onModelChange={onModelChange}
             onOllamaEndpointChanged={onOllamaEndpointChanged}
+            chatMode={chatMode}
+            onChatModeChange={onChatModeChange}
           />
         )}
       </div>

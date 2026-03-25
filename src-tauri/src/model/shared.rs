@@ -1,5 +1,5 @@
 use chrono::Local;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
 use crate::phone::get_installed_apps;
@@ -7,6 +7,15 @@ use crate::skills::{build_persona_prompt, build_skills_prompt};
 use crate::tools::{build_core_prompt, read_core};
 
 pub const MAX_TOOL_ROUNDS: usize = 200;
+
+/// Character identity override — passed from the frontend when in Chat Mode.
+/// Replaces the session persona in the system prompt.
+#[derive(Deserialize, Clone)]
+pub struct CharacterOverride {
+    pub name: String,
+    pub persona: String,     // persona skill name, e.g. "persona_jk"
+    pub background: String,
+}
 
 /// Payload emitted via the `ollama-stream` Tauri event for every token.
 #[derive(Clone, Serialize)]
@@ -23,10 +32,16 @@ pub struct AgentStatusPayload {
 
 /// Build the static part of the system prompt (persona + skills + installed apps + paired devices).
 /// Core memory is injected separately each round via `prepare_system`.
-pub async fn build_base_prompt(app: &AppHandle) -> String {
+/// If `character` is provided, the character's persona + identity replaces the session persona.
+pub async fn build_base_prompt(app: &AppHandle, character: Option<&CharacterOverride>) -> String {
     let apps = get_installed_apps(app).await;
     let cfg = crate::session::store::bootstrap(app);
-    let persona = build_persona_prompt(Some(cfg.persona.as_str()));
+    let persona = if let Some(char) = character {
+        let persona_content = build_persona_prompt(Some(char.persona.as_str()));
+        format!("You are {}.\n{}\nBackground: {}", char.name, persona_content, char.background)
+    } else {
+        build_persona_prompt(Some(cfg.persona.as_str()))
+    };
     let skills = build_skills_prompt();
 
     let mut buf = String::with_capacity(persona.len() + skills.len() + apps.len() * 60 + 256);

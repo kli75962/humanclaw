@@ -7,6 +7,17 @@ export interface ChatMeta {
   createdAt: string;
 }
 
+/** A Chat Mode character/friend. */
+export interface Character {
+  id: string;
+  name: string;
+  icon?: string;       // emoji, optional
+  model: string;
+  persona: string;
+  background: string;
+  createdAt: string;
+}
+
 export interface ChatMessageProps {
   message: Message;
   isLastMessage: boolean;
@@ -49,6 +60,13 @@ export interface SideMenuProps {
   onOllamaEndpointChanged: () => void;
   isMobileOpen?: boolean;
   onCloseSide?: () => void;
+  chatMode: boolean;
+  onChatModeChange: (v: boolean) => void;
+  characters: Character[];
+  activeCharacterId: string | null;
+  onSelectCharacter: (id: string) => void;
+  onCreateCharacter: (data: Omit<Character, 'id' | 'createdAt'>) => void;
+  onDeleteCharacter: (id: string) => void;
 }
 
 export interface WelcomeScreenProps {

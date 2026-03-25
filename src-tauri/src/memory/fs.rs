@@ -96,9 +96,9 @@ fn chats_index_path(app: &AppHandle) -> PathBuf {
     chats_dir(app).join("_index.json")
 }
 
-/// Returns true if `id` is a safe UUID-ish string (alphanumeric + hyphens only).
+/// Returns true if `id` is a safe file-stem string (alphanumeric, hyphens, underscores only).
 fn is_safe_id(id: &str) -> bool {
-    !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_alphanumeric() || c == '-')
+    !id.is_empty() && id.len() <= 80 && id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
 }
 
 /// List all chats ordered newest-first (as stored in the index).

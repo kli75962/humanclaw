@@ -6,7 +6,7 @@ use tauri::AppHandle;
 
 use crate::session::store;
 use super::exec::exec_handler;
-use super::types::{ChatImportRequest, PingQuery, PingResponse, RegisterRequest, ToolRequest, ToolResponse, UnpairRequest};
+use super::types::{CharacterImportRequest, ChatImportRequest, PingQuery, PingResponse, RegisterRequest, ToolRequest, ToolResponse, UnpairRequest};
 
 // ── Server state ─────────────────────────────────────────────────────────────
 
@@ -85,8 +85,10 @@ async fn register_handler(
         label: body.label,
     };
     let app_for_sync = (*app).clone();
+    let peer_for_char = peer.clone();
     tauri::async_runtime::spawn(async move {
         super::chat_sync::sync_after_pair(&app_for_sync, &peer).await;
+        super::character_sync::sync_after_pair(&app_for_sync, &peer_for_char).await;
     });
 
     // A device just came online — emit updated status to the frontend immediately.
@@ -148,6 +150,37 @@ async fn unpair_handler(
     StatusCode::OK
 }
 
+/// GET /characters/export?key=<hash_key>
+async fn character_export_handler(
+    State(app): State<BridgeState>,
+    Query(query): Query<PingQuery>,
+) -> Result<Json<crate::characters::CharacterSyncPayload>, StatusCode> {
+    let cfg = store::bootstrap(&app);
+    if query.key != cfg.hash_key {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    Ok(Json(crate::characters::export_character_sync_payload(&app)))
+}
+
+/// POST /characters/import
+async fn character_import_handler(
+    State(app): State<BridgeState>,
+    Json(body): Json<CharacterImportRequest>,
+) -> StatusCode {
+    let cfg = store::bootstrap(&app);
+    if body.key != cfg.hash_key {
+        return StatusCode::UNAUTHORIZED;
+    }
+    match crate::characters::import_character_sync_payload(&app, body.payload, body.replace) {
+        Ok(()) => {
+            use tauri::Emitter;
+            let _ = app.emit("character-sync-updated", serde_json::json!({}));
+            StatusCode::OK
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
 /// POST /tool — execute a single tool call on this device and return the result.
 /// Authenticated via the shared hash key.
 async fn tool_handler(
@@ -190,6 +223,8 @@ pub fn start_bridge_server(app: AppHandle) {
             .route("/tool", post(tool_handler))
             .route("/chat/export", get(chat_export_handler))
             .route("/chat/import", post(chat_import_handler))
+            .route("/characters/export", get(character_export_handler))
+            .route("/characters/import", post(character_import_handler))
             .route("/exec", post(exec_handler))
             .with_state(state);
 

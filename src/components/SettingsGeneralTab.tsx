@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Check, ChevronDown, ChevronRight, Cpu, Palette, RefreshCw, User } from 'lucide-react';
 import type { SessionConfig } from '../types';
-import { Card, CardRow, SectionFooter, SectionHeader } from './SettingsUI';
+import { Card, CardRow, SectionFooter, SectionHeader, SegmentControl } from './SettingsUI';
 import { useTheme } from '../hooks/useTheme';
 import type { Theme } from '../hooks/useTheme';
 
@@ -319,6 +319,8 @@ interface GeneralTabProps {
   setPersona: (persona: string) => Promise<SessionConfig>;
   setOllamaEndpoint: (host: string, port: number) => Promise<SessionConfig>;
   onOllamaEndpointChanged: () => void;
+  chatMode: boolean;
+  onChatModeChange: (v: boolean) => void;
 }
 
 export function GeneralTab({
@@ -330,6 +332,8 @@ export function GeneralTab({
   setPersona,
   setOllamaEndpoint,
   onOllamaEndpointChanged,
+  chatMode,
+  onChatModeChange,
 }: GeneralTabProps) {
   const [showModelConfig, setShowModelConfig] = useState(false);
   const [activeProvider, setActiveProvider] = useState<Provider>(
@@ -367,7 +371,22 @@ export function GeneralTab({
 
   return (
     <>
-      <SectionHeader>Model</SectionHeader>
+      <SectionHeader>Mode</SectionHeader>
+      <Card>
+        <div className="settings-card-body">
+          <SegmentControl
+            options={[
+              { value: 'normal' as const, label: 'Normal' },
+              { value: 'chat' as const, label: 'Chat' },
+            ]}
+            value={chatMode ? 'chat' : 'normal'}
+            onChange={(v) => onChatModeChange(v === 'chat')}
+          />
+        </div>
+      </Card>
+      <SectionFooter>Chat mode lets you create AI friends with custom personas.</SectionFooter>
+
+      {!chatMode && <><SectionHeader>Model</SectionHeader>
       <Card>
         <CardRow onClick={() => setShowModelConfig((v) => !v)}>
           <div className="settings-qr-row-left">
@@ -463,7 +482,7 @@ export function GeneralTab({
       <SectionFooter>
         Persona controls the assistant character and tone used during tool-driven chat.
         {personaSaveMsg ? ` ${personaSaveMsg}` : ''}
-      </SectionFooter>
+      </SectionFooter></>}
 
       <SectionHeader>Appearance</SectionHeader>
       <Card>
