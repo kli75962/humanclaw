@@ -140,7 +140,6 @@
   transition: fill 0.15s, color 0.15s;
 }
 .post-card-like-btn:hover .post-card-heart {
-  fill: #e05c7a;
   color: #e05c7a;
 }
 .post-card-like-btn--liked {

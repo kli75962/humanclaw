@@ -405,7 +405,7 @@ export function GeneralTab({
               />
             </div>
           </Card>
-          <SectionFooter>Characters can share posts visible in the feed.</SectionFooter>
+          <SectionFooter>Characters can share posts. This will cause more token spend.</SectionFooter>
         </>
       )}
 
