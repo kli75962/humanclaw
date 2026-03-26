@@ -42,7 +42,7 @@ function App() {
   );
   const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);
   const { characters, addCharacter, deleteCharacter } = useCharacters();
-  const { posts, likedPostIds, toggleLike, deletePost, refresh: refreshPosts } = usePosts();
+  const { posts, likedPostIds, toggleLike, deletePost, addPost, refresh: refreshPosts } = usePosts();
   const [quotedPost, setQuotedPost] = useState<Post | null>(null);
   const [permRequest, setPermRequest] = useState<PermissionRequestData | null>(null);
 
@@ -292,16 +292,11 @@ function App() {
     setActiveMemoId(null);
     const charChatId = `char_${id}`;
     setActiveCharacterId(id);
+    setActiveChatId(charChatId);
     setMainTab('chat');
     invoke<Message[]>('load_chat_messages', { id: charChatId })
-      .then((msgs) => {
-        setActiveChatId(charChatId);
-        setInitMessages(msgs);
-      })
-      .catch(() => {
-        setActiveChatId(charChatId);
-        setInitMessages([]);
-      });
+      .then((msgs) => { setInitMessages(msgs); })
+      .catch(() => { setInitMessages([]); });
   }, []);
 
   // Clear the quoted post whenever the user navigates away from that character's chat.
@@ -311,12 +306,24 @@ function App() {
     }
   }, [activeChatId, quotedPost]);
 
-  const handleDmCharacter = useCallback((id: string, post: Post) => {
-    selectCharacter(id);
-    setQuotedPost(post);
-    setMainTab('chat');
-    handleSwitchView('history');
-  }, [selectCharacter, handleSwitchView]);
+  const handleCreateUserPost = useCallback(async (text: string) => {
+    const post = await addPost({ characterId: 'user', text });
+    invoke<{ characterId: string; text: string }[]>('react_to_user_post', { postId: post.id })
+      .then(async (dms) => {
+        refreshPosts();
+        for (const dm of dms) {
+          const chatId = `char_${dm.characterId}`;
+          const msgs = await invoke<{ role: string; content: string }[]>('load_chat_messages', { id: chatId }).catch(() => []);
+          const updated = [...msgs, { role: 'assistant', content: dm.text }];
+          await invoke('save_chat_messages', { id: chatId, messages: updated }).catch(() => {});
+          // Refresh active chat if the user is already in it
+          if (activeChatId === chatId) {
+            setInitMessages(updated as Message[]);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [addPost, refreshPosts, activeChatId]);
 
   const startNewChat = useCallback(() => {
     setActiveChatId(null);
@@ -529,7 +536,7 @@ function App() {
                 likedPostIds={likedPostIds}
                 onLike={toggleLike}
                 onDelete={deletePost}
-                onDmCharacter={handleDmCharacter}
+                onCreatePost={handleCreateUserPost}
               />
             </div>
           </div>

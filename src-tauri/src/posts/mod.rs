@@ -6,6 +6,13 @@ pub use fs::{PostComment, PostMeta};
 use serde::Serialize;
 use crate::characters::list_characters_fs;
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DmResult {
+    pub character_id: String,
+    pub text: String,
+}
+
 // ── Basic CRUD ───────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -76,7 +83,31 @@ pub async fn generate_character_post(
     Ok(post)
 }
 
+/// Return true if the character's persona suggests an extroverted personality.
+fn is_extrovert(persona: &str) -> bool {
+    let lower = persona.to_lowercase();
+    lower.contains("extrovert") || lower.contains("outgoing") || lower.contains("energetic")
+        || lower.contains("enthusiastic") || lower.contains("lively") || lower.contains("talkative")
+        || lower.contains("confident") || lower.contains("vibrant") || lower.contains("social")
+        || lower.contains("friendly") || lower.contains("cheerful")
+}
+
+/// Resolve a character's display name for comment context.
+fn author_display_name<'a>(characters: &'a [crate::characters::CharacterMeta], author_id: &str) -> &'a str {
+    if author_id == "user" { return "User"; }
+    characters.iter().find(|c| c.id == author_id).map(|c| c.name.as_str()).unwrap_or("Unknown")
+}
+
+/// Build (author_name, text) pairs from saved comments for a post.
+fn load_comment_context(app: &tauri::AppHandle, post_id: &str, characters: &[crate::characters::CharacterMeta]) -> Vec<(String, String)> {
+    fs::list_comments(app, post_id)
+        .into_iter()
+        .map(|c| (author_display_name(characters, &c.author_id).to_string(), c.text))
+        .collect()
+}
+
 /// Trigger other characters to comment on a post with naturally delayed timestamps.
+/// Chance is personality-based: extrovert ~45%, introvert ~2%.
 #[tauri::command]
 pub async fn trigger_character_reactions(
     app: tauri::AppHandle,
@@ -98,12 +129,21 @@ pub async fn trigger_character_reactions(
         .unwrap_or("them")
         .to_string();
 
+    let prior = load_comment_context(&app, &post_id, &all_characters);
+
     for character in all_characters.iter().filter(|c| c.id != post.character_id) {
-        if pseudo_rand(&character.id, &post_id) < 60 {
+        // Like: score from LLM → used as probability %
+        let like_score = generate::generate_like_score(&app, character, &post.text).await;
+        if pseudo_rand(&character.id, &format!("like{post_id}")) < like_score {
+            let _ = fs::like_post(&app, &post_id);
+        }
+
+        // Comment: extrovert 45%, introvert 2%
+        let chance: u8 = if is_extrovert(&character.persona) { 45 } else { 2 };
+        if pseudo_rand(&character.id, &post_id) < chance {
             if let Ok(comment_text) = generate::generate_comment_text(
-                &app, character, &author_name, &post.text,
+                &app, character, &author_name, &post.text, &prior,
             ).await {
-                // Delayed timestamp: each character reacts at a different time
                 let seed = str_hash(&format!("reaction{}{}", character.id, post_id));
                 let comment = PostComment {
                     id: uuid_v4(),
@@ -120,28 +160,72 @@ pub async fn trigger_character_reactions(
     Ok(())
 }
 
-/// Result of a character reacting to a user post.
-/// action = "dm"  → text is a DM the frontend should inject into the character's chat
-/// action = "comment" → already saved; text is the comment content
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReactResult {
-    pub character_id: String,
-    pub action: String,
-    pub text: String,
-    pub comment_id: Option<String>,
+/// When a user comments on their own post after a character has commented,
+/// that character has a 70% chance to reply.
+#[tauri::command]
+pub async fn react_to_user_comment(
+    app: tauri::AppHandle,
+    post_id: String,
+) -> Result<(), String> {
+    let posts = fs::list_posts(&app);
+    let post = posts
+        .iter()
+        .find(|p| p.id == post_id)
+        .ok_or_else(|| "Post not found".to_string())?
+        .clone();
+
+    let all_characters = list_characters_fs(&app);
+    let prior = load_comment_context(&app, &post_id, &all_characters);
+
+    // Collect characters who have already commented (before the user's current comment).
+    let existing_comments = fs::list_comments(&app, &post_id);
+    let already_commented: std::collections::HashSet<&str> = existing_comments
+        .iter()
+        .filter(|c| c.author_id != "user")
+        .map(|c| c.author_id.as_str())
+        .collect();
+
+    let author_name = all_characters
+        .iter()
+        .find(|c| c.id == post.character_id)
+        .map(|c| c.name.as_str())
+        .unwrap_or("them")
+        .to_string();
+
+    for character in &all_characters {
+        if !already_commented.contains(character.id.as_str()) {
+            continue;
+        }
+        if pseudo_rand(&character.id, &format!("ucreply{post_id}")) < 70 {
+            if let Ok(comment_text) = generate::generate_comment_text(
+                &app, character, &author_name, &post.text, &prior,
+            ).await {
+                let seed = str_hash(&format!("ucreact{}{}", character.id, post_id));
+                let comment = PostComment {
+                    id: uuid_v4(),
+                    post_id: post_id.clone(),
+                    author_id: character.id.clone(),
+                    text: comment_text,
+                    created_at: generate::pick_comment_timestamp(&post.created_at, seed),
+                };
+                let _ = fs::add_comment(&app, &comment);
+            }
+        }
+    }
+
+    Ok(())
 }
 
-/// When a user creates a post, each character decides:
-///   30% chance → DM (wants a deeper conversation, asks questions)
-///   70% chance → comment (short reaction saved with delayed timestamp)
-///
-/// Frontend is responsible for injecting DM results into the character's chat.
+
+/// When a user creates a post:
+///   extrovert → 50% chance to react; of those, 5% DM instead of comment.
+///   introvert → 3% chance to comment only.
+/// Returns DM entries so the frontend can inject them into the character's chat.
 #[tauri::command]
 pub async fn react_to_user_post(
     app: tauri::AppHandle,
     post_id: String,
-) -> Result<Vec<ReactResult>, String> {
+) -> Result<Vec<DmResult>, String> {
     let posts = fs::list_posts(&app);
     let post = posts
         .iter()
@@ -150,51 +234,48 @@ pub async fn react_to_user_post(
         .clone();
 
     let characters = list_characters_fs(&app);
-    let mut results = Vec::new();
+    let mut dms = Vec::new();
 
     for character in &characters {
-        let seed = str_hash(&format!("react{}{}", character.id, post_id));
+        // Like: score from LLM → used as probability %
+        let like_score = generate::generate_like_score(&app, character, &post.text).await;
+        if pseudo_rand(&character.id, &format!("like{post_id}")) < like_score {
+            let _ = fs::like_post(&app, &post_id);
+        }
 
-        if seed % 100 < 30 {
-            // DM path: generate a conversational message that invites a reply
+        let extrovert = is_extrovert(&character.persona);
+        let chance: u8 = if extrovert { 50 } else { 3 };
+        if pseudo_rand(&character.id, &post_id) >= chance {
+            continue;
+        }
+
+        // Extroverts: 5% chance to DM instead of comment.
+        if extrovert && pseudo_rand(&character.id, &format!("dm{post_id}")) < 5 {
             let trigger = format!(
-                "The user posted: \"{}\". You want to start a real conversation about it — ask something genuine.",
+                "The user posted: \"{}\". React naturally and start a conversation.",
                 post.text
             );
             if let Ok(text) = generate::generate_dm_text(&app, character, &trigger).await {
-                results.push(ReactResult {
-                    character_id: character.id.clone(),
-                    action: "dm".to_string(),
-                    text,
-                    comment_id: None,
-                });
+                dms.push(DmResult { character_id: character.id.clone(), text });
             }
         } else {
-            // Comment path: short reaction with delayed timestamp
             let comment_seed = str_hash(&format!("comment{}{}", character.id, post_id));
             if let Ok(comment_text) = generate::generate_comment_text(
-                &app, character, "you", &post.text,
+                &app, character, "you", &post.text, &[],
             ).await {
                 let comment = PostComment {
                     id: uuid_v4(),
                     post_id: post_id.clone(),
                     author_id: character.id.clone(),
-                    text: comment_text.clone(),
+                    text: comment_text,
                     created_at: generate::pick_comment_timestamp(&post.created_at, comment_seed),
                 };
-                let comment_id = comment.id.clone();
                 let _ = fs::add_comment(&app, &comment);
-                results.push(ReactResult {
-                    character_id: character.id.clone(),
-                    action: "comment".to_string(),
-                    text: comment_text,
-                    comment_id: Some(comment_id),
-                });
             }
         }
     }
 
-    Ok(results)
+    Ok(dms)
 }
 
 /// Generate a DM from a character and return the text (frontend handles routing into chat).

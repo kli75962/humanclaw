@@ -147,21 +147,46 @@ pub async fn generate_post_text(
 }
 
 /// Generate a comment text for a character on a given post.
+/// `prior_comments` is a list of (author_name, comment_text) already on the post — may be empty.
 pub async fn generate_comment_text(
     app: &AppHandle,
     character: &CharacterMeta,
     post_author_name: &str,
     post_text: &str,
+    prior_comments: &[(String, String)],
 ) -> Result<String, String> {
     let skill = get_skill_content("post_comment").unwrap_or("");
     let core = crate::tools::read_core(app);
     let system = character_system(skill, character, &core);
 
-    let prompt = format!(
-        "{post_author_name} posted: \"{post_text}\"\n\nWrite a comment on this post."
-    );
+    let mut prompt = format!("{post_author_name} posted: \"{post_text}\"");
+    if !prior_comments.is_empty() {
+        prompt.push_str("\n\nComments so far:");
+        for (author, text) in prior_comments {
+            prompt.push_str(&format!("\n{author}: {text}"));
+        }
+    }
+    prompt.push_str("\n\nWrite a comment on this post.");
 
     complete_once(app, &character.model, &system, &prompt).await
+}
+
+/// Ask the character how much they resonate with / like a post.
+/// Returns a score 0–100, used directly as a like probability %.
+pub async fn generate_like_score(
+    app: &AppHandle,
+    character: &CharacterMeta,
+    post_text: &str,
+) -> u8 {
+    let core = crate::tools::read_core(app);
+    let system = character_system("", character, &core);
+    let prompt = format!(
+        "Post: \"{post_text}\"\n\nHow much do you personally like or resonate with this post? Reply with a single integer 0-100. Nothing else."
+    );
+    match complete_once(app, &character.model, &system, &prompt).await {
+        Ok(s) => s.trim().parse::<u8>().unwrap_or(0),
+        Err(_) => 0,
+    }
 }
 
 /// Generate a DM from a character to the user.

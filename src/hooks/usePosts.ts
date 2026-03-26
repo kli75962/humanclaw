@@ -90,6 +90,14 @@ export function usePostComments(postId: string) {
     };
     await invoke('add_comment', { comment });
     setComments((prev) => [...prev, comment]);
+
+    if (authorId === 'user') {
+      // Fire-and-forget: let characters react based on personality, then refresh
+      invoke('react_to_user_comment', { postId })
+        .then(() => invoke<PostComment[]>('list_comments', { postId }))
+        .then((updated) => setComments(updated as PostComment[]))
+        .catch(() => {});
+    }
   }, [postId]);
 
   return { comments, addComment, refresh };
