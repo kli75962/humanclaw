@@ -433,7 +433,7 @@ export function GeneralTab({
               />
             </div>
           </Card>
-          <SectionFooter>This will cause more token spend.</SectionFooter>
+          <SectionFooter>This will cause more token spend base on how many character you create.</SectionFooter>
         </>
       )}
 

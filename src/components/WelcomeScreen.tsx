@@ -14,7 +14,6 @@ export const WelcomeScreen = memo(function WelcomeScreen({ onSend: _ }: WelcomeS
     <div className="welcome">
       <div className="welcome-header">
         <h1 className="welcome-title">{getGreeting()}</h1>
-        <h2 className="welcome-subtitle">How can I help today?</h2>
       </div>
     </div>
   );
