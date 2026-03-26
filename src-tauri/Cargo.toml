@@ -42,9 +42,14 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 tauri-plugin-barcode-scanner = "2.4.4"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
+tauri-plugin-window-state = "2"
 cpal = "0.15"
 # keyring: OS-level secure credential storage (Keychain / SecretService / Credential Manager)
 keyring = { version = "3", features = ["sync-secret-service", "crypto-openssl", "windows-native", "apple-native"] }
+# enigo: cross-platform mouse / keyboard input synthesis
+enigo = "0.2"
+# screenshots: cross-platform screen capture
+screenshots = "0.8"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = "2.0"

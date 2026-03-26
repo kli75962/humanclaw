@@ -1,0 +1,14 @@
+{
+  "type": "function",
+  "function": {
+    "name": "pc_file_delete",
+    "description": "Delete a file or directory (recursively) on the PC filesystem.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string", "description": "Absolute path to file or directory." }
+      },
+      "required": ["path"]
+    }
+  }
+}

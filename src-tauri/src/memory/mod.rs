@@ -1,4 +1,5 @@
 mod fs;
+mod memos;
 pub use fs::{bootstrap_memory, memory_dir};
 pub use fs::{ALLOWED_FILES, CORE_FILE, normalize_memory_path};
 pub use fs::read_memory_file;
@@ -68,3 +69,5 @@ pub fn delete_chat(app: tauri::AppHandle, id: String) -> Result<(), String> {
     }
     r
 }
+
+pub use memos::{list_memos, load_memo_messages, create_memo, save_memo_messages, delete_memo};

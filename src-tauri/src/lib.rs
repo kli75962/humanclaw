@@ -11,19 +11,21 @@ mod queue;
 mod stt;
 mod secrets;
 
-use memory::{get_memory_file, set_memory_file, list_chats, load_chat_messages, create_chat, save_chat_messages, delete_chat};
+use memory::{get_memory_file, set_memory_file, list_chats, load_chat_messages, create_chat, save_chat_messages, delete_chat, list_memos, load_memo_messages, create_memo, save_memo_messages, delete_memo};
 use characters::{list_characters, save_character, delete_character};
 use posts::{list_posts, save_post, delete_post, like_post, unlike_post, list_comments, add_comment, generate_character_post, trigger_character_reactions, generate_character_dm, react_to_user_post};
-use model::{cancel_chat, chat_claude, chat_ollama, list_models, list_models_at};
+use model::{cancel_chat, chat_claude, chat_ollama, list_models, list_models_at, explain_text};
 use stt::{stt_android_cancel, stt_android_once, stt_start, stt_stop};
 use secrets::{store_secret, load_secret};
-use session::{add_paired_device, get_session, list_personas, remove_paired_device, set_device_label, set_ollama_endpoint, set_persona, set_session_hash_key};
+use session::{add_paired_device, get_session, list_personas, remove_paired_device, set_device_label, set_ollama_endpoint, set_pc_permissions, set_persona, set_session_hash_key};
+use tools::{respond_pc_permission, PendingPermissions};
 use phone::{check_accessibility_enabled, open_accessibility_settings};
 use bridge::{check_peer_online, discover_and_pair, get_all_local_addresses, get_all_peer_status, get_local_address, get_qr_pair_svg, pair_from_qr, send_to_device, start_bridge_server, start_peer_monitor};
 use queue::{flush_all_pending, flush_queue, get_pending_queue, get_queue, queue_command};
 
 /// App entry point — registers Tauri commands and starts the event loop.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[allow(dependency_on_unit_never_type_fallback)]
 pub fn run() {
     // Load .secrets — desktop only (Android has no access to the host filesystem).
     #[cfg(not(target_os = "android"))]
@@ -37,12 +39,18 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(phone::plugin::init());
 
+    #[cfg(not(target_os = "android"))]
+    {
+        builder = builder.plugin(tauri_plugin_window_state::Builder::new().build());
+    }
+
     #[cfg(target_os = "android")]
     {
         builder = builder.plugin(tauri_plugin_barcode_scanner::init());
     }
 
     builder
+        .manage(PendingPermissions(std::sync::Mutex::new(std::collections::HashMap::new())))
         .setup(|app| {
             // 1. Start the bridge HTTP server so peers can reach this device.
             start_bridge_server(app.handle().clone());
@@ -113,8 +121,11 @@ pub fn run() {
             set_ollama_endpoint,
             list_personas,
             set_persona,
+            set_pc_permissions,
             add_paired_device,
             remove_paired_device,
+            // pc control permissions
+            respond_pc_permission,
             // bridge / health
             check_peer_online,
             get_all_peer_status,
@@ -142,6 +153,13 @@ pub fn run() {
             open_accessibility_settings,
             // chat control
             cancel_chat,
+            // explain + memos
+            explain_text,
+            list_memos,
+            load_memo_messages,
+            create_memo,
+            save_memo_messages,
+            delete_memo,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

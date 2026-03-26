@@ -76,9 +76,18 @@ export interface ModalProps {
 }
 
 
+/** Memo list entry (no messages for perf). */
+export interface MemoMeta {
+  id: string;
+  title: string;
+  created_at: string;
+}
+
 export interface SideMenuProps {
-  view: 'history' | 'settings';
-  onSwitchView: (v: 'history' | 'settings') => void;
+  view: 'history' | 'settings' | 'connect' | 'memos';
+  onSwitchView: (v: 'history' | 'settings' | 'connect' | 'memos') => void;
+  activeMemoId: string | null;
+  onSelectMemo: (id: string) => void;
   onNewChat: () => void;
   chats: ChatMeta[];
   activeChatId: string | null;
@@ -143,6 +152,18 @@ export interface AgentStatusPayload {
   message: string;
 }
 
+export type PermissionState = 'allow_all' | 'ask_before_use' | 'not_allow';
+
+export interface PcPermissions {
+  mouse_control:   PermissionState;
+  keyboard_input:  PermissionState;
+  take_screenshot: PermissionState;
+  file_create:     PermissionState;
+  file_read:       PermissionState;
+  file_delete:     PermissionState;
+  shell_command:   PermissionState;
+}
+
 /** Session config returned by the Rust `get_session` command. */
 export interface SessionConfig {
   device: {
@@ -156,4 +177,5 @@ export interface SessionConfig {
   ollama_host_override: string | null;
   ollama_port: number;
   persona: string;
+  pc_permissions: PcPermissions;
 }

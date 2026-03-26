@@ -571,3 +571,46 @@
 .settings-theme-btn--active .settings-theme-label {
   color: var(--color-text);
 }
+
+/* ── PC permissions list ── */
+.settings-perm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-perm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-perm-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.settings-perm-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.settings-perm-sub {
+  font-size: 11px;
+  color: var(--color-text-3);
+}
+
+.settings-perm-row .settings-segment {
+  flex-shrink: 0;
+}
+
+.settings-perm-row .settings-segment-btn {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+

@@ -1,11 +1,13 @@
 pub mod claude;
 pub mod ollama;
 pub(crate) mod shared;
+mod explain;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub use claude::chat_claude;
 pub use ollama::{chat_ollama, list_models, list_models_at};
+pub use explain::explain_text;
 
 /// Set to true by `cancel_chat`. Reset at the start of each new chat run.
 pub(crate) static CHAT_CANCEL: AtomicBool = AtomicBool::new(false);

@@ -11,8 +11,12 @@ import { ChatMessage } from './components/ChatMessage';
 import { InputBar } from './components/InputBar';
 import { SideMenu } from './components/SideMenu';
 import { AccessibilityDialog } from './components/AccessibilityDialog';
-import type { WizardAnswers } from './types';
-import { Bot, LayoutGrid, Menu, MessageCircle, Settings, Users } from 'lucide-react';
+import { PermissionRequest } from './components/PermissionDialog';
+import type { PermissionRequest as PermissionRequestData } from './components/PermissionDialog';
+import { ExplainPopup } from './components/ExplainPopup';
+import { MemoChatView } from './components/MemoChatView';
+import type { WizardAnswers, MemoMeta } from './types';
+import { BookMarked, Bot, LayoutGrid, Link2, Menu, MessageCircle, Settings, Users } from 'lucide-react';
 import { PostFeed } from './components/PostFeed';
 import type { ChatMeta, InputBarHandle, Message, Post } from './types';
 import './style/themes.css';
@@ -40,6 +44,7 @@ function App() {
   const { characters, addCharacter, deleteCharacter } = useCharacters();
   const { posts, likedPostIds, toggleLike, deletePost, refresh: refreshPosts } = usePosts();
   const [quotedPost, setQuotedPost] = useState<Post | null>(null);
+  const [permRequest, setPermRequest] = useState<PermissionRequestData | null>(null);
 
   usePostGeneration({
     characters,
@@ -55,13 +60,117 @@ function App() {
   const characterModel = activeCharacter?.model ?? model;
 
   const [mainTab, setMainTab] = useState<'chat' | 'posts'>('chat');
-  const [sideView, setSideView] = useState<'history' | 'settings'>('history');
+  const [sideView, setSideView] = useState<'history' | 'settings' | 'connect' | 'memos'>('history');
   const [sideOpen, setSideOpen] = useState(false);
 
-  const handleSwitchView = useCallback((v: 'history' | 'settings') => {
+  const handleSwitchView = useCallback((v: 'history' | 'settings' | 'connect' | 'memos') => {
     setSideView(v);
     setSideOpen(true);
   }, []);
+
+  // Explain popup
+  const [explainText, setExplainText] = useState('');
+  const [showExplain, setShowExplain] = useState(false);
+  const [floatBtn, setFloatBtn] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    function onMouseUp() {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.toString().trim()) {
+        setFloatBtn(null);
+        return;
+      }
+      const range = sel.getRangeAt(0);
+      const messagesEl = document.querySelector('.app-messages');
+      if (!messagesEl?.contains(range.commonAncestorContainer)) {
+        setFloatBtn(null);
+        return;
+      }
+      const rect = range.getBoundingClientRect();
+      setFloatBtn({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
+    }
+    document.addEventListener('mouseup', onMouseUp);
+    return () => document.removeEventListener('mouseup', onMouseUp);
+  }, []);
+
+  const handleExplainClick = useCallback(() => {
+    const sel = window.getSelection();
+    const text = sel?.toString().trim() ?? '';
+    if (!text) return;
+    setExplainText(text);
+    setShowExplain(true);
+    setFloatBtn(null);
+    sel?.removeAllRanges();
+  }, []);
+
+  // ── Memo chat state ──────────────────────────────────────────────────────
+  const [activeMemoId, setActiveMemoId] = useState<string | null>(null);
+  const [memoMessages, setMemoMessages] = useState<Message[]>([]);
+  const [memoStreaming, setMemoStreaming] = useState(false);
+  const [memoStreamContent, setMemoStreamContent] = useState('');
+  const memoStreamBuf = useRef('');
+  const activeMemoIdRef = useRef<string | null>(null);
+  activeMemoIdRef.current = activeMemoId;
+
+  const handleSelectMemo = useCallback(async (id: string) => {
+    const msgs = await invoke<Message[]>('load_memo_messages', { id }).catch(() => []);
+    setActiveMemoId(id);
+    setMemoMessages(msgs);
+    setMainTab('chat');
+    setSideOpen(false);
+  }, []);
+
+  const handleSaveMemo = useCallback(async (title: string, msgs: Message[]): Promise<string | null> => {
+    const meta = await invoke<MemoMeta>('create_memo', { title, messages: msgs }).catch(() => null);
+    document.dispatchEvent(new Event('memo-saved'));
+    return meta?.id ?? null;
+  }, []);
+
+  const handleOpenMemo = useCallback((id: string) => {
+    invoke<Message[]>('load_memo_messages', { id }).then((msgs) => {
+      setActiveMemoId(id);
+      setMemoMessages(msgs);
+      setMainTab('chat');
+      setSideView('memos');
+    }).catch(() => {});
+  }, []);
+
+  const handleMemoSend = useCallback(async (text: string) => {
+    if (memoStreaming) return;
+    const userMsg: Message = { role: 'user', content: text };
+    const updatedMsgs = [...memoMessages, userMsg];
+    setMemoMessages(updatedMsgs);
+    setMemoStreaming(true);
+    setMemoStreamContent('');
+    memoStreamBuf.current = '';
+
+    let unlistenFn: (() => void) | null = null;
+    const unlistenPromise = listen<{ content: string; done: boolean }>('explain-stream', (e) => {
+      if (e.payload.done) {
+        const finalContent = memoStreamBuf.current;
+        const assistantMsg: Message = { role: 'assistant', content: finalContent };
+        const finalMsgs = [...updatedMsgs, assistantMsg];
+        setMemoMessages(finalMsgs);
+        setMemoStreaming(false);
+        setMemoStreamContent('');
+        memoStreamBuf.current = '';
+        const id = activeMemoIdRef.current;
+        if (id) invoke('save_memo_messages', { id, messages: finalMsgs }).catch(() => {});
+        unlistenFn?.();
+      } else {
+        memoStreamBuf.current += e.payload.content;
+        setMemoStreamContent(memoStreamBuf.current);
+      }
+    });
+    unlistenPromise.then((fn) => { unlistenFn = fn; });
+
+    const apiMsgs = updatedMsgs.map((m) => ({ role: m.role, content: m.content }));
+    invoke('explain_text', { messages: apiMsgs, model }).catch((err: unknown) => {
+      setMemoMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${err}` }]);
+      setMemoStreaming(false);
+      unlistenPromise.then((fn) => fn());
+    });
+  }, [memoStreaming, memoMessages, model]);
 
   const handleIgModeChange = useCallback((enabled: boolean) => {
     setIgMode(enabled);
@@ -175,10 +284,12 @@ function App() {
     setActiveChatId(null);
     setInitMessages([]);
     setActiveCharacterId(null);
+    setActiveMemoId(null);
     if (!enabled) setMainTab('chat');
   }, []);
 
   const selectCharacter = useCallback((id: string) => {
+    setActiveMemoId(null);
     const charChatId = `char_${id}`;
     setActiveCharacterId(id);
     setMainTab('chat');
@@ -210,9 +321,11 @@ function App() {
   const startNewChat = useCallback(() => {
     setActiveChatId(null);
     setInitMessages([]);
+    setActiveMemoId(null);
   }, []);
 
   const switchChat = useCallback((id: string) => {
+    setActiveMemoId(null);
     invoke<Message[]>('load_chat_messages', { id })
       .then((msgs) => {
         setActiveChatId(id);
@@ -267,6 +380,13 @@ function App() {
     );
   }, [chatMode, handleChatModeChange, startNewChat, handleSend]);
 
+  useEffect(() => {
+    const unlisten = listen<PermissionRequestData>('pc-permission-request', (e) => {
+      setPermRequest(e.payload);
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
   const handleOllamaEndpointChanged = useCallback(() => {}, []);
 
   const messageList = useMemo(() => {
@@ -289,6 +409,27 @@ function App() {
     <div className={`app-root${sideOpen ? ' side-open' : ''}`}>
       <AccessibilityDialog />
 
+      {floatBtn && (
+        <button
+          className="explain-float-btn"
+          style={{ left: floatBtn.x, top: floatBtn.y }}
+          onMouseDown={(e) => { e.preventDefault(); handleExplainClick(); }}
+        >
+          Explain more
+        </button>
+      )}
+
+      {showExplain && (
+        <ExplainPopup
+          selectedText={explainText}
+          model={model}
+          contextMessages={messages}
+          onClose={() => setShowExplain(false)}
+          onSaveMemo={handleSaveMemo}
+          onOpenMemo={handleOpenMemo}
+        />
+      )}
+
       {/* ── Tab bar (leftmost column) — mode switch ── */}
       <div className="app-tab-bar">
         <button
@@ -296,14 +437,14 @@ function App() {
           onClick={() => { if (chatMode) handleChatModeChange(false); }}
           aria-label="Normal mode"
         >
-          <Bot size={20} />
+          <Bot size={26} />
         </button>
         <button
           className={`tab-bar-btn${chatMode ? ' tab-bar-btn--active' : ''}`}
           onClick={() => { if (!chatMode) handleChatModeChange(true); }}
           aria-label="Chat mode"
         >
-          <Users size={20} />
+          <Users size={26} />
         </button>
       </div>
 
@@ -322,6 +463,20 @@ function App() {
           aria-label="Chat history"
         >
           <Menu size={22} />
+        </button>
+        <button
+          className={`top-nav-btn${sideView === 'memos' ? ' top-nav-btn--active' : ''}`}
+          onClick={() => handleSwitchView('memos')}
+          aria-label="Memos"
+        >
+          <BookMarked size={22} />
+        </button>
+        <button
+          className={`top-nav-btn${sideView === 'connect' ? ' top-nav-btn--active' : ''}`}
+          onClick={() => handleSwitchView('connect')}
+          aria-label="Connect"
+        >
+          <Link2 size={22} />
         </button>
       </div>
 
@@ -350,6 +505,8 @@ function App() {
           igMode={igMode}
           onIgModeChange={handleIgModeChange}
           onAddPersona={handleAddPersona}
+          activeMemoId={activeMemoId}
+          onSelectMemo={handleSelectMemo}
         />
       </div>
 
@@ -397,6 +554,14 @@ function App() {
               />
             </div>
           </div>
+        ) : activeMemoId ? (
+          <MemoChatView
+            key={activeMemoId}
+            messages={memoMessages}
+            streaming={memoStreaming}
+            streamContent={memoStreamContent}
+            onSend={handleMemoSend}
+          />
         ) : (
           <>
             <div className="app-content custom-scrollbar">
@@ -415,6 +580,13 @@ function App() {
                       <span className="app-agent-dot" />
                       {agentStatus}
                     </div>
+                  )}
+
+                  {permRequest && (
+                    <PermissionRequest
+                      request={permRequest}
+                      onDone={() => setPermRequest(null)}
+                    />
                   )}
 
                   {error && (

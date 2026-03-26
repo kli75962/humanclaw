@@ -3,7 +3,7 @@ import { Sparkles, RotateCcw } from 'lucide-react';
 import type { ChatMessageProps } from '../types';
 import '../style/ChatMessage.css';
 
-function formatAssistantText(raw: string): string {
+export function formatAssistantText(raw: string): string {
   if (!raw) return raw;
 
   if (/\n/.test(raw)) {
@@ -83,7 +83,11 @@ export const ChatMessage = memo(function ChatMessage({ message, isLastMessage, i
             {i < arr.length - 1 && <br />}
           </Fragment>
         ))}
-        {isStreaming && <span className="chat-cursor" />}
+        {isStreaming && (
+          <span className="chat-typing">
+            <span /><span /><span />
+          </span>
+        )}
       </div>
 
       {onRetry && isUser && (

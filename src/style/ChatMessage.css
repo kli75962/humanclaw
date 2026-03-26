@@ -45,14 +45,28 @@
   border-top-left-radius: 4px;
 }
 
-.chat-cursor {
-  display: inline-block;
-  width: 2px;
-  height: 1em;
-  background: #60a5fa;
-  margin-left: 2px;
+.chat-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 3px;
   vertical-align: middle;
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.chat-typing span {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-text-3);
+  animation: typing-dot 1.2s ease-in-out infinite;
+}
+.chat-typing span:nth-child(2) { animation-delay: 0.2s; }
+.chat-typing span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing-dot {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
 }
 
 .chat-retry-btn {

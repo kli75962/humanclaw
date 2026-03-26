@@ -1,0 +1,14 @@
+{
+  "type": "function",
+  "function": {
+    "name": "pc_key_press",
+    "description": "Press a key or key combination on the PC keyboard. Modifiers and main key are joined with '+', e.g. 'ctrl+c', 'alt+f4', 'shift+tab'. Single keys: return, escape, backspace, tab, space, delete, home, end, pageup, pagedown, up, down, left, right, f1–f12, or any single character.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "key": { "type": "string", "description": "Key or combo string, e.g. 'ctrl+c', 'return', 'f5'." }
+      },
+      "required": ["key"]
+    }
+  }
+}

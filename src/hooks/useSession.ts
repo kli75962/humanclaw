@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useCallback, useEffect, useState } from 'react';
-import type { SessionConfig } from '../types';
+import type { PcPermissions, SessionConfig } from '../types';
 
 export function useSession() {
   const [session, setSession] = useState<SessionConfig | null>(null);
@@ -55,6 +55,13 @@ export function useSession() {
     return s;
   }, []);
 
+  /** Update PC control tool permissions. */
+  const setPcPermissions = useCallback(async (permissions: PcPermissions): Promise<SessionConfig> => {
+    const s = await invoke<SessionConfig>('set_pc_permissions', { permissions });
+    setSession(s);
+    return s;
+  }, []);
+
   return {
     session,
     refresh,
@@ -63,5 +70,6 @@ export function useSession() {
     setOllamaEndpoint,
     listPersonas,
     setPersona,
+    setPcPermissions,
   };
 }

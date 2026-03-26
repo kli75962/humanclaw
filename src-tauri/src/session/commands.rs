@@ -1,7 +1,7 @@
 use tauri::AppHandle;
 
 use super::store;
-use super::types::{PairedDevice, SessionConfig};
+use super::types::{PairedDevice, PcPermissions, SessionConfig};
 
 /// Return the current session config (creates default on first run).
 #[tauri::command]
@@ -85,4 +85,10 @@ pub fn list_personas(app: AppHandle) -> Vec<String> {
 #[tauri::command]
 pub fn set_persona(app: AppHandle, persona: String) -> Result<SessionConfig, String> {
     store::set_persona(&app, &persona)
+}
+
+/// Update PC control tool permissions.
+#[tauri::command]
+pub fn set_pc_permissions(app: AppHandle, permissions: PcPermissions) -> Result<SessionConfig, String> {
+    store::set_pc_permissions(&app, permissions)
 }

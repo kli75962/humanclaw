@@ -1,0 +1,80 @@
+/* Inline permission request card — rendered inside the chat message list */
+.perm-request {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid #fbbf24;
+  border-radius: 8px;
+  max-width: 480px;
+  overflow: hidden;
+}
+
+/* Header row */
+.perm-request-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 6px;
+}
+
+.perm-request-icon {
+  color: #fbbf24;
+  flex-shrink: 0;
+}
+
+.perm-request-tag {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-2);
+}
+
+/* Summary line */
+.perm-request-action {
+  font-size: 13px;
+  color: var(--color-text);
+  margin: 0;
+  padding: 0 12px 8px;
+  line-height: 1.45;
+}
+
+/* Exact command / path block */
+.perm-request-detail {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  color: var(--color-text);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  margin: 0 12px 10px;
+  padding: 6px 10px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.perm-request-btns {
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.perm-request-btn {
+  padding: 5px 16px;
+  border-radius: 6px;
+  border: none;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.perm-request-btn:hover { opacity: 0.8; }
+
+.perm-request-btn--deny {
+  background: var(--color-surface-2);
+  color: var(--color-text-2);
+}
+.perm-request-btn--allow {
+  background: var(--color-accent);
+  color: #fff;
+}

@@ -1,5 +1,50 @@
 use serde::{Deserialize, Serialize};
 
+/// Permission level for a PC control capability.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum PermissionState {
+    AllowAll,
+    AskBeforeUse,
+    NotAllow,
+}
+
+fn default_allow() -> PermissionState { PermissionState::AllowAll }
+fn default_ask()   -> PermissionState { PermissionState::AskBeforeUse }
+
+/// Per-capability permission settings for PC control tools.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PcPermissions {
+    #[serde(default = "default_allow")]
+    pub mouse_control: PermissionState,
+    #[serde(default = "default_allow")]
+    pub keyboard_input: PermissionState,
+    #[serde(default = "default_allow")]
+    pub take_screenshot: PermissionState,
+    #[serde(default = "default_allow")]
+    pub file_create: PermissionState,
+    #[serde(default = "default_allow")]
+    pub file_read: PermissionState,
+    #[serde(default = "default_ask")]
+    pub file_delete: PermissionState,
+    #[serde(default = "default_ask")]
+    pub shell_command: PermissionState,
+}
+
+impl Default for PcPermissions {
+    fn default() -> Self {
+        Self {
+            mouse_control:  PermissionState::AllowAll,
+            keyboard_input: PermissionState::AllowAll,
+            take_screenshot: PermissionState::AllowAll,
+            file_create:    PermissionState::AllowAll,
+            file_read:      PermissionState::AllowAll,
+            file_delete:    PermissionState::AskBeforeUse,
+            shell_command:  PermissionState::AskBeforeUse,
+        }
+    }
+}
+
 /// What kind of device this is.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -64,6 +109,9 @@ pub struct SessionConfig {
     /// Selected LLM persona skill name.
     #[serde(default = "default_persona")]
     pub persona: String,
+    /// Permission settings for PC control tools.
+    #[serde(default)]
+    pub pc_permissions: PcPermissions,
 }
 
 fn default_port() -> u16 {

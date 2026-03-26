@@ -1,0 +1,13 @@
+{
+  "type": "function",
+  "function": {
+    "name": "pc_screenshot",
+    "description": "Capture a screenshot of a PC display and return it as a base64 PNG data URL.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "display": { "type": "number", "description": "Display index to capture (default: 0 = primary monitor)." }
+      }
+    }
+  }
+}

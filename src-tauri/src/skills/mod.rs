@@ -49,21 +49,6 @@ pub fn persona_skill_names() -> Vec<&'static str> {
         .collect()
 }
 
-/// Build the selected persona prompt, with fallback to default persona.
-pub fn build_persona_prompt(selected: Option<&str>) -> String {
-    let selected = selected.unwrap_or(DEFAULT_PERSONA_SKILL);
-
-    if let Some(skill) = SKILLS.iter().find(|s| s.name == selected && is_persona_skill(s.name)) {
-        return skill.content.to_string();
-    }
-
-    if let Some(skill) = SKILLS.iter().find(|s| s.name == DEFAULT_PERSONA_SKILL) {
-        return skill.content.to_string();
-    }
-
-    String::new()
-}
-
 /// List runtime persona names stored in the app data directory.
 pub fn list_runtime_persona_names(app: &AppHandle) -> Vec<String> {
     let Ok(data_dir) = app.path().app_data_dir() else { return vec![]; };

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Check, ChevronDown, ChevronRight, Cpu, Palette, Plus, RefreshCw, User } from 'lucide-react';
-import type { SessionConfig, WizardAnswers } from '../types';
+import { Check, ChevronDown, ChevronRight, Cpu, LayoutGrid, Monitor, Palette, Plus, RefreshCw, User } from 'lucide-react';
+import type { PcPermissions, PermissionState, SessionConfig, WizardAnswers } from '../types';
 import { Card, CardRow, SectionFooter, SectionHeader, SegmentControl } from './SettingsUI';
 import { PersonaWizard } from './PersonaWizard';
 import { useTheme } from '../hooks/useTheme';
@@ -307,6 +307,26 @@ function ModelConfigPanel({
 
 // ── GeneralTab ─────────────────────────────────────────────────────────────────
 
+const PERM_ROWS: { field: keyof PcPermissions; label: string; subtitle: string }[] = [
+  { field: 'mouse_control',   label: 'Mouse Control',      subtitle: 'Move cursor and click' },
+  { field: 'keyboard_input',  label: 'Keyboard Input',     subtitle: 'Type text and press keys' },
+  { field: 'take_screenshot', label: 'Screenshot',         subtitle: 'Capture the screen' },
+  { field: 'file_create',     label: 'Create / Write Files', subtitle: 'Create or overwrite files' },
+  { field: 'file_read',       label: 'Read Files',         subtitle: 'Read file contents' },
+  { field: 'file_delete',     label: 'Delete Files',       subtitle: 'Delete files or directories' },
+  { field: 'shell_command',   label: 'Run Shell Commands', subtitle: 'Execute terminal commands' },
+];
+
+const DEFAULT_PC_PERMS: PcPermissions = {
+  mouse_control:   'allow_all',
+  keyboard_input:  'allow_all',
+  take_screenshot: 'allow_all',
+  file_create:     'allow_all',
+  file_read:       'allow_all',
+  file_delete:     'ask_before_use',
+  shell_command:   'ask_before_use',
+};
+
 interface GeneralTabProps {
   model: string;
   availableModels: string[];
@@ -321,6 +341,7 @@ interface GeneralTabProps {
   igMode: boolean;
   onIgModeChange: (v: boolean) => void;
   onAddPersona?: (answers: WizardAnswers) => void;
+  setPcPermissions: (p: PcPermissions) => Promise<SessionConfig>;
 }
 
 export function GeneralTab({
@@ -337,8 +358,19 @@ export function GeneralTab({
   igMode,
   onIgModeChange,
   onAddPersona,
+  setPcPermissions,
 }: GeneralTabProps) {
+  const [pcPerms, setPcPermsLocal] = useState<PcPermissions>(
+    () => session?.pc_permissions ?? DEFAULT_PC_PERMS,
+  );
+
+  async function handlePermChange(field: keyof PcPermissions, value: PermissionState) {
+    const next = { ...pcPerms, [field]: value };
+    setPcPermsLocal(next);
+    try { await setPcPermissions(next); } catch { /* ignore */ }
+  }
   const [showModelConfig, setShowModelConfig] = useState(false);
+  const [showPermConfig, setShowPermConfig] = useState(false);
 
   const [isPersonaMenuOpen, setIsPersonaMenuOpen] = useState(false);
   const [personas, setPersonas] = useState<string[]>(FALLBACK_PERSONAS);
@@ -375,9 +407,18 @@ export function GeneralTab({
     <>
       {chatMode && (
         <>
-          <SectionHeader>IG Mode</SectionHeader>
+          <SectionHeader>Post Mode</SectionHeader>
           <Card>
-            <div className="settings-card-body">
+            <div className="settings-perm-row" style={{ padding: '10px 16px' }}>
+              <div className="settings-qr-row-left">
+                <div className="settings-icon-badge settings-icon-badge--amber">
+                  <LayoutGrid size={18} />
+                </div>
+                <div className="settings-item-info">
+                  <p className="settings-item-title">Social posts</p>
+                  <p className="settings-item-subtitle">Allow characters create posts like social media.</p>
+                </div>
+              </div>
               <SegmentControl
                 options={[
                   { value: 'off' as const, label: 'Off' },
@@ -388,7 +429,7 @@ export function GeneralTab({
               />
             </div>
           </Card>
-          <SectionFooter>Characters can share posts. This will cause more token spend.</SectionFooter>
+          <SectionFooter>This will cause more token spend.</SectionFooter>
         </>
       )}
 
@@ -514,6 +555,52 @@ export function GeneralTab({
       <SectionFooter>
         {personaSaveMsg ? ` ${personaSaveMsg}` : ''}
       </SectionFooter></>}
+
+      {!chatMode && (
+        <>
+          <SectionHeader>PC Control</SectionHeader>
+          <Card>
+            <CardRow onClick={() => setShowPermConfig((v) => !v)}>
+              <div className="settings-qr-row-left">
+                <div className="settings-icon-badge settings-icon-badge--indigo">
+                  <Monitor size={18} />
+                </div>
+                <div>
+                  <p className="settings-item-title">Tool permissions</p>
+                  <p className="settings-item-subtitle">Control what the AI can do on this PC</p>
+                </div>
+              </div>
+              {showPermConfig
+                ? <ChevronDown size={18} className="settings-chevron" />
+                : <ChevronRight size={18} className="settings-chevron" />
+              }
+            </CardRow>
+            {showPermConfig && (
+              <div className="settings-inline-expand">
+                <div className="settings-perm-list">
+                  {PERM_ROWS.map(({ field, label, subtitle }) => (
+                    <div key={field} className="settings-perm-row">
+                      <div className="settings-perm-info">
+                        <span className="settings-perm-label">{label}</span>
+                        <span className="settings-perm-sub">{subtitle}</span>
+                      </div>
+                      <SegmentControl
+                        options={[
+                          { value: 'allow_all'      as PermissionState, label: 'Allow' },
+                          { value: 'ask_before_use' as PermissionState, label: 'Ask' },
+                          { value: 'not_allow'      as PermissionState, label: 'Block' },
+                        ]}
+                        value={pcPerms[field]}
+                        onChange={(v) => handlePermChange(field, v)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Card>
+        </>
+      )}
 
       <SectionHeader>Appearance</SectionHeader>
       <Card>

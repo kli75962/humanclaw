@@ -10,7 +10,7 @@
 
 /* ── Tab bar (leftmost column) ── */
 .app-tab-bar {
-  width: 48px;
+  width: 68px;
   flex-shrink: 0;
   height: 100%;
   display: flex;
@@ -22,12 +22,12 @@
 }
 
 .tab-bar-btn {
-  width: 36px;
-  height: 36px;
+  width: 52px;
+  height: 52px;
   border: none;
   background: transparent;
   color: var(--color-text-2);
-  border-radius: 8px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -36,13 +36,13 @@
 }
 
 .tab-bar-btn:hover {
-  background: var(--color-surface-2);
+  background: var(--color-hover);
   color: var(--color-text);
 }
 
 .tab-bar-btn--active {
-  background: var(--color-surface-2);
-  color: var(--color-accent);
+  background: var(--color-hover);
+  color: var(--color-text);
 }
 
 /* ── Left column (side panel) ── */

@@ -1,0 +1,16 @@
+{
+  "type": "function",
+  "function": {
+    "name": "pc_mouse_click",
+    "description": "Click a mouse button on the PC. Optionally move to (x, y) first.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "x": { "type": "number", "description": "Move to this X coordinate before clicking. Omit to click at current position." },
+        "y": { "type": "number", "description": "Move to this Y coordinate before clicking. Omit to click at current position." },
+        "button": { "type": "string", "enum": ["left", "right", "middle"], "description": "Mouse button (default: left)." },
+        "double": { "type": "boolean", "description": "Double-click if true (default: false)." }
+      }
+    }
+  }
+}

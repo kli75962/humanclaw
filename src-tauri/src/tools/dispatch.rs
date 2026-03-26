@@ -1,10 +1,8 @@
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
-#[cfg(target_os = "android")]
-use tauri::Manager;
 
 use super::memory::execute_memory_tool;
+use super::types::ToolResult;
 
 #[cfg(not(target_os = "android"))]
 static PHONE_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
@@ -13,14 +11,6 @@ static PHONE_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock:
 pub struct ToolExecutionContext {
     pub source_device_id: Option<String>,
     pub source_device_type: Option<String>,
-}
-
-/// Result returned to the LLM after executing a tool.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ToolResult {
-    pub tool_name: String,
-    pub success: bool,
-    pub output: String,
 }
 
 fn is_phone_control_tool(name: &str) -> bool {
@@ -212,6 +202,7 @@ pub async fn execute_tool_with_context(
             }
         }
         _ if is_phone_control_tool(name) => execute_phone_control_tool(app, name, args).await,
+        _ if super::pc::is_pc_control_tool(name) => super::pc::execute_pc_tool(app, name, args).await,
         _ => ToolResult {
             tool_name: name.to_string(),
             success: false,

@@ -3,7 +3,7 @@ use std::sync::RwLock;
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
-use super::types::{default_ollama_port, default_persona, DeviceInfo, DeviceType, PairedDevice, SessionConfig};
+use super::types::{default_ollama_port, default_persona, DeviceInfo, DeviceType, PairedDevice, PcPermissions, SessionConfig};
 
 const SESSION_FILE: &str = "session.json";
 
@@ -92,6 +92,7 @@ pub fn bootstrap(app: &AppHandle) -> SessionConfig {
         ollama_host_override: None,
         ollama_port: default_ollama_port(),
         persona: default_persona(),
+        pc_permissions: PcPermissions::default(),
     };
     let _ = save(app, &cfg);
     cfg
@@ -176,13 +177,24 @@ pub fn set_persona(app: &AppHandle, persona: &str) -> Result<SessionConfig, Stri
         return Err("Persona is required".to_string());
     }
 
-    let allowed = crate::skills::persona_skill_names();
-    if !allowed.iter().any(|name| *name == persona) {
+    let compiled = crate::skills::persona_skill_names();
+    let runtime = crate::skills::list_runtime_persona_names(app);
+    let known_compiled = compiled.iter().any(|n| *n == persona);
+    let known_runtime = runtime.iter().any(|n| n == persona);
+    if !known_compiled && !known_runtime {
         return Err(format!("Unknown persona: {persona}"));
     }
 
     let mut cfg = load(app).ok_or("Session not initialised")?;
     cfg.persona = persona.to_string();
+    save(app, &cfg)?;
+    Ok(cfg)
+}
+
+/// Update PC control tool permissions.
+pub fn set_pc_permissions(app: &AppHandle, permissions: PcPermissions) -> Result<SessionConfig, String> {
+    let mut cfg = load(app).ok_or("Session not initialised")?;
+    cfg.pc_permissions = permissions;
     save(app, &cfg)?;
     Ok(cfg)
 }
