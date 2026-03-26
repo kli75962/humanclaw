@@ -84,7 +84,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 16px;
+  padding: 24px 16px 0;
 }
 
 .app-messages {
@@ -122,6 +122,14 @@
 
 /* ── Phone layout ── */
 @media (max-width: 768px) {
+  /* Tab bar buttons expand to fill the bottom bar evenly */
+  .app-root.side-open .tab-bar-btn {
+    flex: 1;
+    height: 100%;
+    width: auto;
+    border-radius: 0;
+  }
+
   /* Mobile nav: fixed at same position as side panel's top nav buttons */
   .mobile-nav {
     position: fixed;
@@ -149,9 +157,35 @@
     transform: translateX(0);
   }
 
-  /* Tab bar: hidden on mobile */
+  /* Tab bar: hidden on mobile main screen */
   .app-tab-bar {
     display: none;
+  }
+
+  /* Tab bar: shown as horizontal bottom bar on the side panel page */
+  .app-root.side-open .app-tab-bar {
+    display: flex;
+    flex-direction: row;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    width: auto;
+    z-index: 55;
+    border-right: none;
+    border-top: 1px solid var(--color-border);
+    padding: 0;
+    justify-content: space-around;
+  }
+
+  /* Side panel: leave room at bottom for the tab bar */
+  .app-root.side-open .app-left {
+    left: 0 !important;
+    width: 100% !important;
+    bottom: 60px;
+    top: 0;
+    height: auto !important;
   }
 
   /* Divider: hidden on mobile */
@@ -164,24 +198,26 @@
 .app-content-tabs {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 6px 12px 0;
-  border-bottom: 1px solid var(--color-border);
+  gap: 4px;
+  padding: 15px 16px 0;
   flex-shrink: 0;
 }
 
 .content-tab-btn {
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
-  padding: 6px 10px;
   border: none;
   background: transparent;
   color: var(--color-text-2);
   font-size: 13px;
-  border-radius: 6px 6px 0 0;
+  border-radius: 12px;
   cursor: pointer;
   transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
 }
 
 .content-tab-btn:hover {
@@ -190,8 +226,8 @@
 }
 
 .content-tab-btn--active {
-  color: var(--color-accent);
-  box-shadow: inset 0 -2px 0 var(--color-accent);
+  color: var(--color-text);
+  background: var(--color-hover);
 }
 
 .app-posts-feed {

@@ -364,6 +364,10 @@ export function GeneralTab({
     () => session?.pc_permissions ?? DEFAULT_PC_PERMS,
   );
 
+  useEffect(() => {
+    if (session?.pc_permissions) setPcPermsLocal(session.pc_permissions);
+  }, [session]);
+
   async function handlePermChange(field: keyof PcPermissions, value: PermissionState) {
     const next = { ...pcPerms, [field]: value };
     setPcPermsLocal(next);

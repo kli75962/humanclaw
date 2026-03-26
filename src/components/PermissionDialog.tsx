@@ -43,7 +43,7 @@ function buildDescription(tool: string, args: Record<string, unknown> = {}): { s
       return { summary: `Capture screenshot of display ${d}` };
     }
     case 'pc_run_command':
-      return { summary: 'Run this command in the terminal', detail: str(args.command) };
+      return { summary: 'Run this command in the terminal', detail: str(args.cmd) };
     case 'pc_file_write':
       return { summary: 'Write to this file', detail: str(args.path) };
     case 'pc_file_read':

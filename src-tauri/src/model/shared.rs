@@ -48,19 +48,33 @@ pub async fn build_base_prompt(app: &AppHandle, character: Option<&CharacterOver
     buf.push_str(&persona);
     buf.push_str("\n\n");
     buf.push_str(&skills);
-    buf.push_str("\n\n[INSTALLED APPS]\n");
-    if apps.is_empty() {
-        buf.push_str("  (no apps found)");
-    } else {
+
+    // Installed apps list is only meaningful on Android (from Kotlin plugin).
+    // On desktop the list is empty/stub so we skip it.
+    if !apps.is_empty() {
+        buf.push_str("\n\n[INSTALLED APPS]\n");
         for (i, a) in apps.iter().enumerate() {
             if i > 0 { buf.push('\n'); }
             buf.push_str(&a.prompt_line());
         }
     }
 
+    use crate::session::types::DeviceType;
+    match cfg.device.device_type {
+        DeviceType::Desktop => {
+            buf.push_str("Running on: Desktop PC.\n");
+            buf.push_str("Default to pc_* tools (pc_file_write, pc_file_read, pc_file_delete, pc_run_command, pc_screenshot, pc_mouse_move, pc_mouse_click, pc_type_text, pc_key_press) for local tasks.\n");
+            buf.push_str("Phone tools (tap, swipe, get_screen, etc.) require a paired Android device.");
+        }
+        DeviceType::Android => {
+            buf.push_str("Running on: Android phone.\n");
+            buf.push_str("Default to phone tools (tap, swipe, type_text, press_key, get_screen, launch_app) for local tasks.\n");
+            buf.push_str("PC tools (pc_*) require a paired desktop device.");
+        }
+    }
+
     if !cfg.paired_devices.is_empty() {
         buf.push_str("\n\n[PAIRED DEVICES]\n");
-        buf.push_str("Phone tools (tap, swipe, get_screen, etc.) are forwarded to the paired Android device automatically.\n");
         for p in &cfg.paired_devices {
             buf.push_str("- ");
             buf.push_str(&p.label);

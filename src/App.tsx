@@ -16,7 +16,7 @@ import type { PermissionRequest as PermissionRequestData } from './components/Pe
 import { ExplainPopup } from './components/ExplainPopup';
 import { MemoChatView } from './components/MemoChatView';
 import type { WizardAnswers, MemoMeta } from './types';
-import { BookMarked, Bot, LayoutGrid, Link2, Menu, MessageCircle, Settings, Users } from 'lucide-react';
+import { Bot, ChevronLeft, LayoutGrid, MessageCircle, Users } from 'lucide-react';
 import { PostFeed } from './components/PostFeed';
 import type { ChatMeta, InputBarHandle, Message, Post } from './types';
 import './style/themes.css';
@@ -451,32 +451,11 @@ function App() {
       {/* ── Mobile nav overlay (phone only, shown when side panel is closed) ── */}
       <div className="mobile-nav">
         <button
-          className={`top-nav-btn${sideView === 'settings' ? ' top-nav-btn--active' : ''}`}
-          onClick={() => handleSwitchView('settings')}
-          aria-label="Settings"
+          className="top-nav-btn"
+          onClick={() => setSideOpen(true)}
+          aria-label="Open menu"
         >
-          <Settings size={22} />
-        </button>
-        <button
-          className={`top-nav-btn${sideView === 'history' ? ' top-nav-btn--active' : ''}`}
-          onClick={() => handleSwitchView('history')}
-          aria-label="Chat history"
-        >
-          <Menu size={22} />
-        </button>
-        <button
-          className={`top-nav-btn${sideView === 'memos' ? ' top-nav-btn--active' : ''}`}
-          onClick={() => handleSwitchView('memos')}
-          aria-label="Memos"
-        >
-          <BookMarked size={22} />
-        </button>
-        <button
-          className={`top-nav-btn${sideView === 'connect' ? ' top-nav-btn--active' : ''}`}
-          onClick={() => handleSwitchView('connect')}
-          aria-label="Connect"
-        >
-          <Link2 size={22} />
+          <ChevronLeft size={22} />
         </button>
       </div>
 
@@ -527,16 +506,16 @@ function App() {
             <button
               className={`content-tab-btn${mainTab === 'chat' ? ' content-tab-btn--active' : ''}`}
               onClick={() => setMainTab('chat')}
+              aria-label="Chat"
             >
-              <MessageCircle size={15} />
-              Chat
+              <MessageCircle size={22} />
             </button>
             <button
               className={`content-tab-btn${mainTab === 'posts' ? ' content-tab-btn--active' : ''}`}
               onClick={() => setMainTab('posts')}
+              aria-label="Posts"
             >
-              <LayoutGrid size={15} />
-              Posts
+              <LayoutGrid size={22} />
             </button>
           </div>
         )}

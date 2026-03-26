@@ -27,19 +27,7 @@ pub async fn get_installed_apps(_app: &AppHandle) -> Vec<InstalledApp> {
 
     #[cfg(not(target_os = "android"))]
     {
-        // Desktop stub — useful for development without a device
-        vec![
-            InstalledApp {
-                name: "YouTube".into(),
-                package_name: "com.google.android.youtube".into(),
-                is_system: false,
-            },
-            InstalledApp {
-                name: "Chrome".into(),
-                package_name: "com.android.chrome".into(),
-                is_system: false,
-            },
-        ]
+        vec![]
     }
 }
 
