@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Check, ChevronDown, ChevronRight, Cpu, Palette, RefreshCw, User } from 'lucide-react';
-import type { SessionConfig } from '../types';
+import { Check, ChevronDown, ChevronRight, Cpu, Palette, Plus, RefreshCw, User } from 'lucide-react';
+import type { SessionConfig, WizardAnswers } from '../types';
 import { Card, CardRow, SectionFooter, SectionHeader, SegmentControl } from './SettingsUI';
+import { PersonaWizard } from './PersonaWizard';
 import { useTheme } from '../hooks/useTheme';
 import type { Theme } from '../hooks/useTheme';
 
@@ -51,14 +52,12 @@ function ModelConfigPanel({
   onModelChange,
   setOllamaEndpoint,
   onOllamaEndpointChanged,
-  onSaved,
 }: {
   session: SessionConfig | null;
   currentModel: string;
   onModelChange: (m: string) => void;
   setOllamaEndpoint: (host: string, port: number) => Promise<SessionConfig>;
   onOllamaEndpointChanged: () => void;
-  onSaved: (provider: Provider) => void;
 }) {
   const [provider, setProvider] = useState<Provider>(
     () => (localStorage.getItem(PROVIDER_KEY) as Provider) ?? 'ollama',
@@ -127,7 +126,7 @@ function ModelConfigPanel({
   function handleProviderChange(p: Provider) {
     setProvider(p);
     localStorage.setItem(PROVIDER_KEY, p);
-    onSaved(p);
+    onModelChange(p === 'claude' ? claudeModel : ollamaModel);
   }
 
   async function handleApiKeyBlur() {
@@ -146,7 +145,6 @@ function ModelConfigPanel({
     localStorage.setItem(PROVIDER_KEY, 'claude');
     localStorage.setItem(CLAUDE_MODEL_KEY, id);
     onModelChange(id);
-    onSaved('claude');
     flashSaved();
   }
 
@@ -171,7 +169,6 @@ function ModelConfigPanel({
     setIsModelMenuOpen(false);
     localStorage.setItem(PROVIDER_KEY, 'ollama');
     onModelChange(m);
-    onSaved('ollama');
     flashSaved();
   }
 
@@ -323,6 +320,7 @@ interface GeneralTabProps {
   onChatModeChange: (v: boolean) => void;
   igMode: boolean;
   onIgModeChange: (v: boolean) => void;
+  onAddPersona?: (answers: WizardAnswers) => void;
 }
 
 export function GeneralTab({
@@ -335,19 +333,18 @@ export function GeneralTab({
   setOllamaEndpoint,
   onOllamaEndpointChanged,
   chatMode,
-  onChatModeChange,
+  onChatModeChange: _onChatModeChange,
   igMode,
   onIgModeChange,
+  onAddPersona,
 }: GeneralTabProps) {
   const [showModelConfig, setShowModelConfig] = useState(false);
-  const [activeProvider, setActiveProvider] = useState<Provider>(
-    () => (localStorage.getItem(PROVIDER_KEY) as Provider) ?? 'ollama',
-  );
 
   const [isPersonaMenuOpen, setIsPersonaMenuOpen] = useState(false);
   const [personas, setPersonas] = useState<string[]>(FALLBACK_PERSONAS);
   const [personaSaveMsg, setPersonaSaveMsg] = useState('');
   const personaMenuRef = useRef<HTMLDivElement>(null);
+  const [showAddPersona, setShowAddPersona] = useState(false);
 
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
   const themeMenuRef = useRef<HTMLDivElement>(null);
@@ -355,10 +352,11 @@ export function GeneralTab({
   const [theme, setTheme] = useTheme();
 
   useEffect(() => {
+    if (!isPersonaMenuOpen) return;
     listPersonas()
       .then((names) => { if (names.length > 0) setPersonas(names); })
       .catch(() => setPersonas(FALLBACK_PERSONAS));
-  }, [listPersonas]);
+  }, [isPersonaMenuOpen, listPersonas]);
 
   useEffect(() => {
     function onPointerDown(event: PointerEvent) {
@@ -375,21 +373,6 @@ export function GeneralTab({
 
   return (
     <>
-      <SectionHeader>Mode</SectionHeader>
-      <Card>
-        <div className="settings-card-body">
-          <SegmentControl
-            options={[
-              { value: 'normal' as const, label: 'Normal' },
-              { value: 'chat' as const, label: 'Chat' },
-            ]}
-            value={chatMode ? 'chat' : 'normal'}
-            onChange={(v) => onChatModeChange(v === 'chat')}
-          />
-        </div>
-      </Card>
-      <SectionFooter>Chat mode lets you create AI friends with custom personas.</SectionFooter>
-
       {chatMode && (
         <>
           <SectionHeader>IG Mode</SectionHeader>
@@ -434,14 +417,9 @@ export function GeneralTab({
             onModelChange={onModelChange}
             setOllamaEndpoint={setOllamaEndpoint}
             onOllamaEndpointChanged={onOllamaEndpointChanged}
-
-            onSaved={(p) => setActiveProvider(p)}
           />
         )}
       </Card>
-      <SectionFooter>
-        {activeProvider === 'claude' ? 'Using Claude API. Model and API key are stored securely.' : 'Using local Ollama instance.'}
-      </SectionFooter>
 
       <SectionHeader>Persona</SectionHeader>
       <Card>
@@ -502,8 +480,38 @@ export function GeneralTab({
           </div>
         </div>
       </Card>
+
+      {onAddPersona && (<>
+        <SectionHeader>Add Persona</SectionHeader>
+        <Card>
+          <CardRow onClick={() => setShowAddPersona((v) => !v)}>
+            <div className="settings-qr-row-left">
+              <div className="settings-icon-badge settings-icon-badge--emerald">
+                <Plus size={18} />
+              </div>
+              <div>
+                <p className="settings-item-title">Create new persona</p>
+                <p className="settings-item-subtitle">Let AI build a custom persona for you</p>
+              </div>
+            </div>
+            {showAddPersona
+              ? <ChevronDown size={18} className="settings-chevron" />
+              : <ChevronRight size={18} className="settings-chevron" />
+            }
+          </CardRow>
+          {showAddPersona && (
+            <div className="settings-inline-expand">
+              <PersonaWizard
+                onComplete={(answers) => {
+                  onAddPersona(answers);
+                  setShowAddPersona(false);
+                }}
+              />
+            </div>
+          )}
+        </Card>
+        </>)}
       <SectionFooter>
-        Persona controls the assistant character and tone used during tool-driven chat.
         {personaSaveMsg ? ` ${personaSaveMsg}` : ''}
       </SectionFooter></>}
 
@@ -550,7 +558,6 @@ export function GeneralTab({
           </div>
         </div>
       </Card>
-      <SectionFooter>Changes apply immediately.</SectionFooter>
     </>
   );
 }

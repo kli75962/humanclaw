@@ -4,6 +4,7 @@ pub mod character_sync;
 pub mod exec;
 pub mod health;
 pub mod pairing_token;
+pub mod persona_sync;
 pub mod server;
 pub mod types;
 

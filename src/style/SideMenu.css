@@ -84,20 +84,22 @@
 }
 
 .side-menu-delete-btn {
-  padding: 8px;
-  border-radius: 9999px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   border: none;
   background: transparent;
   cursor: pointer;
   flex-shrink: 0;
-  color: var(--color-text-2);
+  color: var(--color-text-3);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.15s;
+  transition: background-color 0.15s, color 0.15s;
 }
 .side-menu-delete-btn:hover {
   background: var(--color-hover);
+  color: var(--color-text);
 }
 
 /* ── Top nav buttons ── */
@@ -155,12 +157,36 @@
   padding-bottom: 32px;
 }
 
+.side-menu-friend-btn {
+  display: flex !important;
+  align-items: center;
+  gap: 12px;
+}
+
+.side-menu-friend-name {
+  font-size: 15px;
+  font-weight: 500;
+}
+
 .side-menu-char-avatar {
-  margin-right: 8px;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
   object-fit: cover;
+  flex-shrink: 0;
+}
+
+.side-menu-char-avatar-placeholder {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
   flex-shrink: 0;
 }
 

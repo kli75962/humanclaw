@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use crate::memory::ChatSyncPayload;
 use crate::characters::CharacterSyncPayload;
+use crate::skills::PersonaSyncPayload;
 
 /// Response body for `GET /ping` — returned only when the caller's key matches.
 /// `hash_key` is present ONLY when a one-time pairing token was used;
@@ -77,5 +78,13 @@ pub struct UnpairRequest {
 pub struct CharacterImportRequest {
     pub key: String,
     pub payload: CharacterSyncPayload,
+    pub replace: bool,
+}
+
+/// Request body for `POST /personas/import`.
+#[derive(Deserialize)]
+pub struct PersonaImportRequest {
+    pub key: String,
+    pub payload: PersonaSyncPayload,
     pub replace: bool,
 }

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
 use crate::phone::get_installed_apps;
-use crate::skills::{build_persona_prompt, build_skills_prompt};
+use crate::skills::{build_persona_prompt_with_runtime, build_skills_prompt};
 use crate::tools::{build_core_prompt, read_core};
 
 pub const MAX_TOOL_ROUNDS: usize = 200;
@@ -37,10 +37,10 @@ pub async fn build_base_prompt(app: &AppHandle, character: Option<&CharacterOver
     let apps = get_installed_apps(app).await;
     let cfg = crate::session::store::bootstrap(app);
     let persona = if let Some(char) = character {
-        let persona_content = build_persona_prompt(Some(char.persona.as_str()));
+        let persona_content = build_persona_prompt_with_runtime(app, Some(char.persona.as_str()));
         format!("You are {}.\n{}\nBackground: {}", char.name, persona_content, char.background)
     } else {
-        build_persona_prompt(Some(cfg.persona.as_str()))
+        build_persona_prompt_with_runtime(app, Some(cfg.persona.as_str()))
     };
     let skills = build_skills_prompt();
 

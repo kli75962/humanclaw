@@ -77,8 +77,8 @@ export interface ModalProps {
 
 
 export interface SideMenuProps {
-  view: 'history' | 'settings' | 'posts';
-  onSwitchView: (v: 'history' | 'settings' | 'posts') => void;
+  view: 'history' | 'settings';
+  onSwitchView: (v: 'history' | 'settings') => void;
   onNewChat: () => void;
   chats: ChatMeta[];
   activeChatId: string | null;
@@ -98,11 +98,14 @@ export interface SideMenuProps {
   onDeleteCharacter: (id: string) => void;
   igMode: boolean;
   onIgModeChange: (v: boolean) => void;
-  posts: Post[];
-  likedPostIds: Set<string>;
-  onLikePost: (id: string) => void;
-  onDeletePost: (id: string) => void;
-  onDmCharacter: (characterId: string, post: Post) => void;
+  onAddPersona?: (answers: WizardAnswers) => void;
+}
+
+export interface WizardAnswers {
+  sex: string;
+  personality: string;
+  profession: string;
+  personaName: string;
 }
 
 export interface WelcomeScreenProps {

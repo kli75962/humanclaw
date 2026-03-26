@@ -1,14 +1,13 @@
 import { memo, useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import { ChevronRight, LayoutGrid, Menu, PenSquare, Settings, Trash2, UserPlus } from 'lucide-react';
+import { ChevronRight, Menu, PenSquare, Settings, Trash2, UserPlus, X } from 'lucide-react';
 import { useSession } from '../hooks/useSession';
 import { SegmentControl } from './SettingsUI';
 import { GeneralTab } from './SettingsGeneralTab';
 import { ConnectTab } from './SettingsConnectTab';
 import { CreateFriendInline } from './CreateFriendInline';
-import { PostFeed } from './PostFeed';
-import type { SideMenuProps } from '../types';
+import type { SideMenuProps, WizardAnswers } from '../types';
 import '../style/SideMenu.css';
 import '../style/SettingsScreen.css';
 
@@ -22,6 +21,7 @@ function SettingsPanel({
   onChatModeChange,
   igMode,
   onIgModeChange,
+  onAddPersona,
 }: {
   model: string;
   onModelChange: (m: string) => void;
@@ -30,6 +30,7 @@ function SettingsPanel({
   onChatModeChange: (v: boolean) => void;
   igMode: boolean;
   onIgModeChange: (v: boolean) => void;
+  onAddPersona?: (answers: WizardAnswers) => void;
 }) {
   const [tab, setTab] = useState<SettingsTab>('general');
   const [peerStatus, setPeerStatus] = useState<Record<string, boolean>>({});
@@ -75,6 +76,7 @@ function SettingsPanel({
               onChatModeChange={onChatModeChange}
               igMode={igMode}
               onIgModeChange={onIgModeChange}
+              onAddPersona={onAddPersona}
             />
           )}
           {tab === 'connect' && (
@@ -99,7 +101,7 @@ export const SideMenu = memo(function SideMenu({
   isMobileOpen, onCloseSide,
   chatMode, onChatModeChange,
   characters, activeCharacterId, onSelectCharacter, onCreateCharacter, onDeleteCharacter,
-  igMode, onIgModeChange, posts, likedPostIds, onLikePost, onDeletePost, onDmCharacter,
+  igMode, onIgModeChange, onAddPersona,
 }: SideMenuProps) {
   const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -121,15 +123,6 @@ export const SideMenu = memo(function SideMenu({
         >
           <Menu size={22} />
         </button>
-        {chatMode && igMode && (
-          <button
-            className={`top-nav-btn${view === 'posts' ? ' top-nav-btn--active' : ''}`}
-            onClick={() => onSwitchView('posts')}
-            aria-label="Posts feed"
-          >
-            <LayoutGrid size={22} />
-          </button>
-        )}
         {isMobileOpen && (
           <button
             className="top-nav-btn top-nav-btn--back"
@@ -195,18 +188,22 @@ export const SideMenu = memo(function SideMenu({
               <div key={char.id} className="side-menu-chat-item">
                 <button
                   onClick={() => onSelectCharacter(char.id)}
-                  className={`side-menu-chat-btn${char.id === activeCharacterId ? ' side-menu-chat-btn--active' : ''}`}
+                  className={`side-menu-chat-btn side-menu-friend-btn${char.id === activeCharacterId ? ' side-menu-chat-btn--active' : ''}`}
                 >
-                  {char.icon && (
+                  {char.icon ? (
                     <img src={char.icon} className="side-menu-char-avatar" alt="" />
+                  ) : (
+                    <span className="side-menu-char-avatar-placeholder">
+                      {char.name.charAt(0).toUpperCase()}
+                    </span>
                   )}
-                  {char.name}
+                  <span className="side-menu-friend-name">{char.name}</span>
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); onDeleteCharacter(char.id); }}
                   className="side-menu-delete-btn"
                 >
-                  <Trash2 size={14} />
+                  <X size={16} />
                 </button>
               </div>
             ))}
@@ -222,19 +219,10 @@ export const SideMenu = memo(function SideMenu({
             onChatModeChange={onChatModeChange}
             igMode={igMode}
             onIgModeChange={onIgModeChange}
+            onAddPersona={onAddPersona}
           />
         )}
 
-        {view === 'posts' && (
-          <PostFeed
-            posts={posts}
-            characters={characters}
-            likedPostIds={likedPostIds}
-            onLike={onLikePost}
-            onDelete={onDeletePost}
-            onDmCharacter={onDmCharacter}
-          />
-        )}
       </div>
     </div>
   );

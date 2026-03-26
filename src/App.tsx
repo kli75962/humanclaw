@@ -11,7 +11,9 @@ import { ChatMessage } from './components/ChatMessage';
 import { InputBar } from './components/InputBar';
 import { SideMenu } from './components/SideMenu';
 import { AccessibilityDialog } from './components/AccessibilityDialog';
-import { LayoutGrid, Menu, Settings } from 'lucide-react';
+import type { WizardAnswers } from './types';
+import { Bot, LayoutGrid, Menu, MessageCircle, Settings, Users } from 'lucide-react';
+import { PostFeed } from './components/PostFeed';
 import type { ChatMeta, InputBarHandle, Message, Post } from './types';
 import './style/themes.css';
 import './style/App.css';
@@ -52,10 +54,11 @@ function App() {
   );
   const characterModel = activeCharacter?.model ?? model;
 
-  const [sideView, setSideView] = useState<'history' | 'settings' | 'posts'>('history');
+  const [mainTab, setMainTab] = useState<'chat' | 'posts'>('chat');
+  const [sideView, setSideView] = useState<'history' | 'settings'>('history');
   const [sideOpen, setSideOpen] = useState(false);
 
-  const handleSwitchView = useCallback((v: 'history' | 'settings' | 'posts') => {
+  const handleSwitchView = useCallback((v: 'history' | 'settings') => {
     setSideView(v);
     setSideOpen(true);
   }, []);
@@ -63,6 +66,7 @@ function App() {
   const handleIgModeChange = useCallback((enabled: boolean) => {
     setIgMode(enabled);
     localStorage.setItem(IG_MODE_KEY, String(enabled));
+    if (!enabled) setMainTab('chat');
   }, []);
   const [sideWidth, setSideWidth] = useState(() => {
     const saved = localStorage.getItem(SIDE_WIDTH_KEY);
@@ -171,11 +175,13 @@ function App() {
     setActiveChatId(null);
     setInitMessages([]);
     setActiveCharacterId(null);
+    if (!enabled) setMainTab('chat');
   }, []);
 
   const selectCharacter = useCallback((id: string) => {
     const charChatId = `char_${id}`;
     setActiveCharacterId(id);
+    setMainTab('chat');
     invoke<Message[]>('load_chat_messages', { id: charChatId })
       .then((msgs) => {
         setActiveChatId(charChatId);
@@ -187,9 +193,17 @@ function App() {
       });
   }, []);
 
+  // Clear the quoted post whenever the user navigates away from that character's chat.
+  useEffect(() => {
+    if (quotedPost && activeChatId !== `char_${quotedPost.characterId}`) {
+      setQuotedPost(null);
+    }
+  }, [activeChatId, quotedPost]);
+
   const handleDmCharacter = useCallback((id: string, post: Post) => {
     selectCharacter(id);
     setQuotedPost(post);
+    setMainTab('chat');
     handleSwitchView('history');
   }, [selectCharacter, handleSwitchView]);
 
@@ -238,6 +252,21 @@ function App() {
     }
   }, [handleSend, isListening, stopListening, quotedPost, characters]);
 
+  const handleAddPersona = useCallback((answers: WizardAnswers) => {
+    if (chatMode) handleChatModeChange(false);
+    setMainTab('chat');
+    setSideOpen(false);
+    startNewChat();
+    handleSend(
+      `Create a new persona using the create_skill tool based on these preferences:\n` +
+      `- Gender: ${answers.sex}\n` +
+      `- Personality: ${answers.personality}\n` +
+      `- Profession: ${answers.profession}\n` +
+      `- Name: ${answers.personaName}\n\n` +
+      `Follow the persona skill creation guide. The skill name must start with "persona_".`
+    );
+  }, [chatMode, handleChatModeChange, startNewChat, handleSend]);
+
   const handleOllamaEndpointChanged = useCallback(() => {}, []);
 
   const messageList = useMemo(() => {
@@ -260,6 +289,24 @@ function App() {
     <div className={`app-root${sideOpen ? ' side-open' : ''}`}>
       <AccessibilityDialog />
 
+      {/* ── Tab bar (leftmost column) — mode switch ── */}
+      <div className="app-tab-bar">
+        <button
+          className={`tab-bar-btn${!chatMode ? ' tab-bar-btn--active' : ''}`}
+          onClick={() => { if (chatMode) handleChatModeChange(false); }}
+          aria-label="Normal mode"
+        >
+          <Bot size={20} />
+        </button>
+        <button
+          className={`tab-bar-btn${chatMode ? ' tab-bar-btn--active' : ''}`}
+          onClick={() => { if (!chatMode) handleChatModeChange(true); }}
+          aria-label="Chat mode"
+        >
+          <Users size={20} />
+        </button>
+      </div>
+
       {/* ── Mobile nav overlay (phone only, shown when side panel is closed) ── */}
       <div className="mobile-nav">
         <button
@@ -276,15 +323,6 @@ function App() {
         >
           <Menu size={22} />
         </button>
-        {chatMode && igMode && (
-          <button
-            className={`top-nav-btn${sideView === 'posts' ? ' top-nav-btn--active' : ''}`}
-            onClick={() => handleSwitchView('posts')}
-            aria-label="Posts feed"
-          >
-            <LayoutGrid size={22} />
-          </button>
-        )}
       </div>
 
       {/* ── Left panel ── */}
@@ -311,11 +349,7 @@ function App() {
           onDeleteCharacter={deleteCharacter}
           igMode={igMode}
           onIgModeChange={handleIgModeChange}
-          posts={posts}
-          likedPostIds={likedPostIds}
-          onLikePost={toggleLike}
-          onDeletePost={deletePost}
-          onDmCharacter={handleDmCharacter}
+          onAddPersona={handleAddPersona}
         />
       </div>
 
@@ -328,42 +362,83 @@ function App() {
         onPointerCancel={handleDividerPointerUp}
       />
 
-      {/* ── Right: chat ── */}
+      {/* ── Right: main content ── */}
       <div className="app-right">
-        <div className="app-content custom-scrollbar">
-          {messages.length === 0 ? (
-            <WelcomeScreen onSend={onSend} />
-          ) : (
-            <div className="app-messages">
-              {messageList}
+        {/* Content tabs — only when both chatMode and igMode are active */}
+        {chatMode && igMode && (
+          <div className="app-content-tabs">
+            <button
+              className={`content-tab-btn${mainTab === 'chat' ? ' content-tab-btn--active' : ''}`}
+              onClick={() => setMainTab('chat')}
+            >
+              <MessageCircle size={15} />
+              Chat
+            </button>
+            <button
+              className={`content-tab-btn${mainTab === 'posts' ? ' content-tab-btn--active' : ''}`}
+              onClick={() => setMainTab('posts')}
+            >
+              <LayoutGrid size={15} />
+              Posts
+            </button>
+          </div>
+        )}
 
-              {agentStatus && (
-                <div className="app-agent-status">
-                  <span className="app-agent-dot" />
-                  {agentStatus}
+        {mainTab === 'posts' ? (
+          <div className="app-content custom-scrollbar">
+            <div className="app-posts-feed">
+              <PostFeed
+                posts={posts}
+                characters={characters}
+                likedPostIds={likedPostIds}
+                onLike={toggleLike}
+                onDelete={deletePost}
+                onDmCharacter={handleDmCharacter}
+              />
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="app-content custom-scrollbar">
+              {messages.length === 0 ? (
+                activeCharacter ? (
+                  <div className="app-friend-empty">Start to chat with your new friend</div>
+                ) : (
+                  <WelcomeScreen onSend={onSend} />
+                )
+              ) : (
+                <div className="app-messages">
+                  {messageList}
+
+                  {agentStatus && (
+                    <div className="app-agent-status">
+                      <span className="app-agent-dot" />
+                      {agentStatus}
+                    </div>
+                  )}
+
+                  {error && (
+                    <div className="app-error">{error}</div>
+                  )}
+
+                  <div ref={scrollRef} />
                 </div>
               )}
-
-              {error && (
-                <div className="app-error">{error}</div>
-              )}
-
-              <div ref={scrollRef} />
             </div>
-          )}
-        </div>
 
-        <InputBar
-          ref={inputBarRef}
-          isThinking={isThinking}
-          isListening={isListening}
-          sttError={sttError}
-          onSend={onSend}
-          onSttToggle={handleSttToggle}
-          onStop={handleStop}
-          quotedPost={quotedPost}
-          onClearQuote={() => setQuotedPost(null)}
-        />
+            <InputBar
+              ref={inputBarRef}
+              isThinking={isThinking}
+              isListening={isListening}
+              sttError={sttError}
+              onSend={onSend}
+              onSttToggle={handleSttToggle}
+              onStop={handleStop}
+              quotedPost={quotedPost}
+              onClearQuote={() => setQuotedPost(null)}
+            />
+          </>
+        )}
       </div>
     </div>
   );

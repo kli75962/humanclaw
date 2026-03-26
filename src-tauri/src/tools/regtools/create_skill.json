@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "create_skill",
+    "description": "Create a custom persona skill file in the user's persona library. The persona becomes selectable from Settings after creation. Use this after collecting user preferences to generate a tailored SKILL.md.",
+    "parameters": {
+      "type": "object",
+      "required": ["name", "content"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Skill directory name, e.g. 'persona_alex'. Must start with 'persona_' and contain only lowercase letters, digits, and underscores."
+        },
+        "content": {
+          "type": "string",
+          "description": "Full SKILL.md content including the YAML frontmatter block (--- name, description, compatibility ---) followed by the persona system prompt."
+        }
+      }
+    }
+  }
+}

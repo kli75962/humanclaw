@@ -70,13 +70,15 @@ pub fn set_ollama_endpoint(app: AppHandle, host: String, port: u16) -> Result<Se
     store::set_ollama_endpoint(&app, &host, port)
 }
 
-/// Return available persona skill names.
+/// Return available persona skill names (compiled + runtime user-created).
 #[tauri::command]
-pub fn list_personas() -> Vec<String> {
-    crate::skills::persona_skill_names()
+pub fn list_personas(app: AppHandle) -> Vec<String> {
+    let mut names: Vec<String> = crate::skills::persona_skill_names()
         .iter()
         .map(|s| (*s).to_string())
-        .collect()
+        .collect();
+    names.extend(crate::skills::list_runtime_persona_names(&app));
+    names
 }
 
 /// Set selected persona by skill name.

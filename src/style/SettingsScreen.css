@@ -356,6 +356,26 @@
 .settings-save-msg--ok  { font-size: 12px; color: #4ade80; }
 .settings-save-msg--err { font-size: 12px; color: #f87171; }
 
+.settings-add-persona-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 7px 14px;
+  border-radius: 9999px;
+  border: 1px dashed var(--color-border-2);
+  background: transparent;
+  color: var(--color-text-2);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.settings-add-persona-btn:hover {
+  background: var(--color-hover);
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
 .settings-save-btn {
   padding: 8px 16px;
   border-radius: 9999px;

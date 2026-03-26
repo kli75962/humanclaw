@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 #[cfg(target_os = "android")]
 use tauri::Manager;
 
@@ -153,6 +153,62 @@ pub async fn execute_tool_with_context(
                 tool_name: name.to_string(),
                 success: true,
                 output: "ok: message delivered to user".to_string(),
+            }
+        }
+        "create_skill" => {
+            let skill_name = args.get("name").and_then(Value::as_str).unwrap_or("").trim().to_string();
+            let content = args.get("content").and_then(Value::as_str).unwrap_or("");
+
+            // Validate name
+            if !skill_name.starts_with("persona_") || skill_name.len() < 9 {
+                return ToolResult {
+                    tool_name: "create_skill".to_string(),
+                    success: false,
+                    output: "Skill name must start with 'persona_' followed by at least one character.".to_string(),
+                };
+            }
+            if !skill_name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_') {
+                return ToolResult {
+                    tool_name: "create_skill".to_string(),
+                    success: false,
+                    output: "Skill name must contain only lowercase letters, digits, and underscores.".to_string(),
+                };
+            }
+
+            match app.path().app_data_dir() {
+                Ok(data_dir) => {
+                    let skill_dir = data_dir.join("custom_personas").join(&skill_name);
+                    if let Err(e) = std::fs::create_dir_all(&skill_dir) {
+                        return ToolResult {
+                            tool_name: "create_skill".to_string(),
+                            success: false,
+                            output: format!("Failed to create directory: {e}"),
+                        };
+                    }
+                    match std::fs::write(skill_dir.join("SKILL.md"), content) {
+                        Ok(_) => {
+                            let app_clone = app.clone();
+                            tauri::async_runtime::spawn(async move {
+                                crate::bridge::persona_sync::sync_to_all_peers(&app_clone).await;
+                            });
+                            ToolResult {
+                                tool_name: "create_skill".to_string(),
+                                success: true,
+                                output: format!("Persona '{skill_name}' saved. The user can now select it from Settings → Persona."),
+                            }
+                        }
+                        Err(e) => ToolResult {
+                            tool_name: "create_skill".to_string(),
+                            success: false,
+                            output: format!("Failed to write SKILL.md: {e}"),
+                        },
+                    }
+                }
+                Err(e) => ToolResult {
+                    tool_name: "create_skill".to_string(),
+                    success: false,
+                    output: format!("Could not resolve app data directory: {e}"),
+                },
             }
         }
         _ if is_phone_control_tool(name) => execute_phone_control_tool(app, name, args).await,
