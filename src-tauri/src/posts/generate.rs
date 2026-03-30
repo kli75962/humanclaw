@@ -58,7 +58,36 @@ struct SimpleRequest<'a> {
     stream: bool,
 }
 
+/// Helper: Extract persona skill name from character persona field.
+/// Maps personas like "jk", "concise", "default" to skill names like "persona_jk", "persona_concise".
+fn get_persona_skill_name(character: &CharacterMeta) -> Option<String> {
+    // If character.persona contains "jk", look for "persona_jk" skill
+    // Common persona keywords to try
+    let keywords = ["jk", "concise", "default", "mentor"];
+
+    for keyword in &keywords {
+        if character.persona.to_lowercase().contains(keyword) {
+            return Some(format!("persona_{}", keyword));
+        }
+    }
+    None
+}
+
+/// Extract user birthday from core memory.
+fn extract_user_birthday(core: &str) -> Option<String> {
+    let lines = core.lines();
+    for line in lines {
+        if line.contains("[USER_BIRTHDAY]") {
+            if let Some(date) = line.split(':').nth(1) {
+                return Some(date.trim().to_string());
+            }
+        }
+    }
+    None
+}
+
 /// Build the character identity + current datetime + user preferences block for the system prompt.
+/// Now includes BOTH the general skill guide and the character's persona skill for authentic voice.
 fn character_system(skill_content: &str, character: &CharacterMeta, core: &str) -> String {
     let now = Local::now();
     let datetime_str = now.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
@@ -67,10 +96,29 @@ fn character_system(skill_content: &str, character: &CharacterMeta, core: &str) 
     } else {
         format!("\n\n[USER PREFERENCES]\n{}", core.trim())
     };
+
+    // Extract user birthday for context
+    let birthday_block = if let Some(birthday) = extract_user_birthday(core) {
+        format!("\n\n[USER BIRTHDAY]\n{}", birthday)
+    } else {
+        String::new()
+    };
+
+    // Try to load the character's persona skill for voice guidance
+    let persona_guide = if let Some(skill_name) = get_persona_skill_name(character) {
+        if let Some(persona_skill_content) = get_skill_content(&skill_name) {
+            format!("\n\n[YOUR VOICE GUIDE]\n{}", persona_skill_content)
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
     format!(
-        "You are {}.\n{}\nBackground: {}\n\n[CURRENT DATETIME]\n{}{}\n\n{}",
+        "You are {}.\n{}\nBackground: {}\n\n[CURRENT DATETIME]\n{}{}{}\n\n[GENERATION GUIDE]\n{}{}\n---\n[FOLLOW YOUR VOICE GUIDE ABOVE TO WRITE AUTHENTICALLY]",
         character.name, character.persona, character.background,
-        datetime_str, pref_block, skill_content,
+        datetime_str, pref_block, birthday_block, skill_content, persona_guide,
     )
 }
 
@@ -82,8 +130,8 @@ async fn complete_once(
     user_prompt: &str,
 ) -> Result<String, String> {
     let messages = vec![
-        OllamaMessage { role: "system".to_string(), content: system.to_string(), tool_calls: None },
-        OllamaMessage { role: "user".to_string(), content: user_prompt.to_string(), tool_calls: None },
+        OllamaMessage { role: "system".to_string(), content: system.to_string(), tool_calls: None, images: None },
+        OllamaMessage { role: "user".to_string(), content: user_prompt.to_string(), tool_calls: None, images: None },
     ];
     let body = SimpleRequest { model, messages, stream: true };
 
@@ -129,7 +177,7 @@ pub async fn generate_post_text(
 ) -> Result<(String, String), String> {
     let skill = get_skill_content("generate_post").unwrap_or("");
     let core = crate::tools::read_core(app);
-    let system = character_system(skill, character, &core);
+    let system = character_system(skill, character, &core); // Persona skill loaded automatically
 
     let prompt = match context {
         Some(ctx) if !ctx.is_empty() => {

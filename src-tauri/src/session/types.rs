@@ -10,7 +10,6 @@ pub enum PermissionState {
 }
 
 fn default_allow() -> PermissionState { PermissionState::AllowAll }
-fn default_ask()   -> PermissionState { PermissionState::AskBeforeUse }
 
 /// Per-capability permission settings for PC control tools.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -22,13 +21,7 @@ pub struct PcPermissions {
     #[serde(default = "default_allow")]
     pub take_screenshot: PermissionState,
     #[serde(default = "default_allow")]
-    pub file_create: PermissionState,
-    #[serde(default = "default_allow")]
-    pub file_read: PermissionState,
-    #[serde(default = "default_ask")]
-    pub file_delete: PermissionState,
-    #[serde(default = "default_ask")]
-    pub shell_command: PermissionState,
+    pub launch_app: PermissionState,
 }
 
 impl Default for PcPermissions {
@@ -37,10 +30,7 @@ impl Default for PcPermissions {
             mouse_control:  PermissionState::AllowAll,
             keyboard_input: PermissionState::AllowAll,
             take_screenshot: PermissionState::AllowAll,
-            file_create:    PermissionState::AllowAll,
-            file_read:      PermissionState::AllowAll,
-            file_delete:    PermissionState::AskBeforeUse,
-            shell_command:  PermissionState::AskBeforeUse,
+            launch_app:     PermissionState::AskBeforeUse,
         }
     }
 }

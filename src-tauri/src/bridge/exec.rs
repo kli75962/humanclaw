@@ -80,6 +80,7 @@ pub async fn exec_handler(
         role: "user".to_string(),
         content: req.message,
         tool_calls: None,
+        images: None,
     });
 
     match run_headless(
@@ -127,6 +128,7 @@ pub async fn route_command(
             role: "user".to_string(),
             content: message.to_string(),
             tool_calls: None,
+            images: None,
         });
         let source_device_type = Some(cfg.device.device_type.label().to_string());
         return match run_headless(

@@ -145,6 +145,27 @@ function PostCard({ post, character, characters, isLiked, onLike, onDelete }: Po
       {/* Comments */}
       {(comments.length > 0 || showCommentInput) && (
         <div className="post-card-comments">
+          {showCommentInput && (
+            <div className="post-card-comment-input-row">
+              <input
+                ref={commentInputRef}
+                className="post-card-comment-input"
+                placeholder="Add a comment…"
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') submitComment(); }}
+              />
+              <button
+                className="post-card-comment-send"
+                onClick={submitComment}
+                disabled={!commentText.trim()}
+                aria-label="Send comment"
+              >
+                <Send size={14} />
+              </button>
+            </div>
+          )}
+
           {comments.map((c) => {
             const author = c.authorId === 'user'
               ? null
@@ -168,27 +189,6 @@ function PostCard({ post, character, characters, isLiked, onLike, onDelete }: Po
               </div>
             );
           })}
-
-          {showCommentInput && (
-            <div className="post-card-comment-input-row">
-              <input
-                ref={commentInputRef}
-                className="post-card-comment-input"
-                placeholder="Add a comment…"
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') submitComment(); }}
-              />
-              <button
-                className="post-card-comment-send"
-                onClick={submitComment}
-                disabled={!commentText.trim()}
-                aria-label="Send comment"
-              >
-                <Send size={14} />
-              </button>
-            </div>
-          )}
         </div>
       )}
 

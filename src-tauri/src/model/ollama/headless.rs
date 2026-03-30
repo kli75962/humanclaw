@@ -7,6 +7,7 @@ use tauri::AppHandle;
 use crate::memory::bootstrap_memory;
 use crate::skills::load_tool_schemas;
 use crate::tools::{execute_tool_with_context, ToolExecutionContext};
+use crate::model::ollama::types::tool_message;
 use crate::model::shared::{build_base_prompt, prepare_system, MAX_TOOL_ROUNDS};
 
 use super::types::{OllamaChunk, OllamaMessage, OllamaRoundRequest, OllamaToolCall};
@@ -61,7 +62,20 @@ async fn stream_once_headless(
         role,
         content,
         tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
+        images: None,
     })
+}
+
+const MAX_TOOL_OUTPUT_CHARS: usize = 4000;
+const MAX_BASE_HISTORY: usize = 12;
+const MAX_TOOL_HISTORY_MSGS: usize = 8;
+
+fn truncate_tool_output(tool_name: &str, output: String) -> String {
+    // Never truncate data URLs — they are base64 images and must stay intact.
+    if output.starts_with("data:") { return output; }
+    let limit = if tool_name == "pc_ui_elements" { 10_000 } else { MAX_TOOL_OUTPUT_CHARS };
+    if output.len() <= limit { return output; }
+    format!("{}…[truncated, {} chars total]", &output[..limit], output.len())
 }
 
 /// Run a full agentic loop without emitting Tauri events.
@@ -79,7 +93,16 @@ pub async fn run_headless(
     let base_prompt = build_base_prompt(app, None).await;
     let tool_context = ToolExecutionContext { source_device_id, source_device_type };
 
-    let mut history = conversation;
+    let base_messages: Vec<OllamaMessage> = {
+        let msgs: Vec<_> = conversation.into_iter().collect();
+        if msgs.len() > MAX_BASE_HISTORY {
+            msgs[msgs.len() - MAX_BASE_HISTORY..].to_vec()
+        } else {
+            msgs
+        }
+    };
+
+    let mut tool_history: Vec<OllamaMessage> = Vec::new();
     let mut final_result: Result<String, String> =
         Err(format!("Agent exceeded maximum tool rounds ({MAX_TOOL_ROUNDS})"));
 
@@ -89,7 +112,19 @@ pub async fn run_headless(
             role: "system".to_string(),
             content: system_content,
             tool_calls: None,
+            images: None,
         };
+
+        let tool_slice = if tool_history.len() > MAX_TOOL_HISTORY_MSGS {
+            &tool_history[tool_history.len() - MAX_TOOL_HISTORY_MSGS..]
+        } else {
+            &tool_history
+        };
+
+        let history: Vec<OllamaMessage> = base_messages.iter()
+            .chain(tool_slice.iter())
+            .cloned()
+            .collect();
 
         let mut final_msg = match stream_once_headless(app, &system_msg, &history, tool_schemas, model).await {
             Ok(msg) => msg,
@@ -107,7 +142,7 @@ pub async fn run_headless(
         }
 
         final_msg.tool_calls = Some(tool_calls.clone());
-        history.push(final_msg);
+        tool_history.push(final_msg);
 
         for call in &tool_calls {
             let tool_name = &call.function.name;
@@ -116,11 +151,7 @@ pub async fn run_headless(
                 .await
                 .output;
 
-            history.push(OllamaMessage {
-                role: "tool".to_string(),
-                content: output,
-                tool_calls: None,
-            });
+            tool_history.push(tool_message(truncate_tool_output(tool_name, output)));
         }
     }
 

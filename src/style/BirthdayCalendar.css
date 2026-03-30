@@ -1,0 +1,163 @@
+.birthday-calendar {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-top: 12px;
+}
+
+.birthday-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 10px;
+}
+
+.birthday-calendar-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  text-align: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.birthday-calendar-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border-2);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text-2);
+  cursor: pointer;
+  transition: all 0.15s;
+  padding: 0;
+  flex-shrink: 0;
+}
+.birthday-calendar-back-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+.birthday-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.birthday-calendar-weekday {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-3);
+  text-align: center;
+  padding: 6px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.birthday-calendar-grid {
+  display: grid;
+  gap: 2px;
+}
+
+.birthday-calendar-year-grid {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.birthday-calendar-month-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.birthday-calendar-day-grid {
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.birthday-calendar-selector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.birthday-calendar-selector:hover:not(:disabled) {
+  background: var(--color-hover);
+  color: var(--color-text);
+  border-color: var(--color-accent);
+}
+
+.birthday-calendar-selector:disabled {
+  color: var(--color-text-3);
+  background: var(--color-bg-tertiary);
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.birthday-calendar-day {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text-2);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  padding: 0;
+  min-height: 32px;
+}
+
+.birthday-calendar-day:hover:not(:disabled) {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
+.birthday-calendar-day:not(:disabled) {
+  cursor: pointer;
+}
+
+.birthday-calendar-day--selected {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+  font-weight: 600;
+}
+.birthday-calendar-day--selected:hover {
+  background: var(--color-accent-2);
+  border-color: var(--color-accent-2);
+}
+
+.birthday-calendar-day--disabled {
+  color: var(--color-text-3);
+  background: var(--color-bg-tertiary);
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+.birthday-calendar-day--disabled:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.birthday-calendar-day--empty {
+  background: transparent;
+  border: none;
+  cursor: default;
+}
+.birthday-calendar-day--empty:hover {
+  background: transparent;
+}

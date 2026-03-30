@@ -6,6 +6,7 @@ use crate::memory::bootstrap_memory;
 use crate::phone::{hide_overlay, show_overlay};
 use crate::skills::load_tool_schemas;
 use crate::tools::{execute_tool_with_context, ToolExecutionContext};
+use crate::model::ollama::types::tool_message;
 use crate::model::shared::{
     build_base_prompt, prepare_system, should_cancel, AgentStatusPayload, StreamPayload,
     MAX_TOOL_ROUNDS,
@@ -85,7 +86,31 @@ async fn stream_once(
         role: final_role,
         content: accumulated_content,
         tool_calls: if accumulated_tool_calls.is_empty() { None } else { Some(accumulated_tool_calls) },
+        images: None,
     })
+}
+
+/// Maximum characters for a single tool result sent to the model.
+/// Prevents huge outputs (e.g. long element lists) from overflowing context.
+const MAX_TOOL_OUTPUT_CHARS: usize = 4000;
+
+/// Keep only the last N messages from the base conversation history
+/// so accumulated chat doesn't blow up the context window.
+const MAX_BASE_HISTORY: usize = 12;
+
+/// Keep at most this many tool-round messages (assistant tool_calls + tool results)
+/// within one agent invocation.
+const MAX_TOOL_HISTORY_MSGS: usize = 8; // 4 rounds × 2 messages
+
+fn truncate_tool_output(tool_name: &str, output: String) -> String {
+    // Never truncate data URLs — they are base64 images and must stay intact
+    // so tool_message() can move them to the `images` field correctly.
+    if output.starts_with("data:") { return output; }
+    // UI element lists can be large; give them a higher budget so the LLM
+    // sees enough elements to find the target (e.g. video links on YouTube).
+    let limit = if tool_name == "pc_ui_elements" { 10_000 } else { MAX_TOOL_OUTPUT_CHARS };
+    if output.len() <= limit { return output; }
+    format!("{}…[truncated, {} chars total]", &output[..limit], output.len())
 }
 
 /// Tauri command — streams a chat completion from the local Ollama server with
@@ -103,10 +128,19 @@ pub async fn chat_ollama(
     bootstrap_memory(&app);
 
     let base_prompt = build_base_prompt(&app, character.as_ref()).await;
-    let mut conversation: Vec<OllamaMessage> = messages
-        .into_iter()
-        .filter(|m| m.role != "system")
-        .collect();
+
+    // Trim base history to avoid carrying too much prior conversation.
+    let base_messages: Vec<OllamaMessage> = {
+        let msgs: Vec<_> = messages.into_iter().filter(|m| m.role != "system").collect();
+        if msgs.len() > MAX_BASE_HISTORY {
+            msgs[msgs.len() - MAX_BASE_HISTORY..].to_vec()
+        } else {
+            msgs
+        }
+    };
+
+    // Tool-round messages accumulated during this agent invocation only.
+    let mut tool_history: Vec<OllamaMessage> = Vec::new();
     let tool_context = local_tool_context(&app);
 
     show_overlay(&app);
@@ -126,7 +160,21 @@ pub async fn chat_ollama(
             role: "system".to_string(),
             content: system_content,
             tool_calls: None,
+            images: None,
         };
+
+        // Trim tool history to last MAX_TOOL_HISTORY_MSGS messages.
+        let tool_slice = if tool_history.len() > MAX_TOOL_HISTORY_MSGS {
+            &tool_history[tool_history.len() - MAX_TOOL_HISTORY_MSGS..]
+        } else {
+            &tool_history
+        };
+
+        // Combine base history + recent tool rounds into one slice for this request.
+        let conversation: Vec<OllamaMessage> = base_messages.iter()
+            .chain(tool_slice.iter())
+            .cloned()
+            .collect();
 
         let final_msg = match stream_once(&app, &system_msg, &conversation, tool_schemas, &model).await {
             Ok(msg) => msg,
@@ -160,7 +208,7 @@ pub async fn chat_ollama(
         }
 
         final_msg.tool_calls = Some(tool_calls.clone());
-        conversation.push(final_msg);
+        tool_history.push(final_msg);
 
         for call in &tool_calls {
             if should_cancel(&app) {
@@ -183,11 +231,7 @@ pub async fn chat_ollama(
                 .await
                 .output;
 
-            conversation.push(OllamaMessage {
-                role: "tool".to_string(),
-                content: output,
-                tool_calls: None,
-            });
+            tool_history.push(tool_message(truncate_tool_output(tool_name, output)));
         }
     }
 

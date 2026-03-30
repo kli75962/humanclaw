@@ -1,0 +1,11 @@
+{
+  "type": "function",
+  "function": {
+    "name": "pc_get_platform",
+    "description": "Return the operating system and architecture of the PC being controlled (e.g. {\"os\":\"linux\",\"arch\":\"x86_64\"} or {\"os\":\"windows\",\"arch\":\"x86_64\"}). Call this first if you need to adapt your workflow to the specific OS.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+}

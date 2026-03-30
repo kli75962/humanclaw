@@ -13,7 +13,7 @@ mod secrets;
 
 use memory::{get_memory_file, set_memory_file, list_chats, load_chat_messages, create_chat, save_chat_messages, delete_chat, list_memos, load_memo_messages, create_memo, save_memo_messages, delete_memo};
 use characters::{list_characters, save_character, delete_character};
-use posts::{list_posts, save_post, delete_post, like_post, unlike_post, list_comments, add_comment, generate_character_post, trigger_character_reactions, generate_character_dm, react_to_user_post, react_to_user_comment};
+use posts::{list_posts, save_post, delete_post, like_post, unlike_post, list_comments, add_comment, generate_character_post, trigger_character_reactions, generate_character_dm, react_to_user_post, react_to_user_comment, resume_post_gen_queue};
 use model::{cancel_chat, chat_claude, chat_ollama, list_models, list_models_at, explain_text};
 use stt::{stt_android_cancel, stt_android_once, stt_start, stt_stop};
 use secrets::{store_secret, load_secret};
@@ -22,6 +22,7 @@ use tools::{respond_pc_permission, PendingPermissions};
 use phone::{check_accessibility_enabled, open_accessibility_settings};
 use bridge::{check_peer_online, discover_and_pair, get_all_local_addresses, get_all_peer_status, get_local_address, get_qr_pair_svg, pair_from_qr, send_to_device, start_bridge_server, start_peer_monitor};
 use queue::{flush_all_pending, flush_queue, get_pending_queue, get_queue, queue_command};
+use queue::commands::{get_post_gen_queue, get_post_gen_pending, cleanup_post_gen_stale};
 
 /// App entry point — registers Tauri commands and starts the event loop.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -65,7 +66,16 @@ pub fn run() {
                 flush_all_pending(&handle).await;
             });
 
-            // 4. Grant microphone (and other media) permission requests from the WebView.
+            // 4. On startup: resume any interrupted post generation tasks and cleanup stale entries.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                // Resume pending post generation
+                let _ = crate::posts::resume_post_gen_queue(handle.clone()).await;
+                // Cleanup entries older than 7 days
+                let _ = cleanup_post_gen_stale(handle);
+            });
+
+            // 5. Grant microphone (and other media) permission requests from the WebView.
             //    On Linux/WebKit, permission-request signals are silently ignored unless
             //    we explicitly allow them here.
             #[cfg(target_os = "linux")]
@@ -115,6 +125,7 @@ pub fn run() {
             generate_character_dm,
             react_to_user_post,
             react_to_user_comment,
+            resume_post_gen_queue,
             // session / pairing
             get_session,
             set_device_label,
@@ -141,6 +152,10 @@ pub fn run() {
             get_pending_queue,
             queue_command,
             flush_queue,
+            // post generation queue
+            get_post_gen_queue,
+            get_post_gen_pending,
+            cleanup_post_gen_stale,
             // stt
             stt_android_cancel,
             stt_android_once,

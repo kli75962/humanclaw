@@ -13,10 +13,7 @@ const PERMISSION_LABELS: Record<string, string> = {
   mouse_control:   'Mouse Control',
   keyboard_input:  'Keyboard Input',
   take_screenshot: 'Screenshot',
-  file_create:     'Create Files',
-  file_read:       'Read Files',
-  file_delete:     'Delete Files',
-  shell_command:   'Run Shell Command',
+  launch_app:      'Open URL / App',
 };
 
 function str(v: unknown): string {
@@ -25,31 +22,20 @@ function str(v: unknown): string {
 
 function buildDescription(tool: string, args: Record<string, unknown> = {}): { summary: string; detail?: string } {
   switch (tool) {
-    case 'pc_mouse_move': {
-      const x = args.x ?? '?', y = args.y ?? '?';
-      return { summary: `Move cursor to (${x}, ${y})` };
-    }
     case 'pc_mouse_click': {
       const btn = args.button ?? 'left';
       const dbl = args.double ? ' (double-click)' : '';
-      return { summary: `Click ${btn} mouse button${dbl}` };
+      const pos = args.x != null ? ` at (${args.x}, ${args.y})` : '';
+      return { summary: `Click ${btn} mouse button${dbl}${pos}` };
     }
     case 'pc_type_text':
       return { summary: 'Type text into the focused window', detail: str(args.text) };
-    case 'pc_key_press':
-      return { summary: `Press key: ${str(args.key)}` };
     case 'pc_screenshot': {
       const d = args.display ?? 0;
       return { summary: `Capture screenshot of display ${d}` };
     }
-    case 'pc_run_command':
-      return { summary: 'Run this command in the terminal', detail: str(args.cmd) };
-    case 'pc_file_write':
-      return { summary: 'Write to this file', detail: str(args.path) };
-    case 'pc_file_read':
-      return { summary: 'Read this file', detail: str(args.path) };
-    case 'pc_file_delete':
-      return { summary: 'Delete this file or directory', detail: str(args.path) };
+    case 'pc_open_url':
+      return { summary: 'Open URL or file', detail: str(args.url) };
     default:
       return { summary: `Use tool: ${tool}` };
   }

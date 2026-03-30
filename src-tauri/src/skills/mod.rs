@@ -5,17 +5,18 @@ use serde_json::Value;
 use std::sync::OnceLock;
 use tauri::{AppHandle, Manager};
 
-pub const DEFAULT_PERSONA_SKILL: &str = "persona_default";
+pub const DEFAULT_PERSONA_SKILL: &str = "persona-default";
 
 static SKILLS_PROMPT: OnceLock<String> = OnceLock::new();
 static TOOL_SCHEMAS: OnceLock<Vec<Value>> = OnceLock::new();
 
 fn is_persona_skill(name: &str) -> bool {
-    name.starts_with("persona_")
+    name.starts_with("persona-") || name.starts_with("persona_")
 }
 
 fn is_ig_skill(name: &str) -> bool {
-    matches!(name, "generate_post" | "post_comment" | "post_dm")
+    matches!(name, "generate-post" | "post-comment" | "post-dm"
+                 | "generate_post" | "post_comment" | "post_dm")
 }
 
 /// Look up a skill's content by exact name. Returns None if not found.
@@ -126,7 +127,7 @@ pub fn import_persona_sync_payload(
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let custom_dir = data_dir.join("custom_personas");
     for entry in payload.personas {
-        if !entry.name.starts_with("persona_") {
+        if !entry.name.starts_with("persona-") && !entry.name.starts_with("persona_") {
             continue;
         }
         let skill_dir = custom_dir.join(&entry.name);

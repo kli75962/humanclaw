@@ -291,12 +291,18 @@ function App() {
   const selectCharacter = useCallback((id: string) => {
     setActiveMemoId(null);
     const charChatId = `char_${id}`;
-    setActiveCharacterId(id);
-    setActiveChatId(charChatId);
     setMainTab('chat');
     invoke<Message[]>('load_chat_messages', { id: charChatId })
-      .then((msgs) => { setInitMessages(msgs); })
-      .catch(() => { setInitMessages([]); });
+      .then((msgs) => {
+        setActiveCharacterId(id);
+        setActiveChatId(charChatId);
+        setInitMessages(msgs);
+      })
+      .catch(() => {
+        setActiveCharacterId(id);
+        setActiveChatId(charChatId);
+        setInitMessages([]);
+      });
   }, []);
 
   // Clear the quoted post whenever the user navigates away from that character's chat.

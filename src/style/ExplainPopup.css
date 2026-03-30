@@ -5,8 +5,6 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 14px;
-  width: min(520px, calc(100vw - 32px));
-  max-height: 72vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -62,7 +60,7 @@
 
 /* Selected text quote */
 .explain-selected {
-  padding: 10px 14px 4px;
+  padding: 15px 19px 9px;
   flex-shrink: 0;
   user-select: text;
 }
@@ -91,7 +89,7 @@
 
 /* Explanation body — matches chat bubble text style */
 .explain-body {
-  padding: 10px 16px 16px;
+  padding: 15px 21px 21px;
   font-size: 16px;
   line-height: 1.75;
   color: var(--color-text);
@@ -110,6 +108,156 @@
 @keyframes explain-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.25; }
+}
+
+/* Follow-up messages */
+.explain-message {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.5;
+  user-select: text;
+}
+
+.explain-message--user {
+  background: var(--color-accent);
+  color: #fff;
+  margin-left: 24px;
+  text-align: right;
+}
+
+.explain-message--assistant {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  margin-right: 24px;
+}
+
+/* Footer with input */
+.explain-footer {
+  display: flex;
+  gap: 8px;
+  padding: 20px;
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+  background: var(--color-surface);
+}
+
+.explain-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.explain-input:focus {
+  border-color: var(--color-accent);
+}
+.explain-input::placeholder {
+  color: var(--color-text-3);
+}
+.explain-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.explain-send-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s;
+  flex-shrink: 0;
+}
+.explain-send-btn:hover:not(:disabled) {
+  background: var(--color-accent-2);
+}
+.explain-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Resize handles */
+.explain-resize-handle {
+  position: absolute;
+  z-index: 1000;
+}
+
+/* Edge handles */
+.explain-resize-handle--n {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  cursor: ns-resize;
+}
+
+.explain-resize-handle--s {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  cursor: ns-resize;
+}
+
+.explain-resize-handle--w {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: ew-resize;
+}
+
+.explain-resize-handle--e {
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: ew-resize;
+}
+
+/* Corner handles */
+.explain-resize-handle--nw {
+  top: 0;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  cursor: nwse-resize;
+}
+
+.explain-resize-handle--ne {
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  cursor: nesw-resize;
+}
+
+.explain-resize-handle--sw {
+  bottom: 0;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  cursor: nesw-resize;
+}
+
+.explain-resize-handle--se {
+  bottom: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, var(--color-border) 50%);
+  border-radius: 0 0 13px 0;
 }
 
 /* Floating selection button */

@@ -53,5 +53,14 @@ screenshots = "0.8"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = "2.0"
+atspi = { version = "0.19", default-features = false, features = ["tokio"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+uiautomation = "0.24"
+
+[dev-dependencies]
+base64 = "0.22"
+image = "0.25.10"
+screenshots = "0.8"
 
 

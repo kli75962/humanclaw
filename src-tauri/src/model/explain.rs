@@ -35,11 +35,12 @@ async fn explain_ollama(app: &AppHandle, messages: &[InputMessage], model: &str)
         role: "system".to_string(),
         content: system_content,
         tool_calls: None,
+        images: None,
     };
 
     let ollama_msgs: Vec<OllamaMessage> = messages.iter()
         .filter(|m| m.role != "system")
-        .map(|m| OllamaMessage { role: m.role.clone(), content: m.content.clone(), tool_calls: None })
+        .map(|m| OllamaMessage { role: m.role.clone(), content: m.content.clone(), tool_calls: None, images: None })
         .collect();
 
     let body = OllamaRoundRequest::new(model, &system_msg, &ollama_msgs, true, &[]);

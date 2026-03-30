@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Check, ChevronDown, ImageIcon, RefreshCw } from 'lucide-react';
 import type { Character } from '../types';
+import { BirthdayCalendar } from './BirthdayCalendar';
 import '../style/SettingsScreen.css';
 
 const PROVIDER_KEY = 'phoneclaw_provider';
@@ -103,6 +104,13 @@ export function CreateFriendInline({ defaultModel = '', onSave, onCancel }: Prop
   const [personaOpen, setPersonaOpen] = useState(false);
   const personaRef = useRef<HTMLDivElement>(null);
 
+  // ── Active Time ────────────────────────────────────────────────────────────
+  const [activeTime, setActiveTime] = useState<'early' | 'night' | 'random'>('random');
+
+  // ── Birthday ───────────────────────────────────────────────────────────────
+  const [selectedBirthday, setSelectedBirthday] = useState<string | null>(null);
+  const [birthdayRandom, setBirthdayRandom] = useState(true);
+
   useEffect(() => {
     invoke<string[]>('list_personas')
       .then((list) => { if (list.length > 0) setPersonas(list); })
@@ -131,7 +139,16 @@ export function CreateFriendInline({ defaultModel = '', onSave, onCancel }: Prop
   function handleSave() {
     if (!name.trim()) { setError('Name is required.'); return; }
     if (!currentModel().trim()) { setError('Model is required.'); return; }
-    onSave({ name: name.trim(), icon, model: currentModel().trim(), persona, background: background.trim() });
+
+    onSave({
+      name: name.trim(),
+      icon,
+      model: currentModel().trim(),
+      persona,
+      background: background.trim(),
+      activeTime: activeTime === 'random' ? undefined : activeTime,
+      birthday: birthdayRandom ? undefined : selectedBirthday || undefined,
+    });
   }
 
   return (
@@ -268,7 +285,66 @@ export function CreateFriendInline({ defaultModel = '', onSave, onCancel }: Prop
         style={{ marginTop: 6, resize: 'vertical', minHeight: 64, fontFamily: 'ui-sans-serif, system-ui, sans-serif' }}
       />
 
-      {error && <p className="settings-save-msg--err" style={{ marginTop: 6, fontSize: 12 }}>{error}</p>}
+      {/* Active Time */}
+      <p className="settings-modal-field-label">Active Time</p>
+      <div className="settings-provider-row" style={{ marginTop: 6, marginBottom: 12 }}>
+        {(['early', 'night', 'random'] as const).map((t) => (
+          <button key={t} type="button"
+            onClick={() => setActiveTime(t)}
+            className={`settings-provider-btn${activeTime === t ? ' settings-provider-btn--active' : ''}`}
+            style={{ flex: 1 }}
+          >
+            {t === 'early' ? '🌅 Early' : t === 'night' ? '🌙 Night' : '🎲 Random'}
+          </button>
+        ))}
+      </div>
+
+      {/* Birthday */}
+      <p className="settings-modal-field-label">Birthday</p>
+      <div style={{ marginTop: 6, marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <button
+            type="button"
+            onClick={() => setBirthdayRandom(true)}
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              borderRadius: 4,
+              border: birthdayRandom ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+              backgroundColor: birthdayRandom ? 'var(--color-bg-secondary)' : 'transparent',
+              color: 'var(--color-text-1)',
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 500,
+            }}
+          >
+            🎲 Random
+          </button>
+          <button
+            type="button"
+            onClick={() => setBirthdayRandom(false)}
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              borderRadius: 4,
+              border: !birthdayRandom ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+              backgroundColor: !birthdayRandom ? 'var(--color-bg-secondary)' : 'transparent',
+              color: 'var(--color-text-1)',
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 500,
+            }}
+          >
+            📅 Specific
+          </button>
+        </div>
+
+        {!birthdayRandom && (
+          <BirthdayCalendar value={selectedBirthday} onChange={setSelectedBirthday} />
+        )}
+      </div>
+
+      {error && <p className="settings-save-msg--err" style={{ marginTop: 12, fontSize: 12 }}>{error}</p>}
 
       {/* Actions */}
       <div className="friend-inline-actions">

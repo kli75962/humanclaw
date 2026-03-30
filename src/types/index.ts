@@ -38,11 +38,13 @@ export interface ReactResult {
 export interface Character {
   id: string;
   name: string;
-  icon?: string;       // emoji, optional
+  icon?: string;            // emoji, optional
   model: string;
   persona: string;
   background: string;
   createdAt: string;
+  activeTime?: 'early' | 'night' | 'random';  // When character is most active
+  birthday?: string;        // ISO date YYYY-MM-DD or 'random'
 }
 
 export interface ChatMessageProps {
@@ -158,10 +160,7 @@ export interface PcPermissions {
   mouse_control:   PermissionState;
   keyboard_input:  PermissionState;
   take_screenshot: PermissionState;
-  file_create:     PermissionState;
-  file_read:       PermissionState;
-  file_delete:     PermissionState;
-  shell_command:   PermissionState;
+  launch_app:      PermissionState;
 }
 
 /** Session config returned by the Rust `get_session` command. */

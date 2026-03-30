@@ -4,6 +4,7 @@ import { Check, ChevronDown, ChevronRight, Cpu, LayoutGrid, Monitor, Palette, Pl
 import type { PcPermissions, PermissionState, SessionConfig, WizardAnswers } from '../types';
 import { Card, CardRow, SectionFooter, SectionHeader, SegmentControl } from './SettingsUI';
 import { PersonaWizard } from './PersonaWizard';
+import { BirthdayCalendar } from './BirthdayCalendar';
 import { useTheme } from '../hooks/useTheme';
 import type { Theme } from '../hooks/useTheme';
 
@@ -308,23 +309,17 @@ function ModelConfigPanel({
 // ── GeneralTab ─────────────────────────────────────────────────────────────────
 
 const PERM_ROWS: { field: keyof PcPermissions; label: string; subtitle: string }[] = [
-  { field: 'mouse_control',   label: 'Mouse Control',      subtitle: 'Move cursor and click' },
-  { field: 'keyboard_input',  label: 'Keyboard Input',     subtitle: 'Type text and press keys' },
-  { field: 'take_screenshot', label: 'Screenshot',         subtitle: 'Capture the screen' },
-  { field: 'file_create',     label: 'Create / Write Files', subtitle: 'Create or overwrite files' },
-  { field: 'file_read',       label: 'Read Files',         subtitle: 'Read file contents' },
-  { field: 'file_delete',     label: 'Delete Files',       subtitle: 'Delete files or directories' },
-  { field: 'shell_command',   label: 'Run Shell Commands', subtitle: 'Execute terminal commands' },
+  { field: 'mouse_control',   label: 'Mouse Control',  subtitle: 'Click on screen' },
+  { field: 'keyboard_input',  label: 'Keyboard Input', subtitle: 'Type text' },
+  { field: 'take_screenshot', label: 'Screenshot',     subtitle: 'Capture the screen' },
+  { field: 'launch_app',      label: 'Open URL / App', subtitle: 'Open URLs and files with system launcher' },
 ];
 
 const DEFAULT_PC_PERMS: PcPermissions = {
   mouse_control:   'allow_all',
   keyboard_input:  'allow_all',
   take_screenshot: 'allow_all',
-  file_create:     'allow_all',
-  file_read:       'allow_all',
-  file_delete:     'ask_before_use',
-  shell_command:   'ask_before_use',
+  launch_app:      'ask_before_use',
 };
 
 interface GeneralTabProps {
@@ -387,6 +382,66 @@ export function GeneralTab({
 
   const [theme, setTheme] = useTheme();
 
+  // ── User Birthday ─────────────────────────────────────────────────────────
+  const [showBirthdayConfig, setShowBirthdayConfig] = useState(false);
+  const [userBirthday, setUserBirthday] = useState<string | null>(null);
+  const [birthdaySaveMsg, setBirthdaySaveMsg] = useState('');
+
+  // Format birthday display
+  const formatBirthdayDisplay = () => {
+    if (!userBirthday) return 'Not set';
+    const [year, month, day] = userBirthday.split('-');
+    return new Date(`${year}-${month}-${day}`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  useEffect(() => {
+    // Load user birthday from memory
+    invoke<string>('get_memory_file', { filename: 'core.md' })
+      .then((content) => {
+        const match = content.match(/\[USER_BIRTHDAY\]:\s*(.+)/);
+        if (match) {
+          const birthday = match[1].trim();
+          setUserBirthday(birthday);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function saveBirthday(dateStr: string) {
+    if (!dateStr) return;
+
+    try {
+      let content = await invoke<string>('get_memory_file', { filename: 'core.md' });
+
+      const birthdayLine = `[USER_BIRTHDAY]: ${dateStr}`;
+      if (content.includes('[USER_BIRTHDAY]')) {
+        content = content.replace(/\[USER_BIRTHDAY\]:.+/, birthdayLine);
+      } else {
+        content = content.trimEnd() + '\n\n' + birthdayLine;
+      }
+
+      await invoke('set_memory_file', { filename: 'core.md', content });
+      setUserBirthday(dateStr);
+      setBirthdaySaveMsg('Saved');
+      setTimeout(() => setBirthdaySaveMsg(''), 1800);
+    } catch (e) {
+      setBirthdaySaveMsg(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function clearBirthday() {
+    try {
+      let content = await invoke<string>('get_memory_file', { filename: 'core.md' });
+      content = content.replace(/\[USER_BIRTHDAY\]:.+\n?/g, '');
+      await invoke('set_memory_file', { filename: 'core.md', content });
+      setUserBirthday(null);
+      setBirthdaySaveMsg('Cleared');
+      setTimeout(() => setBirthdaySaveMsg(''), 1800);
+    } catch (e) {
+      setBirthdaySaveMsg(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   useEffect(() => {
     if (!isPersonaMenuOpen) return;
     listPersonas()
@@ -409,6 +464,58 @@ export function GeneralTab({
 
   return (
     <>
+      {/* User Birthday Section */}
+      <SectionHeader>Your Profile</SectionHeader>
+      <Card>
+        <CardRow onClick={() => setShowBirthdayConfig((v) => !v)}>
+          <div className="settings-qr-row-left">
+            <div className="settings-icon-badge settings-icon-badge--emerald">
+              🎂
+            </div>
+            <div>
+              <p className="settings-item-title">Birthday</p>
+              <p className="settings-item-subtitle">{formatBirthdayDisplay()}</p>
+            </div>
+          </div>
+          {showBirthdayConfig
+            ? <ChevronDown size={18} className="settings-chevron" />
+            : <ChevronRight size={18} className="settings-chevron" />
+          }
+        </CardRow>
+
+        {showBirthdayConfig && (
+          <div className="settings-inline-expand">
+            <BirthdayCalendar value={userBirthday} onChange={saveBirthday} />
+
+            {/* Clear button */}
+            {userBirthday && (
+              <button
+                type="button"
+                onClick={() => clearBirthday()}
+                style={{
+                  marginTop: 12,
+                  padding: '8px 16px',
+                  borderRadius: 4,
+                  border: '1px solid var(--color-border)',
+                  backgroundColor: 'transparent',
+                  color: 'var(--color-text-2)',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                }}
+              >
+                Clear
+              </button>
+            )}
+
+            {birthdaySaveMsg && (
+              <p className={birthdaySaveMsg === 'Saved' || birthdaySaveMsg === 'Cleared' ? 'settings-save-msg--ok' : 'settings-save-msg--err'} style={{ marginTop: 12, fontSize: 12 }}>
+                {birthdaySaveMsg}
+              </p>
+            )}
+          </div>
+        )}
+      </Card>
+
       {chatMode && (
         <>
           <SectionHeader>Post Mode</SectionHeader>

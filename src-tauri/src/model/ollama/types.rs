@@ -11,6 +11,33 @@ pub struct OllamaMessage {
     pub content: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<OllamaToolCall>>,
+    /// Raw base64 image strings (no data-URL prefix) for vision-capable models.
+    /// Populated when a tool returns a `data:image/...;base64,...` result.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub images: Option<Vec<String>>,
+}
+
+/// Build a tool-result message. If `output` is an image data URL
+/// (`data:image/...;base64,...`) the base64 is moved to the `images` field
+/// so Ollama receives it as a vision input instead of raw text tokens.
+pub fn tool_message(output: String) -> OllamaMessage {
+    if output.starts_with("data:image/") {
+        if let Some(idx) = output.find(";base64,") {
+            let b64 = output[idx + 8..].to_string();
+            return OllamaMessage {
+                role:       "tool".to_string(),
+                content:    "[screenshot]".to_string(),
+                tool_calls: None,
+                images:     Some(vec![b64]),
+            };
+        }
+    }
+    OllamaMessage {
+        role:       "tool".to_string(),
+        content:    output,
+        tool_calls: None,
+        images:     None,
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -65,6 +92,14 @@ fn tools_is_empty<T>(s: &&[T]) -> bool {
     s.is_empty()
 }
 
+/// Ollama inference options included in each request.
+#[derive(Serialize)]
+struct OllamaOptions {
+    /// Hard cap on the context window (tokens). Ollama truncates from the front
+    /// if the conversation exceeds this. Prevents 500/OOM crashes.
+    num_ctx: u32,
+}
+
 #[derive(Serialize)]
 pub struct OllamaRoundRequest<'a> {
     pub model: &'a str,
@@ -72,6 +107,7 @@ pub struct OllamaRoundRequest<'a> {
     pub stream: bool,
     #[serde(skip_serializing_if = "tools_is_empty")]
     pub tools: &'a [Value],
+    options: OllamaOptions,
 }
 
 impl<'a> OllamaRoundRequest<'a> {
@@ -87,6 +123,7 @@ impl<'a> OllamaRoundRequest<'a> {
             messages: RoundMessages { system, history },
             stream,
             tools,
+            options: OllamaOptions { num_ctx: 8192 },
         }
     }
 }
