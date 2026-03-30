@@ -79,10 +79,12 @@ function ModelConfigPanel({
   const [ollamaModelsLoading, setOllamaModelsLoading] = useState(false);
   const [ollamaModelsError, setOllamaModelsError] = useState('');
   const [saveMsg, setSaveMsg] = useState('');
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   function flashSaved(msg = 'Saved') {
+    clearTimeout(flashTimerRef.current);
     setSaveMsg(msg);
-    setTimeout(() => setSaveMsg(''), 1800);
+    flashTimerRef.current = setTimeout(() => setSaveMsg(''), 1800);
   }
 
   useEffect(() => {
@@ -374,6 +376,7 @@ export function GeneralTab({
   const [isPersonaMenuOpen, setIsPersonaMenuOpen] = useState(false);
   const [personas, setPersonas] = useState<string[]>(FALLBACK_PERSONAS);
   const [personaSaveMsg, setPersonaSaveMsg] = useState('');
+  const personaTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const personaMenuRef = useRef<HTMLDivElement>(null);
   const [showAddPersona, setShowAddPersona] = useState(false);
 
@@ -386,6 +389,7 @@ export function GeneralTab({
   const [showBirthdayConfig, setShowBirthdayConfig] = useState(false);
   const [userBirthday, setUserBirthday] = useState<string | null>(null);
   const [birthdaySaveMsg, setBirthdaySaveMsg] = useState('');
+  const birthdayTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Format birthday display
   const formatBirthdayDisplay = () => {
@@ -422,8 +426,9 @@ export function GeneralTab({
 
       await invoke('set_memory_file', { filename: 'core.md', content });
       setUserBirthday(dateStr);
+      clearTimeout(birthdayTimerRef.current);
       setBirthdaySaveMsg('Saved');
-      setTimeout(() => setBirthdaySaveMsg(''), 1800);
+      birthdayTimerRef.current = setTimeout(() => setBirthdaySaveMsg(''), 1800);
     } catch (e) {
       setBirthdaySaveMsg(e instanceof Error ? e.message : String(e));
     }
@@ -435,8 +440,9 @@ export function GeneralTab({
       content = content.replace(/\[USER_BIRTHDAY\]:.+\n?/g, '');
       await invoke('set_memory_file', { filename: 'core.md', content });
       setUserBirthday(null);
+      clearTimeout(birthdayTimerRef.current);
       setBirthdaySaveMsg('Cleared');
-      setTimeout(() => setBirthdaySaveMsg(''), 1800);
+      birthdayTimerRef.current = setTimeout(() => setBirthdaySaveMsg(''), 1800);
     } catch (e) {
       setBirthdaySaveMsg(e instanceof Error ? e.message : String(e));
     }
@@ -613,8 +619,9 @@ export function GeneralTab({
                       onClick={async () => {
                         try {
                           await setPersona(persona);
+                          clearTimeout(personaTimerRef.current);
                           setPersonaSaveMsg('Saved');
-                          setTimeout(() => setPersonaSaveMsg(''), 1800);
+                          personaTimerRef.current = setTimeout(() => setPersonaSaveMsg(''), 1800);
                         } catch (e) {
                           setPersonaSaveMsg(e instanceof Error ? e.message : String(e));
                         } finally {

@@ -48,6 +48,23 @@ pub fn unlike_post(app: tauri::AppHandle, id: String) -> Result<u32, String> {
     fs::unlike_post(&app, &id)
 }
 
+#[tauri::command]
+pub fn hide_post(app: tauri::AppHandle, post_id: String) -> Result<(), String> {
+    fs::hide_post(&app, &post_id)
+}
+
+#[tauri::command]
+pub fn record_post_preference(
+    app: tauri::AppHandle,
+    post_id: String,
+    character_id: String,
+    post_text: String,
+    post_image: Option<String>,
+    user_reason: String,
+) -> Result<(), String> {
+    fs::record_post_preference(&app, &post_id, &character_id, &post_text, post_image.as_deref(), &user_reason)
+}
+
 // ── Comments ─────────────────────────────────────────────────────────────────
 
 #[tauri::command]

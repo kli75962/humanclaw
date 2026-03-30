@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import { Heart, MessageCircle, PenSquare, Send, Forward, Trash2 } from 'lucide-react';
+import { memo, useEffect, useRef, useState } from 'react';
+import { Heart, MessageCircle, PenSquare, Send, Forward, MoreVertical } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import type { Character, Post } from '../types';
 import { usePostComments } from '../hooks/usePosts';
+import { usePostPreferences } from '../hooks/usePostPreferences';
 import '../style/PostFeed.css';
 
 function formatRelativeTime(isoString: string): string {
@@ -22,31 +23,92 @@ interface PostCardProps {
   character: Character | undefined;
   characters: Character[];
   isLiked: boolean;
-  onLike: () => void;
-  onDelete: () => void;
+  onLike: (id: string) => void;
+  onDelete: (id: string) => void;
 }
 
-function PostCard({ post, character, characters, isLiked, onLike, onDelete }: PostCardProps) {
+const PostCard = memo(function PostCard({ post, character, characters, isLiked, onLike, onDelete }: PostCardProps) {
   const isUserPost = post.characterId === 'user';
   const displayName = isUserPost ? 'You' : (character?.name ?? 'Unknown');
   const { comments, addComment } = usePostComments(post.id);
+  const prefs = usePostPreferences();
   const [commentText, setCommentText] = useState('');
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [shareText, setShareText] = useState('');
   const [selectedChars, setSelectedChars] = useState<Set<string>>(new Set());
   const [sharing, setSharing] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [processingFeedback, setProcessingFeedback] = useState(false);
   const commentInputRef = useRef<HTMLInputElement>(null);
+  const feedbackInputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (showCommentInput) commentInputRef.current?.focus();
   }, [showCommentInput]);
+
+  useEffect(() => {
+    if (showFeedback) feedbackInputRef.current?.focus();
+  }, [showFeedback]);
+
+  // Close menu on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+        setShowFeedback(false);
+      }
+    }
+
+    if (showMenu || showFeedback) {
+      window.addEventListener('click', handleClickOutside);
+      return () => {
+        window.removeEventListener('click', handleClickOutside);
+      };
+    }
+  }, [showMenu, showFeedback]);
 
   const submitComment = () => {
     const text = commentText.trim();
     if (!text) return;
     addComment('user', text);
     setCommentText('');
+  };
+
+  const handleNotInterested = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowMenu(false);
+    setShowFeedback(true);
+    setFeedbackText('');
+  };
+
+  const handleHidePost = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowMenu(false);
+    await prefs.hidePost(post.id);
+    onDelete(post.id);
+  };
+
+  const handleRemovePost = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowMenu(false);
+    await prefs.removePost(post.id);
+    onDelete(post.id);
+  };
+
+  const submitFeedback = async (specificReason?: string) => {
+    setProcessingFeedback(true);
+    try {
+      const reason = specificReason || 'just_dont_feel_like_it';
+      await prefs.recordNotInterested(post, reason);
+      setShowFeedback(false);
+      onDelete(post.id);
+    } finally {
+      setProcessingFeedback(false);
+    }
   };
 
   const toggleChar = (id: string) => {
@@ -100,9 +162,58 @@ function PostCard({ post, character, characters, isLiked, onLike, onDelete }: Po
           <span className="post-card-name">{displayName}</span>
           <span className="post-card-time">{formatRelativeTime(post.createdAt)}</span>
         </div>
-        <button className="post-card-delete" onClick={onDelete} aria-label="Delete post">
-          <Trash2 size={14} />
-        </button>
+        <div className="post-card-menu-container" ref={menuRef}>
+          <button
+            className="post-card-menu-btn"
+            onClick={() => { setShowMenu((v) => !v); setShowFeedback(false); }}
+            aria-label="Post options"
+          >
+            <MoreVertical size={16} />
+          </button>
+          {showMenu && (
+            <div className="post-card-menu-dropdown">
+              <button className="post-card-menu-option" onClick={handleNotInterested}>
+                Not interested
+              </button>
+              <button className="post-card-menu-option" onClick={handleHidePost}>
+                Hide this post
+              </button>
+              <button className="post-card-menu-option post-card-menu-option--danger" onClick={handleRemovePost}>
+                Remove this post
+              </button>
+            </div>
+          )}
+          {showFeedback && (
+            <div className="post-card-feedback-box">
+              <input
+                ref={feedbackInputRef}
+                type="text"
+                className="post-card-feedback-input"
+                placeholder="Why didn't you like this? (optional)"
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
+                disabled={processingFeedback}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <div className="post-card-feedback-actions">
+                <button
+                  className="post-card-feedback-btn-secondary"
+                  onClick={(e) => { e.stopPropagation(); submitFeedback(); }}
+                  disabled={processingFeedback}
+                >
+                  Skip
+                </button>
+                <button
+                  className="post-card-feedback-btn-submit"
+                  onClick={(e) => { e.stopPropagation(); submitFeedback(feedbackText || undefined); }}
+                  disabled={processingFeedback}
+                >
+                  {processingFeedback ? '...' : 'Submit'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Image */}
@@ -116,7 +227,7 @@ function PostCard({ post, character, characters, isLiked, onLike, onDelete }: Po
         <div className="post-card-actions">
           <button
             className={`post-card-like-btn${isLiked ? ' post-card-like-btn--liked' : ''}`}
-            onClick={onLike}
+            onClick={() => onLike(post.id)}
           >
             <Heart size={16} className="post-card-heart" fill={isLiked ? 'currentColor' : 'none'} />
             <span className="post-card-like-count">{post.likeCount}</span>
@@ -236,9 +347,10 @@ function PostCard({ post, character, characters, isLiked, onLike, onDelete }: Po
           </div>
         </>
       )}
+
     </div>
   );
-}
+});
 
 interface PostFeedProps {
   posts: Post[];
@@ -290,8 +402,8 @@ export function PostFeed({ posts, characters, likedPostIds, onLike, onDelete, on
               character={characters.find((c) => c.id === post.characterId)}
               characters={characters}
               isLiked={likedPostIds.has(post.id)}
-              onLike={() => onLike(post.id)}
-              onDelete={() => onDelete(post.id)}
+              onLike={onLike}
+              onDelete={onDelete}
             />
           ))}
         </div>

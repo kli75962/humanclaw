@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { BookMarked, MessageSquarePlus, X } from 'lucide-react';
@@ -69,12 +69,14 @@ export function ExplainPopup({
     startPosY: number;
     direction: 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se';
   } | null>(null);
+  const sizeRef = useRef(size);
+  sizeRef.current = size;
 
   useEffect(() => {
     function onMove(e: MouseEvent) {
       if (dragOffset.current) {
         const newPos = {
-          x: Math.max(0, Math.min(window.innerWidth - size.width, e.clientX - dragOffset.current.x)),
+          x: Math.max(0, Math.min(window.innerWidth - sizeRef.current.width, e.clientX - dragOffset.current.x)),
           y: Math.max(0, Math.min(window.innerHeight - 120, e.clientY - dragOffset.current.y)),
         };
         setPos(newPos);
@@ -90,7 +92,6 @@ export function ExplainPopup({
         let newPosX = resizeOffset.current.startPosX;
         let newPosY = resizeOffset.current.startPosY;
 
-        // Handle horizontal resize
         if (dir.includes('e')) {
           newWidth = Math.max(300, resizeOffset.current.startWidth + deltaX);
         } else if (dir.includes('w')) {
@@ -98,7 +99,6 @@ export function ExplainPopup({
           newPosX = resizeOffset.current.startPosX + deltaX;
         }
 
-        // Handle vertical resize
         if (dir.includes('s')) {
           newHeight = Math.max(300, resizeOffset.current.startHeight + deltaY);
         } else if (dir.includes('n')) {
@@ -106,7 +106,6 @@ export function ExplainPopup({
           newPosY = resizeOffset.current.startPosY + deltaY;
         }
 
-        // Constrain to screen bounds
         newPosX = Math.max(0, Math.min(window.innerWidth - newWidth, newPosX));
         newPosY = Math.max(0, Math.min(window.innerHeight - 40, newPosY));
 
@@ -129,7 +128,7 @@ export function ExplainPopup({
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
     };
-  }, [pos, size]);
+  }, []);
 
   // Streaming
   useEffect(() => {
@@ -243,7 +242,7 @@ export function ExplainPopup({
     }
   }
 
-  const formatted = formatAssistantText(explanation);
+  const formatted = useMemo(() => formatAssistantText(explanation), [explanation]);
 
   return (
     <div

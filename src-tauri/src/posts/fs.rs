@@ -142,3 +142,64 @@ fn update_like_count(app: &AppHandle, id: &str, increment: bool) -> Result<u32, 
     std::fs::write(posts_index_path(app), json).map_err(|e| e.to_string())?;
     Ok(new_count)
 }
+
+pub fn hide_post(app: &AppHandle, id: &str) -> Result<(), String> {
+    // Store hidden post in memory directory
+    let dir = memory_dir(app);
+    let hidden_file = dir.join("hidden_posts.jsonl");
+
+    let hidden_entry = serde_json::json!({
+        "postId": id,
+        "timestamp": chrono::Local::now().to_rfc3339(),
+    });
+
+    let mut content = String::new();
+    if hidden_file.exists() {
+        content = std::fs::read_to_string(&hidden_file).map_err(|e| e.to_string())?;
+        if !content.is_empty() && !content.ends_with('\n') {
+            content.push('\n');
+        }
+    }
+
+    content.push_str(&serde_json::to_string(&hidden_entry).map_err(|e| e.to_string())?);
+    content.push('\n');
+
+    std::fs::write(&hidden_file, content).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn record_post_preference(
+    app: &AppHandle,
+    post_id: &str,
+    character_id: &str,
+    post_text: &str,
+    post_image: Option<&str>,
+    user_reason: &str,
+) -> Result<(), String> {
+    // Store user preference in memory directory
+    let dir = memory_dir(app);
+    let prefs_file = dir.join("user_preferences.jsonl");
+
+    let pref_entry = serde_json::json!({
+        "postId": post_id,
+        "characterId": character_id,
+        "postText": post_text,
+        "postImage": post_image,
+        "userReason": user_reason,
+        "timestamp": chrono::Local::now().to_rfc3339(),
+    });
+
+    let mut content = String::new();
+    if prefs_file.exists() {
+        content = std::fs::read_to_string(&prefs_file).map_err(|e| e.to_string())?;
+        if !content.is_empty() && !content.ends_with('\n') {
+            content.push('\n');
+        }
+    }
+
+    content.push_str(&serde_json::to_string(&pref_entry).map_err(|e| e.to_string())?);
+    content.push('\n');
+
+    std::fs::write(&prefs_file, content).map_err(|e| e.to_string())?;
+    Ok(())
+}
