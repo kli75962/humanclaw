@@ -1,6 +1,6 @@
 ---
 name: generate-post
-description: Generate a social media post. Read your persona guide (in system prompt) to understand how you should write, then create an authentic post.
+description: Generate a social media post.
 compatibility: PhoneClaw social Mode
 ---
 

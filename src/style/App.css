@@ -255,3 +255,57 @@
   padding: 12px 16px;
   border-radius: 12px;
 }
+
+/* ── Wallpaper layers ── */
+.app-root--wallpaper {
+  background: transparent;
+}
+
+.app-wallpaper-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  pointer-events: none;
+}
+
+.app-wallpaper-dim {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* ── Transparency and blur effects when wallpaper is set ── */
+.app-root--wallpaper .app-content {
+  background: transparent;
+}
+
+.app-root--wallpaper .app-messages {
+  background: transparent;
+}
+
+.app-root--wallpaper .post-feed {
+  background: transparent;
+}
+
+.app-root--wallpaper .post-card {
+  background: transparent;
+  backdrop-filter: blur(10px);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.app-root--wallpaper .content-tab-btn {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.app-root--wallpaper .content-tab-btn--active {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border-color: rgba(255, 255, 255, 0.2);
+}

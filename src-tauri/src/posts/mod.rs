@@ -118,10 +118,37 @@ pub async fn generate_character_post(
 /// Return true if the character's persona suggests an extroverted personality.
 fn is_extrovert(persona: &str) -> bool {
     let lower = persona.to_lowercase();
-    lower.contains("extrovert") || lower.contains("outgoing") || lower.contains("energetic")
-        || lower.contains("enthusiastic") || lower.contains("lively") || lower.contains("talkative")
-        || lower.contains("confident") || lower.contains("vibrant") || lower.contains("social")
-        || lower.contains("friendly") || lower.contains("cheerful")
+
+    // Keywords that indicate extroverted personality
+    let extrovert_keywords = [
+        "extrovert", "outgoing", "energetic", "enthusiastic", "lively", "talkative",
+        "confident", "vibrant", "social", "friendly", "cheerful", "playful", "upbeat",
+        "jk", // jk persona is playful and friendly
+    ];
+
+    // Keywords that indicate introverted personality
+    let introvert_keywords = [
+        "introvert", "quiet", "reserved", "shy", "concise", "minimal", "direct",
+        "quiet", "taciturn", "withdrawn",
+    ];
+
+    // Check extrovert keywords first
+    for keyword in &extrovert_keywords {
+        if lower.contains(keyword) {
+            return true;
+        }
+    }
+
+    // Check introvert keywords
+    for keyword in &introvert_keywords {
+        if lower.contains(keyword) {
+            return false;
+        }
+    }
+
+    // Default: moderate extroversion (50% chance)
+    // This applies to neutral personas like "default", "mentor", etc.
+    true
 }
 
 /// Resolve a character's display name for comment context.
@@ -276,8 +303,11 @@ pub async fn react_to_user_post(
         }
 
         let extrovert = is_extrovert(&character.persona);
-        let chance: u8 = if extrovert { 50 } else { 3 };
-        if pseudo_rand(&character.id, &post_id) >= chance {
+        // Extroverts: 60% chance, Introverts: 15% chance (higher than character posts)
+        let chance: u8 = if extrovert { 60 } else { 15 };
+        if pseudo_rand(&character.id, &post_id) < chance {
+            // Will comment
+        } else {
             continue;
         }
 

@@ -614,3 +614,236 @@
   font-size: 12px;
 }
 
+/* ── Wallpaper picker (16:9 rectangle) ── */
+.settings-wallpaper-picker {
+  display: block;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  cursor: pointer;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+.settings-wallpaper-empty {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-2);
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+.settings-wallpaper-picker:hover .settings-wallpaper-empty {
+  background: var(--color-hover);
+}
+
+.settings-wallpaper-preview {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid var(--color-border-2);
+  border-radius: 8px;
+}
+
+.settings-wallpaper-preview::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0);
+  border-radius: 8px;
+  transition: background 0.15s;
+  pointer-events: none;
+}
+
+.settings-wallpaper-picker:hover .settings-wallpaper-preview::before {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.settings-wallpaper-clear-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: none;
+  padding: 8px 16px;
+  background: rgba(239, 68, 68, 0.9);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, backdrop-filter 0.15s;
+  z-index: 10;
+  position: relative;
+}
+.settings-wallpaper-picker:hover .settings-wallpaper-clear-overlay {
+  display: block;
+}
+.settings-wallpaper-clear-overlay:hover {
+  background: rgba(239, 68, 68, 1);
+}
+
+.app-root--wallpaper .settings-wallpaper-clear-overlay {
+  background: rgba(239, 68, 68, 0.25);
+  border: 1px solid rgba(239, 68, 68, 1);
+  backdrop-filter: blur(29px);
+  color: #fff;
+}
+
+.app-root--wallpaper .settings-wallpaper-clear-overlay:hover {
+  background: rgba(239, 68, 68, 0.4);
+  border-color: rgba(239, 68, 68, 1);
+}
+
+.settings-wallpaper-set-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: none;
+  padding: 8px 16px;
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  z-index: 10;
+}
+.settings-wallpaper-picker:hover .settings-wallpaper-set-overlay {
+  display: block;
+}
+.settings-wallpaper-set-overlay:hover {
+  opacity: 0.85;
+}
+
+/* ── Tweak bar (blur / dim slider) ── */
+.settings-tweak-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+}
+
+.settings-tweak-label {
+  font-size: 12px;
+  color: var(--color-text-2);
+  width: 30px;
+  flex-shrink: 0;
+}
+
+.settings-tweak-value {
+  font-size: 11px;
+  color: var(--color-text-3);
+  width: 34px;
+  text-align: right;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-tweak-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: var(--color-border-2);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.settings-tweak-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  cursor: grab;
+  border: none;
+  transition: transform 0.1s;
+}
+.settings-tweak-slider:active::-webkit-slider-thumb {
+  cursor: grabbing;
+  transform: scale(1.2);
+}
+.settings-tweak-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  cursor: grab;
+  border: none;
+}
+
+/* ── Wallpaper transparency effects ── */
+.app-root--wallpaper .settings-root {
+  background: transparent;
+}
+
+.app-root--wallpaper .settings-body {
+  background: transparent;
+}
+
+.app-root--wallpaper .settings-content {
+  background: transparent;
+}
+
+.app-root--wallpaper .settings-card {
+  background: transparent;
+}
+
+.app-root--wallpaper .settings-card-row {
+  background: transparent;
+}
+
+.app-root--wallpaper .settings-model-dropdown,
+.app-root--wallpaper .settings-model-menu--open {
+  backdrop-filter: blur(10px);
+  background: rgba(20, 20, 30, 0.3);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.app-root--wallpaper .settings-model-option {
+  background: transparent;
+  backdrop-filter: blur(5px);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .settings-model-option:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .settings-segment {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .settings-popup-input,
+.app-root--wallpaper .settings-model-trigger {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .settings-popup-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.app-root--wallpaper .settings-add-persona-btn {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, 0.8);
+}
+

@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Check, ChevronDown, ChevronRight, Cpu, LayoutGrid, Monitor, Palette, Plus, RefreshCw, User } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Cpu, Image, LayoutGrid, Monitor, Palette, Plus, RefreshCw, User } from 'lucide-react';
 import type { PcPermissions, PermissionState, SessionConfig, WizardAnswers } from '../types';
 import { Card, CardRow, SectionFooter, SectionHeader, SegmentControl } from './SettingsUI';
 import { PersonaWizard } from './PersonaWizard';
 import { BirthdayCalendar } from './BirthdayCalendar';
+import { ImageCropperModal } from './ImageCropperModal';
 import { useTheme } from '../hooks/useTheme';
 import type { Theme } from '../hooks/useTheme';
+import { useWallpaper } from '../hooks/useWallpaper';
 
 const PROVIDER_KEY = 'phoneclaw_provider';
 const CLAUDE_MODEL_KEY = 'phoneclaw_claude_model';
@@ -372,6 +374,7 @@ export function GeneralTab({
   }
   const [showModelConfig, setShowModelConfig] = useState(false);
   const [showPermConfig, setShowPermConfig] = useState(false);
+  const [showWallpaperConfig, setShowWallpaperConfig] = useState(false);
 
   const [isPersonaMenuOpen, setIsPersonaMenuOpen] = useState(false);
   const [personas, setPersonas] = useState<string[]>(FALLBACK_PERSONAS);
@@ -384,6 +387,8 @@ export function GeneralTab({
   const themeMenuRef = useRef<HTMLDivElement>(null);
 
   const [theme, setTheme] = useTheme();
+  const { url: wallpaperUrl, blur, dim, loadWallpaperFile, clearWallpaper, setBlur, setDim, cropperSrc, onCropperConfirm, onCropperCancel } = useWallpaper();
+  const wallpaperFileRef = useRef<HTMLInputElement>(null);
 
   // ── User Birthday ─────────────────────────────────────────────────────────
   const [showBirthdayConfig, setShowBirthdayConfig] = useState(false);
@@ -470,57 +475,60 @@ export function GeneralTab({
 
   return (
     <>
-      {/* User Birthday Section */}
-      <SectionHeader>Your Profile</SectionHeader>
-      <Card>
-        <CardRow onClick={() => setShowBirthdayConfig((v) => !v)}>
-          <div className="settings-qr-row-left">
-            <div className="settings-icon-badge settings-icon-badge--emerald">
-              🎂
-            </div>
-            <div>
-              <p className="settings-item-title">Birthday</p>
-              <p className="settings-item-subtitle">{formatBirthdayDisplay()}</p>
-            </div>
-          </div>
-          {showBirthdayConfig
-            ? <ChevronDown size={18} className="settings-chevron" />
-            : <ChevronRight size={18} className="settings-chevron" />
-          }
-        </CardRow>
+      {/* User Birthday Section — chat mode only */}
+      {chatMode && (
+        <>
+          <SectionHeader>Your Profile</SectionHeader>
+          <Card>
+            <CardRow onClick={() => setShowBirthdayConfig((v) => !v)}>
+              <div className="settings-qr-row-left">
+                <div className="settings-icon-badge settings-icon-badge--emerald">
+                  🎂
+                </div>
+                <div>
+                  <p className="settings-item-title">Birthday</p>
+                  <p className="settings-item-subtitle">{formatBirthdayDisplay()}</p>
+                </div>
+              </div>
+              {showBirthdayConfig
+                ? <ChevronDown size={18} className="settings-chevron" />
+                : <ChevronRight size={18} className="settings-chevron" />
+              }
+            </CardRow>
 
-        {showBirthdayConfig && (
-          <div className="settings-inline-expand">
-            <BirthdayCalendar value={userBirthday} onChange={saveBirthday} />
+            {showBirthdayConfig && (
+              <div className="settings-inline-expand">
+                <BirthdayCalendar value={userBirthday} onChange={saveBirthday} />
 
-            {/* Clear button */}
-            {userBirthday && (
-              <button
-                type="button"
-                onClick={() => clearBirthday()}
-                style={{
-                  marginTop: 12,
-                  padding: '8px 16px',
-                  borderRadius: 4,
-                  border: '1px solid var(--color-border)',
-                  backgroundColor: 'transparent',
-                  color: 'var(--color-text-2)',
-                  cursor: 'pointer',
-                  fontSize: 12,
-                }}
-              >
-                Clear
-              </button>
+                {userBirthday && (
+                  <button
+                    type="button"
+                    onClick={() => clearBirthday()}
+                    style={{
+                      marginTop: 12,
+                      padding: '8px 16px',
+                      borderRadius: 4,
+                      border: '1px solid var(--color-border)',
+                      backgroundColor: 'transparent',
+                      color: 'var(--color-text-2)',
+                      cursor: 'pointer',
+                      fontSize: 12,
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+
+                {birthdaySaveMsg && (
+                  <p className={birthdaySaveMsg === 'Saved' || birthdaySaveMsg === 'Cleared' ? 'settings-save-msg--ok' : 'settings-save-msg--err'} style={{ marginTop: 12, fontSize: 12 }}>
+                    {birthdaySaveMsg}
+                  </p>
+                )}
+              </div>
             )}
-
-            {birthdaySaveMsg && (
-              <p className={birthdaySaveMsg === 'Saved' || birthdaySaveMsg === 'Cleared' ? 'settings-save-msg--ok' : 'settings-save-msg--err'} style={{ marginTop: 12, fontSize: 12 }}>
-                {birthdaySaveMsg}
-              </p>
-            )}
-          </div>
-        )}
-      </Card>
+          </Card>
+        </>
+      )}
 
       {chatMode && (
         <>
@@ -763,6 +771,124 @@ export function GeneralTab({
           </div>
         </div>
       </Card>
+
+      <Card>
+        <CardRow onClick={() => setShowWallpaperConfig((v) => !v)}>
+          <div className="settings-qr-row-left">
+            <div className="settings-icon-badge settings-icon-badge--neutral">
+              <Image size={18} />
+            </div>
+            <div>
+              <p className="settings-item-title">Wallpaper</p>
+              <p className="settings-item-subtitle">{wallpaperUrl ? 'Custom image set' : 'Not set'}</p>
+            </div>
+          </div>
+          {showWallpaperConfig
+            ? <ChevronDown size={18} className="settings-chevron" />
+            : <ChevronRight size={18} className="settings-chevron" />
+          }
+        </CardRow>
+
+        {showWallpaperConfig && (
+          <div className="settings-inline-expand">
+            {/* Wallpaper preview/picker */}
+            <div style={{ marginBottom: 12 }}>
+              <div
+                className="settings-wallpaper-picker"
+                onClick={() => {
+                  if (!wallpaperUrl) wallpaperFileRef.current?.click();
+                }}
+              >
+                {wallpaperUrl ? (
+                  <div
+                    className="settings-wallpaper-preview"
+                    style={{ backgroundImage: `url(${wallpaperUrl})` }}
+                    onClick={() => clearWallpaper()}
+                  >
+                    <button
+                      type="button"
+                      className="settings-wallpaper-clear-overlay"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        clearWallpaper();
+                      }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                ) : (
+                  <div className="settings-wallpaper-empty">
+                    <Image size={32} color="var(--color-text-3)" />
+                    <button
+                      type="button"
+                      className="settings-wallpaper-set-overlay"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        wallpaperFileRef.current?.click();
+                      }}
+                    >
+                      Set Wallpaper
+                    </button>
+                  </div>
+                )}
+              </div>
+              <input
+                ref={wallpaperFileRef}
+                type="file"
+                accept="image/png,image/jpeg"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) loadWallpaperFile(file);
+                  e.target.value = '';
+                }}
+              />
+            </div>
+
+            {/* Blur slider */}
+            <div className="settings-tweak-row">
+              <span className="settings-tweak-label">Blur</span>
+              <input
+                type="range"
+                min="0"
+                max="20"
+                step="1"
+                value={blur}
+                onChange={(e) => setBlur(Number(e.target.value))}
+                className="settings-tweak-slider"
+              />
+              <span className="settings-tweak-value">{blur}px</span>
+            </div>
+
+            {/* Dim slider */}
+            <div className="settings-tweak-row" style={{ marginTop: 8 }}>
+              <span className="settings-tweak-label">Dim</span>
+              <input
+                type="range"
+                min="0"
+                max="90"
+                step="5"
+                value={Math.round(dim * 100)}
+                onChange={(e) => setDim(Number(e.target.value) / 100)}
+                className="settings-tweak-slider"
+              />
+              <span className="settings-tweak-value">{Math.round(dim * 100)}%</span>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {cropperSrc && (
+        <ImageCropperModal
+          src={cropperSrc}
+          aspectRatio={16 / 9}
+          onConfirm={onCropperConfirm}
+          onCancel={onCropperCancel}
+          title="Crop Wallpaper"
+        />
+      )}
     </>
   );
 }

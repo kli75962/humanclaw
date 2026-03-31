@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { Check, ChevronDown, ImageIcon, RefreshCw } from 'lucide-react';
 import type { Character } from '../types';
 import { BirthdayCalendar } from './BirthdayCalendar';
+import { ImageCropperModal } from './ImageCropperModal';
 import '../style/SettingsScreen.css';
 
 const PROVIDER_KEY = 'phoneclaw_provider';
@@ -38,7 +39,7 @@ function resizeImage(dataUrl: string, maxPx = 256): Promise<string> {
       canvas.width = Math.round(img.width * ratio);
       canvas.height = Math.round(img.height * ratio);
       canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.82));
+      resolve(canvas.toDataURL('image/jpeg', 0.95));
     };
     img.src = dataUrl;
   });
@@ -53,6 +54,7 @@ interface Props {
 export function CreateFriendInline({ defaultModel = '', onSave, onCancel }: Props) {
   // ── Icon ──────────────────────────────────────────────────────────────────
   const [icon, setIcon] = useState<string | undefined>();
+  const [cropperSrc, setCropperSrc] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -60,10 +62,15 @@ export function CreateFriendInline({ defaultModel = '', onSave, onCancel }: Prop
     if (!file) return;
     const reader = new FileReader();
     reader.onload = async (ev) => {
-      const resized = await resizeImage(ev.target?.result as string);
-      setIcon(resized);
+      setCropperSrc(ev.target?.result as string);
     };
     reader.readAsDataURL(file);
+  }
+
+  async function handleCropperConfirm(croppedDataUrl: string) {
+    const resized = await resizeImage(croppedDataUrl);
+    setIcon(resized);
+    setCropperSrc('');
   }
 
   // ── Name + background ─────────────────────────────────────────────────────
@@ -152,26 +159,64 @@ export function CreateFriendInline({ defaultModel = '', onSave, onCancel }: Prop
   }
 
   return (
-    <div className="friend-inline-form">
-      {/* Icon */}
-      <p className="settings-modal-field-label" style={{ marginTop: 0 }}>Icon (optional)</p>
-      <div className="friend-inline-icon-row">
-        {icon
-          ? <img src={icon} className="friend-inline-icon-preview" alt="" />
-          : <div className="friend-inline-icon-placeholder"><ImageIcon size={20} color="var(--color-text-3)" /></div>
-        }
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <button type="button" className="settings-refresh-btn" onClick={() => fileRef.current?.click()}>
-            {icon ? 'Change' : 'Choose'}
-          </button>
-          {icon && (
-            <button type="button" className="settings-refresh-btn" onClick={() => setIcon(undefined)}>
-              Remove
-            </button>
-          )}
+    <>
+      {cropperSrc && (
+        <ImageCropperModal
+          src={cropperSrc}
+          aspectRatio={1}
+          onConfirm={handleCropperConfirm}
+          onCancel={() => setCropperSrc('')}
+          title="Crop Character Icon"
+        />
+      )}
+
+      <div className="friend-inline-form">
+        {/* Icon */}
+        <p className="settings-modal-field-label" style={{ marginTop: 0 }}>Icon (optional)</p>
+        <div style={{ marginBottom: 12 }}>
+          <div
+            className="friend-inline-icon-picker"
+            onClick={() => {
+              if (!icon) fileRef.current?.click();
+            }}
+          >
+            {icon ? (
+              <div
+                className="friend-inline-icon-preview-container"
+                style={{ backgroundImage: `url(${icon})` }}
+                onClick={() => setIcon(undefined)}
+              >
+                <button
+                  type="button"
+                  className="friend-inline-icon-remove-overlay"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIcon(undefined);
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <div className="friend-inline-icon-empty">
+                <ImageIcon size={32} color="var(--color-text-3)" />
+                <button
+                  type="button"
+                  className="friend-inline-icon-set-overlay"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    fileRef.current?.click();
+                  }}
+                >
+                  Set Icon
+                </button>
+              </div>
+            )}
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />
         </div>
-        <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />
-      </div>
 
       {/* Name */}
       <p className="settings-modal-field-label">Name</p>
@@ -351,6 +396,7 @@ export function CreateFriendInline({ defaultModel = '', onSave, onCancel }: Prop
         <button type="button" className="friend-inline-cancel-btn" onClick={onCancel}>Cancel</button>
         <button type="button" className="friend-inline-save-btn" onClick={handleSave}>Create</button>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

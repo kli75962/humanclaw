@@ -646,3 +646,81 @@
 }
 .post-share-send-btn:hover:not(:disabled) { background: var(--color-accent-2); }
 .post-share-send-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Wallpaper transparency effects for PostFeed ── */
+.app-root--wallpaper .post-feed-empty {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.app-root--wallpaper .post-card {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.app-root--wallpaper .post-card-header,
+.app-root--wallpaper .post-card-body,
+.app-root--wallpaper .post-card-footer {
+  background: transparent;
+}
+
+.app-root--wallpaper .post-compose {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.app-root--wallpaper .post-compose-textarea {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .post-compose-textarea::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.app-root--wallpaper .post-compose-input {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .post-compose-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.app-root--wallpaper .post-card-menu {
+  background: transparent;
+  backdrop-filter: blur(10px);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.app-root--wallpaper .post-comment-input {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .post-card-comment-input-row {
+  background: transparent;
+}
+
+.app-root--wallpaper .post-card-comment-input {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .post-card-comment-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.app-root--wallpaper .post-card-comment-input:focus {
+  border-color: rgba(59, 130, 246, 0.6);
+  background: transparent;
+}

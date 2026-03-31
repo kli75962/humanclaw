@@ -29,6 +29,24 @@
   --color-modal-close-hover:   #313a4b;
 }
 
+/* Dark with wallpaper — semi-transparent backgrounds */
+[data-theme="dark"] .app-root--wallpaper {
+  --color-bg:                  rgba(19, 19, 20, 0.92);
+  --color-surface:             rgba(30, 31, 32, 0.95);
+  --color-surface-2:           rgba(15, 19, 27, 0.95);
+  --color-surface-3:           rgba(24, 28, 36, 0.92);
+  --color-hover:               rgba(44, 44, 44, 0.85);
+  --color-active:              rgba(46, 52, 66, 0.88);
+  --color-border:              rgba(42, 42, 44, 0.6);
+  --color-border-2:            rgba(47, 58, 82, 0.6);
+  --color-border-3:            rgba(44, 52, 68, 0.6);
+  --color-modal-bg:            rgba(23, 27, 36, 0.95);
+  --color-modal-border:        rgba(47, 55, 71, 0.8);
+  --color-modal-header-border: rgba(39, 48, 67, 0.8);
+  --color-modal-close:         rgba(37, 44, 57, 0.9);
+  --color-modal-close-hover:   rgba(49, 58, 75, 0.9);
+}
+
 /* Light */
 [data-theme="light"] {
   --color-bg:                  #f5f5f7;
@@ -57,6 +75,24 @@
   --color-modal-close-hover:   #dde5ff;
 }
 
+/* Light with wallpaper */
+[data-theme="light"] .app-root--wallpaper {
+  --color-bg:                  rgba(245, 245, 247, 0.92);
+  --color-surface:             rgba(255, 255, 255, 0.95);
+  --color-surface-2:           rgba(242, 242, 247, 0.95);
+  --color-surface-3:           rgba(239, 239, 239, 0.92);
+  --color-hover:               rgba(235, 235, 240, 0.85);
+  --color-active:              rgba(221, 229, 255, 0.88);
+  --color-border:              rgba(209, 209, 214, 0.6);
+  --color-border-2:            rgba(199, 199, 204, 0.6);
+  --color-border-3:            rgba(208, 208, 216, 0.6);
+  --color-modal-bg:            rgba(255, 255, 255, 0.95);
+  --color-modal-border:        rgba(209, 209, 214, 0.8);
+  --color-modal-header-border: rgba(229, 229, 234, 0.8);
+  --color-modal-close:         rgba(235, 235, 240, 0.9);
+  --color-modal-close-hover:   rgba(221, 229, 255, 0.9);
+}
+
 /* Gruvbox Dark */
 [data-theme="gruvbox"] {
   --color-bg:                  #282828;
@@ -83,4 +119,22 @@
   --color-modal-header-border: #504945;
   --color-modal-close:         #504945;
   --color-modal-close-hover:   #665c54;
+}
+
+/* Gruvbox with wallpaper */
+[data-theme="gruvbox"] .app-root--wallpaper {
+  --color-bg:                  rgba(40, 40, 40, 0.92);
+  --color-surface:             rgba(60, 56, 54, 0.95);
+  --color-surface-2:           rgba(29, 32, 33, 0.95);
+  --color-surface-3:           rgba(50, 48, 47, 0.92);
+  --color-hover:               rgba(80, 73, 69, 0.85);
+  --color-active:              rgba(102, 92, 84, 0.88);
+  --color-border:              rgba(80, 73, 69, 0.6);
+  --color-border-2:            rgba(124, 111, 100, 0.6);
+  --color-border-3:            rgba(80, 73, 69, 0.6);
+  --color-modal-bg:            rgba(60, 56, 54, 0.95);
+  --color-modal-border:        rgba(80, 73, 69, 0.8);
+  --color-modal-header-border: rgba(80, 73, 69, 0.8);
+  --color-modal-close:         rgba(80, 73, 69, 0.9);
+  --color-modal-close-hover:   rgba(102, 92, 84, 0.9);
 }

@@ -6,6 +6,7 @@ import { useCharacters } from './hooks/useCharacters';
 import { usePosts } from './hooks/usePosts';
 import { usePostGeneration } from './hooks/usePostGeneration';
 import { useStt } from './hooks/useStt';
+import { useWallpaper } from './hooks/useWallpaper';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ChatMessage } from './components/ChatMessage';
 import { InputBar } from './components/InputBar';
@@ -45,6 +46,7 @@ function App() {
   const { posts, likedPostIds, toggleLike, deletePost, addPost, refresh: refreshPosts } = usePosts();
   const [quotedPost, setQuotedPost] = useState<Post | null>(null);
   const [permRequest, setPermRequest] = useState<PermissionRequestData | null>(null);
+  const { url: wallpaperUrl, blur: wallpaperBlur, dim: wallpaperDim } = useWallpaper();
 
   usePostGeneration({
     characters,
@@ -419,7 +421,24 @@ function App() {
   }, [messages, isThinking, handleRetry]);
 
   return (
-    <div className={`app-root${sideOpen ? ' side-open' : ''}`}>
+    <div className={`app-root${sideOpen ? ' side-open' : ''}${wallpaperUrl ? ' app-root--wallpaper' : ''}`}>
+      {wallpaperUrl && (
+        <>
+          <div
+            className="app-wallpaper-bg"
+            style={{
+              backgroundImage: `url(${wallpaperUrl})`,
+              filter: wallpaperBlur > 0 ? `blur(${wallpaperBlur}px)` : undefined,
+            }}
+          />
+          {wallpaperDim > 0 && (
+            <div
+              className="app-wallpaper-dim"
+              style={{ background: `rgba(0,0,0,${wallpaperDim})` }}
+            />
+          )}
+        </>
+      )}
       <AccessibilityDialog />
 
       {floatBtn && (

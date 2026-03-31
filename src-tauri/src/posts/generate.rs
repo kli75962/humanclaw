@@ -59,17 +59,27 @@ struct SimpleRequest<'a> {
 }
 
 /// Helper: Extract persona skill name from character persona field.
-/// Maps personas like "jk", "concise", "default" to skill names like "persona_jk", "persona_concise".
+/// Tries to match persona names dynamically by looking for skill files.
 fn get_persona_skill_name(character: &CharacterMeta) -> Option<String> {
-    // If character.persona contains "jk", look for "persona_jk" skill
-    // Common persona keywords to try
-    let keywords = ["jk", "concise", "default", "mentor"];
+    let persona_lower = character.persona.to_lowercase();
 
-    for keyword in &keywords {
-        if character.persona.to_lowercase().contains(keyword) {
-            return Some(format!("persona_{}", keyword));
-        }
+    // Try direct persona name: if it's "jk" or "persona_jk", construct skill name
+    if persona_lower.starts_with("persona_") {
+        // Already prefixed, use as-is
+        return Some(character.persona.clone());
     }
+
+    // Try to construct skill name from persona field
+    let candidate = format!("persona_{}", persona_lower.replace(' ', "_"));
+    if get_skill_content(&candidate).is_some() {
+        return Some(candidate);
+    }
+
+    // If persona is a simple word, also try it without modification
+    if get_skill_content(&format!("persona_{}", persona_lower)).is_some() {
+        return Some(format!("persona_{}", persona_lower));
+    }
+
     None
 }
 
@@ -175,7 +185,7 @@ pub async fn generate_post_text(
     character: &CharacterMeta,
     context: Option<&str>,
 ) -> Result<(String, String), String> {
-    let skill = get_skill_content("generate_post").unwrap_or("");
+    let skill = get_skill_content("generate-post").unwrap_or("");
     let core = crate::tools::read_core(app);
     let system = character_system(skill, character, &core); // Persona skill loaded automatically
 
@@ -203,7 +213,7 @@ pub async fn generate_comment_text(
     post_text: &str,
     prior_comments: &[(String, String)],
 ) -> Result<String, String> {
-    let skill = get_skill_content("post_comment").unwrap_or("");
+    let skill = get_skill_content("post-comment").unwrap_or("");
     let core = crate::tools::read_core(app);
     let system = character_system(skill, character, &core);
 
@@ -244,7 +254,7 @@ pub async fn generate_dm_text(
     character: &CharacterMeta,
     trigger: &str,
 ) -> Result<String, String> {
-    let skill = get_skill_content("post_dm").unwrap_or("");
+    let skill = get_skill_content("post-dm").unwrap_or("");
     let core = crate::tools::read_core(app);
     let system = character_system(skill, character, &core);
 
