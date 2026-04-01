@@ -106,3 +106,68 @@
   opacity: 0.35;
   cursor: default;
 }
+
+/* ── Wallpaper transparency effects for PersonaWizard ── */
+.app-root--wallpaper .persona-wizard {
+  background: transparent;
+}
+
+.app-root--wallpaper .wizard-done-row {
+  background: transparent;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .wizard-done-q {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.app-root--wallpaper .wizard-done-a {
+  color: rgba(59, 130, 246, 0.8);
+}
+
+.app-root--wallpaper .wizard-bubble {
+  background: transparent;
+  backdrop-filter: blur(10px);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.app-root--wallpaper .wizard-question {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .wizard-option-btn {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .wizard-option-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.95);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.app-root--wallpaper .wizard-text-input {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .wizard-text-input:focus {
+  border-color: rgba(59, 130, 246, 0.6);
+  background: transparent;
+}
+
+.app-root--wallpaper .wizard-confirm-btn {
+  background: rgba(59, 130, 246, 0.4);
+  color: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(59, 130, 246, 0.5);
+}
+
+.app-root--wallpaper .wizard-confirm-btn:hover {
+  background: rgba(59, 130, 246, 0.6);
+  border-color: rgba(59, 130, 246, 0.7);
+}

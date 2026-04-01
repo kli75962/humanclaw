@@ -166,6 +166,89 @@
   border-color: rgba(255, 255, 255, 0.4);
 }
 
+.app-root--wallpaper .inputbar-btn {
+  color: rgba(255, 255, 255, 0.5);
+  background: transparent;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: background-color 0.15s, color 0.15s, backdrop-filter 0.15s;
+}
+
+.app-root--wallpaper .inputbar-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.app-root--wallpaper .inputbar-btn:disabled {
+  opacity: 0.3;
+}
+
+.app-root--wallpaper .inputbar-stt-btn {
+  color: rgba(255, 255, 255, 0.5);
+  background: transparent;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .inputbar-stt-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+}
+
+.app-root--wallpaper .inputbar-stt-btn--listening {
+  color: rgba(96, 165, 250, 0.9);
+  background: rgba(96, 165, 250, 0.15);
+  border-color: rgba(96, 165, 250, 0.4);
+  backdrop-filter: blur(10px);
+}
+
+.app-root--wallpaper .inputbar-stop-btn {
+  color: rgba(248, 113, 113, 0.7);
+  background: transparent;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+}
+
+.app-root--wallpaper .inputbar-stop-btn:hover {
+  background: rgba(248, 113, 113, 0.1);
+  backdrop-filter: blur(10px);
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.app-root--wallpaper .inputbar-send-btn {
+  color: rgba(96, 165, 250, 0.8);
+  background: transparent;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+}
+
+.app-root--wallpaper .inputbar-send-btn:hover:not(:disabled) {
+  background: rgba(96, 165, 250, 0.1);
+  backdrop-filter: blur(10px);
+  border-color: rgba(96, 165, 250, 0.4);
+}
+
+.app-root--wallpaper .inputbar-quote-preview {
+  background: transparent;
+  border-left-color: rgba(96, 165, 250, 0.6);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .inputbar-quote-text {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.app-root--wallpaper .inputbar-quote-clear {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.app-root--wallpaper .inputbar-quote-clear:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
 .app-root--wallpaper .inputbar-quote {
   background: transparent;
   border-left-color: rgba(96, 165, 250, 0.6);

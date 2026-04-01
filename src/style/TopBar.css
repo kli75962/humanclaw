@@ -17,3 +17,14 @@
   white-space: nowrap;
   max-width: 240px;
 }
+
+/* ── Wallpaper transparency effects for TopBar ── */
+.app-root--wallpaper .topbar {
+  background: transparent;
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .topbar-model {
+  color: rgba(255, 255, 255, 0.4);
+}

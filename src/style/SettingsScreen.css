@@ -223,7 +223,7 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border-2);
   border-radius: 10px;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
@@ -805,21 +805,43 @@
   background: transparent;
 }
 
-.app-root--wallpaper .settings-model-dropdown,
-.app-root--wallpaper .settings-model-menu--open {
-  backdrop-filter: blur(10px);
-  background: rgba(20, 20, 30, 0.3);
-  border-color: rgba(255, 255, 255, 0.2);
+.app-root--wallpaper .settings-model-dropdown {
+  /* Tauri透明窗口中backdrop-filter不工作，改用半透明背景 */
+  background: rgba(15, 15, 25, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  border-radius: 10px;
+  overflow: visible !important;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-.app-root--wallpaper .settings-model-option {
-  background: transparent;
-  backdrop-filter: blur(5px);
+.app-root--wallpaper .settings-model-menu--open {
+  z-index: 200 !important;
+}
+
+.app-root--wallpaper .settings-model-trigger-label {
   color: rgba(255, 255, 255, 0.95);
 }
 
+.app-root--wallpaper .settings-model-trigger-chevron {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.app-root--wallpaper .settings-model-option {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.9);
+  border: none !important;
+  transition: background-color 0.15s;
+}
+
 .app-root--wallpaper .settings-model-option:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.15) !important;
+}
+
+.app-root--wallpaper .settings-model-option-active {
+  background: rgba(59, 130, 246, 0.25) !important;
+  color: rgba(96, 165, 250, 0.95) !important;
 }
 
 .app-root--wallpaper .settings-segment {
@@ -828,12 +850,24 @@
   backdrop-filter: blur(8px);
 }
 
-.app-root--wallpaper .settings-popup-input,
-.app-root--wallpaper .settings-model-trigger {
+.app-root--wallpaper .settings-popup-input {
   background: transparent;
   border-color: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(8px);
   color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .settings-model-trigger {
+  background: rgba(30, 31, 32, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: rgba(255, 255, 255, 0.95);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .settings-model-trigger-open {
+  background: rgba(30, 31, 32, 0.75) !important;
+  border-color: rgba(96, 165, 250, 0.5) !important;
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .app-root--wallpaper .settings-popup-input::placeholder {
@@ -845,5 +879,179 @@
   border-color: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(8px);
   color: rgba(255, 255, 255, 0.8);
+}
+
+.app-root--wallpaper .settings-header {
+  background: transparent;
+  backdrop-filter: blur(10px);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .settings-header-title {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .settings-back-btn {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.app-root--wallpaper .settings-back-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.app-root--wallpaper .settings-tabs {
+  background: transparent;
+}
+
+.app-root--wallpaper .settings-section-header {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.app-root--wallpaper .settings-section-footer {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.app-root--wallpaper .settings-item-title {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .settings-item-subtitle {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.app-root--wallpaper .settings-card-row {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.app-root--wallpaper .settings-card-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.app-root--wallpaper .settings-card-divider {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .settings-model-trigger {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.95);
+  border-color: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .settings-model-trigger-chevron {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.app-root--wallpaper .settings-refresh-btn {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  border-color: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .settings-refresh-btn:hover:not(:disabled) {
+  border-color: rgba(96, 165, 250, 0.6);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .settings-device-row {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  margin-bottom: 8px;
+}
+
+.app-root--wallpaper .settings-device-info-address {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.app-root--wallpaper .settings-device-status--online {
+  color: rgba(74, 222, 128, 0.8);
+}
+
+.app-root--wallpaper .settings-device-status--offline {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.app-root--wallpaper .settings-device-remove-btn {
+  color: rgba(248, 113, 113, 0.7);
+}
+
+.app-root--wallpaper .settings-device-remove-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.app-root--wallpaper .settings-provider-btn {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .settings-provider-btn--active {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.6);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .settings-wallpaper-empty {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .settings-wallpaper-picker:hover .settings-wallpaper-empty {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.app-root--wallpaper .settings-wallpaper-preview {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.app-root--wallpaper .settings-tweak-label {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.app-root--wallpaper .settings-tweak-value {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.app-root--wallpaper .settings-tweak-slider {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.app-root--wallpaper .settings-segment-btn {
+  color: rgba(255, 255, 255, 0.6);
+  background: transparent;
+}
+
+.app-root--wallpaper .settings-segment-btn:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.app-root--wallpaper .settings-segment-btn-active {
+  background: rgba(59, 130, 246, 0.3);
+  color: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(59, 130, 246, 0.5);
+}
+
+.app-root--wallpaper .settings-save-btn {
+  background: rgba(59, 130, 246, 0.4);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .settings-save-btn:hover {
+  background: rgba(59, 130, 246, 0.6);
+}
+
+.app-root--wallpaper .settings-perm-label {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .settings-perm-sub {
+  color: rgba(255, 255, 255, 0.4);
 }
 

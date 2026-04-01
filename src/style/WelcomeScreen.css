@@ -81,3 +81,29 @@
 .welcome-icon--blue   { color: #60a5fa; }
 .welcome-icon--yellow { color: #facc15; }
 .welcome-icon--purple { color: #c084fc; }
+
+/* ── Wallpaper transparency effects for WelcomeScreen ── */
+.app-root--wallpaper .welcome-subtitle {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.app-root--wallpaper .welcome-card {
+  background: transparent;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.app-root--wallpaper .welcome-card:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(12px);
+}
+
+.app-root--wallpaper .welcome-card-text {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .welcome-card-icon {
+  background: rgba(255, 255, 255, 0.1);
+}

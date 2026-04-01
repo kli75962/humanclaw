@@ -113,3 +113,31 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* ── Wallpaper transparency effects for Chat bubbles ── */
+.app-root--wallpaper .chat-bubble--user {
+  background: transparent;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .chat-bubble--assistant {
+  background: transparent;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .chat-avatar {
+  color: rgba(96, 165, 250, 0.8);
+}
+
+.app-root--wallpaper .chat-retry-btn {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.app-root--wallpaper .chat-retry-btn:hover {
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.1);
+}

@@ -130,6 +130,59 @@
   to   { opacity: 1; }
 }
 
+/* ── Wallpaper transparency effects for CreateFriendSheet ── */
+.app-root--wallpaper .friend-sheet-backdrop {
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(6px);
+}
+
+.app-root--wallpaper .friend-sheet {
+  background: transparent;
+  backdrop-filter: blur(10px);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.2);
+}
+
+.app-root--wallpaper .friend-sheet-handle {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.app-root--wallpaper .friend-sheet-header {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .friend-sheet-title {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .friend-sheet-body {
+  background: transparent;
+}
+
+.app-root--wallpaper .friend-sheet-footer {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .friend-sheet-save-btn {
+  background: rgba(59, 130, 246, 0.4);
+  color: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(59, 130, 246, 0.5);
+}
+
+.app-root--wallpaper .friend-sheet-save-btn:hover {
+  background: rgba(59, 130, 246, 0.6);
+  border-color: rgba(59, 130, 246, 0.7);
+}
+
+.app-root--wallpaper .friend-sheet-icon-preview,
+.app-root--wallpaper .friend-sheet-icon-placeholder {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: transparent;
+  backdrop-filter: blur(8px);
+}
+
 @media (min-width: 640px) {
   .friend-sheet {
     left: 50%;

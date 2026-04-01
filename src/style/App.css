@@ -300,12 +300,81 @@
 
 .app-root--wallpaper .content-tab-btn {
   background: transparent;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.5);
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.app-root--wallpaper .content-tab-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
 }
 
 .app-root--wallpaper .content-tab-btn--active {
   background: transparent;
   color: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* ── Wallpaper effects for left sidebar ── */
+.app-root--wallpaper .app-left {
+  background: transparent;
+  backdrop-filter: blur(10px);
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.app-root--wallpaper .app-divider {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+}
+
+.app-root--wallpaper .app-divider:hover,
+.app-root--wallpaper .app-divider:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.app-root--wallpaper .app-tab-bar {
+  background: transparent;
+  backdrop-filter: blur(10px);
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.app-root--wallpaper .tab-bar-btn {
+  color: rgba(255, 255, 255, 0.5);
+  background: transparent;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: background-color 0.15s, color 0.15s, backdrop-filter 0.15s;
+}
+
+.app-root--wallpaper .tab-bar-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.app-root--wallpaper .tab-bar-btn--active {
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.app-root--wallpaper .mobile-nav {
+  background: transparent;
+  backdrop-filter: blur(10px);
+}
+
+.app-root--wallpaper .mobile-nav .top-nav-btn {
+  color: rgba(255, 255, 255, 0.5);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .mobile-nav .top-nav-btn:hover {
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.2);
 }

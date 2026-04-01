@@ -198,3 +198,84 @@
 .image-cropper-btn-confirm:hover {
   opacity: 0.85;
 }
+
+/* ── Wallpaper transparency effects for ImageCropperModal ── */
+.app-root--wallpaper .image-cropper-modal-overlay {
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(6px);
+}
+
+.app-root--wallpaper .image-cropper-modal {
+  background: transparent;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.app-root--wallpaper .image-cropper-header {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .image-cropper-header h2 {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .image-cropper-close {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.app-root--wallpaper .image-cropper-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .image-cropper-body {
+  background: transparent;
+}
+
+.app-root--wallpaper .image-cropper-selection {
+  border-color: rgba(79, 70, 229, 0.7);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.3);
+}
+
+.app-root--wallpaper .image-cropper-handle {
+  background: rgba(79, 70, 229, 0.7);
+  border-color: rgba(255, 255, 255, 0.9);
+}
+
+.app-root--wallpaper .image-cropper-handle:active {
+  background: rgba(99, 102, 241, 0.8);
+}
+
+.app-root--wallpaper .image-cropper-edge {
+  background: rgba(79, 70, 229, 0.4);
+}
+
+.app-root--wallpaper .image-cropper-actions {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .image-cropper-btn-cancel {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .image-cropper-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .image-cropper-btn-confirm {
+  background: rgba(79, 70, 229, 0.4);
+  color: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(79, 70, 229, 0.5);
+}
+
+.app-root--wallpaper .image-cropper-btn-confirm:hover {
+  background: rgba(79, 70, 229, 0.6);
+  border-color: rgba(79, 70, 229, 0.7);
+}

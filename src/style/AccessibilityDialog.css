@@ -81,3 +81,59 @@
   background: #2C2C2C;
   flex-shrink: 0;
 }
+
+/* ── Wallpaper transparency effects for AccessibilityDialog ── */
+.app-root--wallpaper .a11y-backdrop {
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(6px);
+}
+
+.app-root--wallpaper .a11y-dialog {
+  background: transparent;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+}
+
+.app-root--wallpaper .a11y-dialog-body {
+  background: transparent;
+}
+
+.app-root--wallpaper .a11y-dialog-title {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .a11y-dialog-text {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.app-root--wallpaper .a11y-dialog-highlight {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .a11y-checkbox-label {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.app-root--wallpaper .a11y-dialog-actions {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .a11y-dialog-btn {
+  color: rgba(255, 255, 255, 0.6);
+  background: transparent;
+}
+
+.app-root--wallpaper .a11y-dialog-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .a11y-dialog-btn--confirm {
+  color: rgba(156, 123, 196, 0.9);
+}
+
+.app-root--wallpaper .a11y-dialog-divider {
+  background: rgba(255, 255, 255, 0.1);
+}

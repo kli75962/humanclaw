@@ -482,12 +482,83 @@
 /* ── Wallpaper transparency effects for SideMenu ── */
 .app-root--wallpaper .side-menu-panel {
   background: transparent;
+  backdrop-filter: blur(10px);
 }
 
 .app-root--wallpaper .side-menu-scroll,
 .app-root--wallpaper .side-menu-settings,
 .app-root--wallpaper .side-menu-memos {
   background: transparent;
+}
+
+.app-root--wallpaper .side-menu-new-chat-btn {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .side-menu-new-chat-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.app-root--wallpaper .side-menu-new-chat-btn--active {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.app-root--wallpaper .side-menu-history-label {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.app-root--wallpaper .side-menu-chat-btn {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(6px);
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    backdrop-filter 0.15s;
+}
+
+.app-root--wallpaper .side-menu-chat-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.app-root--wallpaper .side-menu-chat-btn--active {
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.95);
+  border-color: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.app-root--wallpaper .side-menu-delete-btn {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.3);
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    backdrop-filter 0.15s;
+}
+
+.app-root--wallpaper .side-menu-delete-btn:hover {
+  background: rgba(255, 0, 0, 0.2);
+  color: rgba(255, 100, 100, 1);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .side-menu-char-avatar-placeholder {
+  background: rgba(59, 130, 246, 0.3);
+  color: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  backdrop-filter: blur(8px);
 }
 
 .app-root--wallpaper .friend-inline-form {
@@ -560,4 +631,80 @@
 .app-root--wallpaper .friend-inline-icon-set-overlay:hover {
   background: rgba(59, 130, 246, 0.2);
   border-color: rgba(59, 130, 246, 1);
+}
+
+.app-root--wallpaper .top-nav-btn {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    backdrop-filter 0.15s;
+}
+
+.app-root--wallpaper .top-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.95);
+  border-color: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.app-root--wallpaper .top-nav-btn--active {
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.95);
+  border-color: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.app-root--wallpaper .side-menu-confirm {
+  background: rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+}
+
+.app-root--wallpaper .side-menu-confirm-text {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.app-root--wallpaper .side-menu-confirm-btn--no {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .side-menu-confirm-btn--no:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.app-root--wallpaper .side-menu-confirm-btn--yes {
+  background: rgba(239, 68, 68, 0.3);
+  color: rgba(255, 200, 200, 0.95);
+  border: 1px solid rgba(239, 68, 68, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .side-menu-confirm-btn--yes:hover {
+  background: rgba(239, 68, 68, 0.45);
+  border-color: rgba(239, 68, 68, 0.8);
+}
+
+.app-root--wallpaper .side-menu-memos-empty {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.app-root--wallpaper .side-menu-memo-item {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .side-menu-memo-selected {
+  color: rgba(96, 165, 250, 0.9);
+}
+
+.app-root--wallpaper .side-menu-memo-body {
+  color: rgba(255, 255, 255, 0.6);
 }

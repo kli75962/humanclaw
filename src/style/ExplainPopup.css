@@ -279,3 +279,109 @@
   transition: opacity 0.1s;
 }
 .explain-float-btn:hover { opacity: 0.85; }
+
+/* ── Wallpaper transparency effects for ExplainPopup ── */
+.app-root--wallpaper .explain-popup {
+  background: transparent;
+  backdrop-filter: blur(10px);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+.app-root--wallpaper .explain-header {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .explain-title {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .explain-icon-btn {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.app-root--wallpaper .explain-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .explain-icon-btn--done {
+  color: rgba(59, 130, 246, 0.9);
+}
+
+.app-root--wallpaper .explain-selected {
+  background: transparent;
+}
+
+.app-root--wallpaper .explain-selected-label {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.app-root--wallpaper .explain-selected-text {
+  background: transparent;
+  border-color: rgba(59, 130, 246, 0.4);
+  backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .explain-body {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .explain-thinking {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.app-root--wallpaper .explain-message--user {
+  background: rgba(59, 130, 246, 0.3);
+  color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.app-root--wallpaper .explain-message--assistant {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .explain-footer {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .explain-input {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .explain-input:focus {
+  border-color: rgba(59, 130, 246, 0.6);
+}
+
+.app-root--wallpaper .explain-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.app-root--wallpaper .explain-send-btn {
+  background: rgba(59, 130, 246, 0.3);
+  color: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.app-root--wallpaper .explain-send-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.5);
+  border-color: rgba(59, 130, 246, 0.6);
+}
+
+.app-root--wallpaper .explain-float-btn {
+  background: rgba(59, 130, 246, 0.4);
+  color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(59, 130, 246, 0.5);
+}

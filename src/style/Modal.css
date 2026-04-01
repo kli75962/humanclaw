@@ -63,6 +63,43 @@
   padding: 16px;
 }
 
+/* ── Wallpaper transparency effects for Modal ── */
+.app-root--wallpaper .pc-modal-overlay {
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(8px);
+}
+
+.app-root--wallpaper .pc-modal {
+  background: transparent;
+  backdrop-filter: blur(10px);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.2);
+}
+
+.app-root--wallpaper .pc-modal-header {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.app-root--wallpaper .pc-modal-title {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .pc-modal-close {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.app-root--wallpaper .pc-modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.app-root--wallpaper .pc-modal-body {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+}
+
 @media (max-width: 640px) {
   .pc-modal-overlay {
     padding: 12px;
