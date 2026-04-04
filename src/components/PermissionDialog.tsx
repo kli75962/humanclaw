@@ -10,8 +10,7 @@ export interface PermissionRequest {
 }
 
 const PERMISSION_LABELS: Record<string, string> = {
-  mouse_control:   'Mouse Control',
-  keyboard_input:  'Keyboard Input',
+  shell_execution: 'Run Commands',
   take_screenshot: 'Screenshot',
   launch_app:      'Open URL / App',
 };
@@ -22,20 +21,17 @@ function str(v: unknown): string {
 
 function buildDescription(tool: string, args: Record<string, unknown> = {}): { summary: string; detail?: string } {
   switch (tool) {
-    case 'pc_mouse_click': {
-      const btn = args.button ?? 'left';
-      const dbl = args.double ? ' (double-click)' : '';
-      const pos = args.x != null ? ` at (${args.x}, ${args.y})` : '';
-      return { summary: `Click ${btn} mouse button${dbl}${pos}` };
+    case 'system_run': {
+      const cmd = str(args.command);
+      const cmdArgs = Array.isArray(args.args) ? args.args.map(str).join(' ') : '';
+      return { summary: 'Run system command', detail: cmdArgs ? `${cmd} ${cmdArgs}` : cmd };
     }
-    case 'pc_type_text':
-      return { summary: 'Type text into the focused window', detail: str(args.text) };
     case 'pc_screenshot': {
       const d = args.display ?? 0;
       return { summary: `Capture screenshot of display ${d}` };
     }
     case 'pc_open_url':
-      return { summary: 'Open URL or file', detail: str(args.url) };
+      return { summary: 'Open URL in browser', detail: str(args.url) };
     default:
       return { summary: `Use tool: ${tool}` };
   }

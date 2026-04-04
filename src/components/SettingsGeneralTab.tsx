@@ -304,15 +304,12 @@ function ModelConfigPanel({
 // ── GeneralTab ─────────────────────────────────────────────────────────────────
 
 const PERM_ROWS: { field: keyof PcPermissions; label: string; subtitle: string }[] = [
-  { field: 'mouse_control',   label: 'Mouse Control',  subtitle: 'Click on screen' },
-  { field: 'keyboard_input',  label: 'Keyboard Input', subtitle: 'Type text' },
-  { field: 'take_screenshot', label: 'Screenshot',     subtitle: 'Capture the screen' },
+  { field: 'shell_execution', label: 'Run Commands',   subtitle: 'Execute shell commands via system_run' },
   { field: 'launch_app',      label: 'Open URL / App', subtitle: 'Open URLs and files with system launcher' },
+  { field: 'take_screenshot', label: 'Screenshot',     subtitle: 'Capture the screen for verification' },
 ];
 
 const DEFAULT_PC_PERMS: PcPermissions = {
-  mouse_control:   'allow_all',
-  keyboard_input:  'allow_all',
   take_screenshot: 'allow_all',
   launch_app:      'ask_before_use',
   shell_execution: 'ask_before_use',

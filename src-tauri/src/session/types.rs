@@ -16,10 +16,6 @@ fn default_ask()   -> PermissionState { PermissionState::AskBeforeUse }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PcPermissions {
     #[serde(default = "default_allow")]
-    pub mouse_control: PermissionState,
-    #[serde(default = "default_allow")]
-    pub keyboard_input: PermissionState,
-    #[serde(default = "default_allow")]
     pub take_screenshot: PermissionState,
     #[serde(default = "default_ask")]
     pub launch_app: PermissionState,
@@ -32,8 +28,6 @@ pub struct PcPermissions {
 impl Default for PcPermissions {
     fn default() -> Self {
         Self {
-            mouse_control:   PermissionState::AllowAll,
-            keyboard_input:  PermissionState::AllowAll,
             take_screenshot: PermissionState::AllowAll,
             launch_app:      PermissionState::AskBeforeUse,
             shell_execution: PermissionState::AskBeforeUse,

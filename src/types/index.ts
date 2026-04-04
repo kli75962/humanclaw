@@ -161,11 +161,8 @@ export interface AgentStatusPayload {
 export type PermissionState = 'allow_all' | 'ask_before_use' | 'not_allow';
 
 export interface PcPermissions {
-  mouse_control:   PermissionState;
-  keyboard_input:  PermissionState;
   take_screenshot: PermissionState;
   launch_app:      PermissionState;
-  /** Permission for system_run (direct shell execution). Defaults to ask_before_use. */
   shell_execution: PermissionState;
 }
 

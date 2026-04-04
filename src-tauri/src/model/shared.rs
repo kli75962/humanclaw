@@ -63,7 +63,7 @@ pub async fn build_base_prompt(app: &AppHandle, character: Option<&CharacterOver
     match cfg.device.device_type {
         DeviceType::Desktop => {
             buf.push_str("Running on: Desktop PC.\n");
-            buf.push_str("Default to pc_* tools (pc_file_write, pc_file_read, pc_file_delete, pc_run_command, pc_screenshot, pc_mouse_move, pc_mouse_click, pc_type_text, pc_key_press) for local tasks.\n");
+            buf.push_str("Available PC tools: system_run (primary), pc_open_url, pc_screenshot (verify only), pc_get_platform.\n");
             buf.push_str("Phone tools (tap, swipe, get_screen, etc.) require a paired Android device.");
         }
         DeviceType::Android => {

@@ -1,4 +1,5 @@
 use futures_util::StreamExt;
+use tokio::time::{timeout, Duration};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter};
 
@@ -51,7 +52,17 @@ async fn stream_once(
     let mut accumulated_tool_calls: Vec<OllamaToolCall> = Vec::new();
     let mut final_role = "assistant".to_string();
 
-    while let Some(chunk_result) = byte_stream.next().await {
+    // 120 s idle timeout per chunk — prevents indefinite hang when a model stalls mid-stream.
+    const CHUNK_IDLE_SECS: u64 = 120;
+
+    loop {
+        let next = timeout(Duration::from_secs(CHUNK_IDLE_SECS), byte_stream.next()).await;
+        let chunk_result = match next {
+            Ok(Some(r)) => r,
+            Ok(None) => break,                       // stream ended normally
+            Err(_) => return Err(format!("Ollama stream timed out after {CHUNK_IDLE_SECS}s — model may be too slow or stalled")),
+        };
+
         if should_cancel(app) {
             return Err("CANCELLED".to_string());
         }
@@ -80,7 +91,7 @@ async fn stream_once(
 
             if parsed.done { break; }
         }
-    }
+    } // end loop
 
     Ok(OllamaMessage {
         role: final_role,
@@ -106,11 +117,8 @@ fn truncate_tool_output(tool_name: &str, output: String) -> String {
     // Never truncate data URLs — they are base64 images and must stay intact
     // so tool_message() can move them to the `images` field correctly.
     if output.starts_with("data:") { return output; }
-    // UI element lists can be large; give them a higher budget so the LLM
-    // sees enough elements to find the target (e.g. video links on YouTube).
-    let limit = if tool_name == "pc_ui_elements" { 10_000 } else { MAX_TOOL_OUTPUT_CHARS };
-    if output.len() <= limit { return output; }
-    format!("{}…[truncated, {} chars total]", &output[..limit], output.len())
+    if output.len() <= MAX_TOOL_OUTPUT_CHARS { return output; }
+    format!("{}…[truncated, {} chars total]", &output[..MAX_TOOL_OUTPUT_CHARS], output.len())
 }
 
 /// Tauri command — streams a chat completion from the local Ollama server with

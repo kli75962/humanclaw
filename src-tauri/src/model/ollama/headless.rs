@@ -73,9 +73,8 @@ const MAX_TOOL_HISTORY_MSGS: usize = 8;
 fn truncate_tool_output(tool_name: &str, output: String) -> String {
     // Never truncate data URLs — they are base64 images and must stay intact.
     if output.starts_with("data:") { return output; }
-    let limit = if tool_name == "pc_ui_elements" { 10_000 } else { MAX_TOOL_OUTPUT_CHARS };
-    if output.len() <= limit { return output; }
-    format!("{}…[truncated, {} chars total]", &output[..limit], output.len())
+    if output.len() <= MAX_TOOL_OUTPUT_CHARS { return output; }
+    format!("{}…[truncated, {} chars total]", &output[..MAX_TOOL_OUTPUT_CHARS], output.len())
 }
 
 /// Run a full agentic loop without emitting Tauri events.

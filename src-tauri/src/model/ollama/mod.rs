@@ -11,5 +11,10 @@ use std::sync::OnceLock;
 static OLLAMA_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
 pub fn ollama_client() -> &'static reqwest::Client {
-    OLLAMA_CLIENT.get_or_init(reqwest::Client::new)
+    OLLAMA_CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(30))
+            .build()
+            .expect("failed to build Ollama client")
+    })
 }
