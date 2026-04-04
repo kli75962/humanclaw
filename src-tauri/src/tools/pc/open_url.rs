@@ -5,12 +5,12 @@ use crate::tools::types::ToolResult;
 pub fn execute(tool_name: &str, args: &Value) -> ToolResult {
     let url = match args.get("url").and_then(Value::as_str) {
         Some(u) if !u.is_empty() => u,
-        _ => return ToolResult { tool_name: tool_name.to_string(), success: false, output: "url is required".into() },
+        _ => return ToolResult::err(tool_name, "INVALID_ARGS", "url is required"),
     };
 
     match open_url(url) {
-        Ok(msg) => ToolResult { tool_name: tool_name.to_string(), success: true,  output: msg },
-        Err(e)  => ToolResult { tool_name: tool_name.to_string(), success: false, output: e },
+        Ok(msg) => ToolResult::ok(tool_name, msg),
+        Err(e)  => ToolResult::err(tool_name, "EXECUTION_FAILED", e),
     }
 }
 

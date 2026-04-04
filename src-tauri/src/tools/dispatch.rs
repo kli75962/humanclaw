@@ -46,12 +46,11 @@ async fn forward_to_android(app: &AppHandle, name: &str, args: &Value) -> ToolRe
     let cfg = store::bootstrap(app);
     let peer = cfg.paired_devices.first();
     let Some(peer) = peer else {
-        return ToolResult {
-            tool_name: name.to_string(),
-            success: false,
-            output: "No paired Android device. Pair a device first via Settings -> Pair with QR code."
-                .to_string(),
-        };
+        return ToolResult::err(
+            name,
+            "DEVICE_NOT_FOUND",
+            "No paired Android device. Pair a device first via Settings -> Pair with QR code.",
+        );
     };
 
     let url = format!("http://{}/tool", peer.address);
@@ -74,23 +73,12 @@ async fn forward_to_android(app: &AppHandle, name: &str, args: &Value) -> ToolRe
                 tool_name: name.to_string(),
                 success: r.success,
                 output: r.output,
+                error_code: None,
             },
-            Err(e) => ToolResult {
-                tool_name: name.to_string(),
-                success: false,
-                output: format!("Invalid response from phone: {e}"),
-            },
+            Err(e) => ToolResult::err(name, "INVALID_RESPONSE", format!("Invalid response from phone: {e}")),
         },
-        Ok(resp) => ToolResult {
-            tool_name: name.to_string(),
-            success: false,
-            output: format!("Phone returned {}", resp.status()),
-        },
-        Err(e) => ToolResult {
-            tool_name: name.to_string(),
-            success: false,
-            output: format!("Could not reach phone at {}: {e}", peer.address),
-        },
+        Ok(resp) => ToolResult::err(name, "DEVICE_ERROR", format!("Phone returned {}", resp.status())),
+        Err(e)   => ToolResult::err(name, "DEVICE_UNREACHABLE", format!("Could not reach phone at {}: {e}", peer.address)),
     }
 }
 
@@ -110,11 +98,7 @@ async fn call_kotlin_tool(app: &AppHandle, name: &str, args: &Value) -> ToolResu
         .run_mobile_plugin::<ToolResult>("executeTool", payload)
     {
         Ok(result) => result,
-        Err(e) => ToolResult {
-            tool_name: name.to_string(),
-            success: false,
-            output: format!("Plugin error: {e}"),
-        },
+        Err(e) => ToolResult::err(name, "PLUGIN_ERROR", format!("Plugin error: {e}")),
     }
 }
 
@@ -129,51 +113,38 @@ pub async fn execute_tool_with_context(
     context: &ToolExecutionContext,
 ) -> ToolResult {
     match name {
-        "memory" => ToolResult {
-            tool_name: name.to_string(),
-            success: true,
-            output: execute_memory_tool(app, args, context),
-        },
+        "memory" => ToolResult::ok(name, execute_memory_tool(app, args, context)),
         "send_message" => {
             let content = args.get("content").and_then(Value::as_str).unwrap_or("");
             if !content.is_empty() {
                 app.emit("ollama-injected-message", serde_json::json!({ "content": content })).ok();
             }
-            ToolResult {
-                tool_name: name.to_string(),
-                success: true,
-                output: "ok: message delivered to user".to_string(),
-            }
+            ToolResult::ok(name, "ok: message delivered to user")
         }
         "create_skill" => {
             let skill_name = args.get("name").and_then(Value::as_str).unwrap_or("").trim().to_string();
             let content = args.get("content").and_then(Value::as_str).unwrap_or("");
 
-            // Validate name
             if !skill_name.starts_with("persona_") || skill_name.len() < 9 {
-                return ToolResult {
-                    tool_name: "create_skill".to_string(),
-                    success: false,
-                    output: "Skill name must start with 'persona_' followed by at least one character.".to_string(),
-                };
+                return ToolResult::err(
+                    "create_skill",
+                    "INVALID_ARGS",
+                    "Skill name must start with 'persona_' followed by at least one character.",
+                );
             }
             if !skill_name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_') {
-                return ToolResult {
-                    tool_name: "create_skill".to_string(),
-                    success: false,
-                    output: "Skill name must contain only lowercase letters, digits, and underscores.".to_string(),
-                };
+                return ToolResult::err(
+                    "create_skill",
+                    "INVALID_ARGS",
+                    "Skill name must contain only lowercase letters, digits, and underscores.",
+                );
             }
 
             match app.path().app_data_dir() {
                 Ok(data_dir) => {
                     let skill_dir = data_dir.join("custom_personas").join(&skill_name);
                     if let Err(e) = std::fs::create_dir_all(&skill_dir) {
-                        return ToolResult {
-                            tool_name: "create_skill".to_string(),
-                            success: false,
-                            output: format!("Failed to create directory: {e}"),
-                        };
+                        return ToolResult::err("create_skill", "EXECUTION_FAILED", format!("Failed to create directory: {e}"));
                     }
                     match std::fs::write(skill_dir.join("SKILL.md"), content) {
                         Ok(_) => {
@@ -181,32 +152,19 @@ pub async fn execute_tool_with_context(
                             tauri::async_runtime::spawn(async move {
                                 crate::bridge::persona_sync::sync_to_all_peers(&app_clone).await;
                             });
-                            ToolResult {
-                                tool_name: "create_skill".to_string(),
-                                success: true,
-                                output: format!("Persona '{skill_name}' saved. The user can now select it from Settings → Persona."),
-                            }
+                            ToolResult::ok(
+                                "create_skill",
+                                format!("Persona '{skill_name}' saved. The user can now select it from Settings → Persona."),
+                            )
                         }
-                        Err(e) => ToolResult {
-                            tool_name: "create_skill".to_string(),
-                            success: false,
-                            output: format!("Failed to write SKILL.md: {e}"),
-                        },
+                        Err(e) => ToolResult::err("create_skill", "EXECUTION_FAILED", format!("Failed to write SKILL.md: {e}")),
                     }
                 }
-                Err(e) => ToolResult {
-                    tool_name: "create_skill".to_string(),
-                    success: false,
-                    output: format!("Could not resolve app data directory: {e}"),
-                },
+                Err(e) => ToolResult::err("create_skill", "EXECUTION_FAILED", format!("Could not resolve app data directory: {e}")),
             }
         }
         _ if is_phone_control_tool(name) => execute_phone_control_tool(app, name, args).await,
         _ if super::pc::is_pc_control_tool(name) => super::pc::execute_pc_tool(app, name, args).await,
-        _ => ToolResult {
-            tool_name: name.to_string(),
-            success: false,
-            output: format!("Unknown tool: {name}"),
-        },
+        _ => ToolResult::err(name, "NOT_FOUND", format!("Unknown tool: {name}")),
     }
 }

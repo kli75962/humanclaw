@@ -1,0 +1,26 @@
+{
+  "type": "function",
+  "function": {
+    "name": "system_run",
+    "description": "Execute a system command directly on the PC without UI interaction. Use this as the PRIMARY method for PC tasks — it is faster, more reliable, and accessibility-friendly compared to screenshot loops. Prefer system_run over pc_activate/pc_set_text whenever the task can be expressed as a command (e.g. open a file, run a script, query system state). Requires shell_execution permission.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "The executable or command to run (e.g. 'xdg-open', 'bash', 'powershell', 'python3')."
+        },
+        "args": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Arguments to pass to the command. Each argument is a separate string."
+        },
+        "timeout_secs": {
+          "type": "number",
+          "description": "Maximum seconds to wait before killing the process (default: 30)."
+        }
+      },
+      "required": ["command"]
+    }
+  }
+}

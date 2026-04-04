@@ -1,7 +1,18 @@
 import { Fragment, memo, useMemo } from 'react';
-import { Sparkles, RotateCcw } from 'lucide-react';
+import { Sparkles, RotateCcw, File } from 'lucide-react';
 import type { ChatMessageProps } from '../types';
 import '../style/ChatMessage.css';
+
+/** Extract <file name="...">...</file> blocks from a user message.
+ *  Returns the filenames and the remaining text (file content stripped). */
+function parseFileAttachments(content: string): { files: string[]; text: string } {
+  const files: string[] = [];
+  const cleaned = content.replace(/<file name="([^"]+)">([\s\S]*?)<\/file>/g, (_m, name: string) => {
+    files.push(name);
+    return '';
+  });
+  return { files, text: cleaned.trim() };
+}
 
 export function formatAssistantText(raw: string): string {
   if (!raw) return raw;
@@ -54,8 +65,14 @@ export const ChatMessage = memo(function ChatMessage({ message, isLastMessage, i
   const isUser = message.role === 'user';
   const isStreaming = isThinking && isLastMessage && !isUser;
 
-  const parsed = useMemo(() => isUser ? parseQuoteBlock(message.content) : null, [isUser, message.content]);
-  const bodyContent = parsed ? parsed.rest : message.content;
+  const attachments = useMemo(
+    () => isUser ? parseFileAttachments(message.content) : null,
+    [isUser, message.content],
+  );
+
+  const contentAfterFiles = attachments ? attachments.text : message.content;
+  const parsed = useMemo(() => isUser ? parseQuoteBlock(contentAfterFiles) : null, [isUser, contentAfterFiles]);
+  const bodyContent = parsed ? parsed.rest : contentAfterFiles;
 
   const displayContent = useMemo(
     () => (isUser ? bodyContent : formatAssistantText(bodyContent)),
@@ -71,6 +88,16 @@ export const ChatMessage = memo(function ChatMessage({ message, isLastMessage, i
       )}
 
       <div className={`chat-bubble${isUser ? ' chat-bubble--user' : ' chat-bubble--assistant'}`}>
+        {attachments && attachments.files.length > 0 && (
+          <div className="chat-file-attachments">
+            {attachments.files.map((name, i) => (
+              <div key={i} className="chat-file-chip">
+                <File size={14} />
+                <span className="chat-file-chip-name">{name}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {parsed && (
           <div className="chat-post-quote">
             <span className="chat-post-quote-author">{parsed.authorName}</span>

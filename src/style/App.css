@@ -78,6 +78,34 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  position: relative;
+}
+
+/* ── File drag-drop overlay ── */
+.drag-file-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.drag-file-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: var(--color-text);
+  opacity: 0.9;
+}
+
+.drag-file-overlay-text {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .app-content {

@@ -86,6 +86,33 @@
   background: var(--color-hover);
 }
 
+/* ── File attachments in user bubble ── */
+.chat-file-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.chat-file-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 8px;
+  max-width: 240px;
+}
+
+.chat-file-chip-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chat-post-quote {
   display: flex;
   flex-direction: column;

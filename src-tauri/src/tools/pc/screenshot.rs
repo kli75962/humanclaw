@@ -8,19 +8,14 @@ pub fn execute(tool_name: &str, args: &Value) -> ToolResult {
         Ok(jpg) => {
             use base64::Engine;
             let b64 = base64::engine::general_purpose::STANDARD.encode(&jpg);
-            ToolResult {
-                tool_name: tool_name.to_string(),
-                success: true,
-                output: format!("data:image/jpeg;base64,{b64}"),
-            }
+            ToolResult::ok(tool_name, format!("data:image/jpeg;base64,{b64}"))
         }
-        Err(e) => ToolResult { tool_name: tool_name.to_string(), success: false, output: e },
+        Err(e) => ToolResult::err(tool_name, "EXECUTION_FAILED", e),
     }
 }
 
 fn capture_jpg(display: usize) -> Result<Vec<u8>, String> {
-    use screenshots::image::{DynamicImage, ImageFormat, codecs::jpeg::JpegEncoder, imageops::FilterType};
-    use std::io::Cursor;
+    use screenshots::image::{DynamicImage, codecs::jpeg::JpegEncoder, imageops::FilterType};
 
     let screens = screenshots::Screen::all().map_err(|e| e.to_string())?;
     let screen  = screens.get(display).ok_or_else(|| format!("Display {display} not found"))?;

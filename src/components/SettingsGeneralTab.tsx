@@ -79,7 +79,6 @@ function ModelConfigPanel({
   const [ollamaModel, setOllamaModel] = useState(currentModel);
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [ollamaModelsLoading, setOllamaModelsLoading] = useState(false);
-  const [ollamaModelsError, setOllamaModelsError] = useState('');
   const [saveMsg, setSaveMsg] = useState('');
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -111,13 +110,13 @@ function ModelConfigPanel({
     const port = colonIdx > 0 ? parseInt(hostPort.slice(colonIdx + 1), 10) : 11434;
     if (!host || !Number.isFinite(port)) return;
     setOllamaModelsLoading(true);
-    setOllamaModelsError('');
+    setOllamaModels([]);
     try {
       const models = await invoke<string[]>('list_models_at', { host, port });
       setOllamaModels(models);
       if (models.length > 0 && !models.includes(ollamaModel)) setOllamaModel(models[0]);
-    } catch (e) {
-      setOllamaModelsError(e instanceof Error ? e.message : String(e));
+    } catch {
+      // silently ignore — UI shows "No model detected"
     } finally {
       setOllamaModelsLoading(false);
     }
@@ -257,11 +256,6 @@ function ModelConfigPanel({
             </button>
           </div>
           <p className="settings-modal-field-label">Model</p>
-          {ollamaModelsError && (
-            <p className="settings-save-msg--err" style={{ marginTop: 6, fontSize: 11 }}>
-              {ollamaModelsError}
-            </p>
-          )}
           {ollamaModels.length > 0 ? (
             <div ref={modelMenuRef} className={`settings-model-menu${isModelMenuOpen ? ' settings-model-menu--open' : ''}`} style={{ marginTop: 6 }}>
               <button
@@ -289,14 +283,11 @@ function ModelConfigPanel({
               )}
             </div>
           ) : (
-            <input
-              value={ollamaModel}
-              onChange={(e) => setOllamaModel(e.target.value)}
-              onBlur={() => handleOllamaModelSelect(ollamaModel)}
-              placeholder="llama3.2:latest"
-              className="settings-popup-input"
-              style={{ marginTop: 6 }}
-            />
+            <div className="settings-model-trigger settings-model-trigger--disabled" style={{ marginTop: 6 }}>
+              <span className="settings-model-trigger-label settings-model-trigger-label--muted">
+                {ollamaModelsLoading ? 'Loading…' : 'No model detected'}
+              </span>
+            </div>
           )}
         </>
       )}
@@ -324,6 +315,7 @@ const DEFAULT_PC_PERMS: PcPermissions = {
   keyboard_input:  'allow_all',
   take_screenshot: 'allow_all',
   launch_app:      'ask_before_use',
+  shell_execution: 'ask_before_use',
 };
 
 interface GeneralTabProps {
@@ -648,6 +640,10 @@ export function GeneralTab({
         </div>
       </Card>
 
+      <SectionFooter>
+        {personaSaveMsg ? ` ${personaSaveMsg}` : ''}
+      </SectionFooter>
+
       {onAddPersona && (<>
         <SectionHeader>Add Persona</SectionHeader>
         <Card>
@@ -677,10 +673,7 @@ export function GeneralTab({
             </div>
           )}
         </Card>
-        </>)}
-      <SectionFooter>
-        {personaSaveMsg ? ` ${personaSaveMsg}` : ''}
-      </SectionFooter></>}
+        </>)}</>}
 
       {!chatMode && (
         <>

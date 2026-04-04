@@ -2,7 +2,7 @@
   "type": "function",
   "function": {
     "name": "pc_screenshot",
-    "description": "Capture a screenshot of a PC display and return it as a base64 PNG data URL.",
+    "description": "Capture a screenshot of a PC display for visual verification only. Do NOT use this as the primary way to control the PC — use system_run or pc_ui_elements + pc_activate instead. Reserve pc_screenshot for: confirming a task completed visually, reading content that has no accessible text, or diagnosing unexpected UI states.",
     "parameters": {
       "type": "object",
       "properties": {

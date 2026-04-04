@@ -69,6 +69,10 @@ export interface InputBarProps {
 export interface InputBarHandle {
   setInput: (text: string) => void;
   getInput: () => string;
+  /** Attach a browser File object (from the file picker). */
+  attachFile: (file: File) => void;
+  /** Attach a file by its OS path string (from Tauri drag-drop). */
+  attachFilePath: (path: string) => void;
 }
 
 export interface ModalProps {
@@ -161,6 +165,8 @@ export interface PcPermissions {
   keyboard_input:  PermissionState;
   take_screenshot: PermissionState;
   launch_app:      PermissionState;
+  /** Permission for system_run (direct shell execution). Defaults to ask_before_use. */
+  shell_execution: PermissionState;
 }
 
 /** Session config returned by the Rust `get_session` command. */

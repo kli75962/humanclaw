@@ -1,7 +1,11 @@
 #[cfg(not(target_os = "android"))]
 mod activate;
 #[cfg(not(target_os = "android"))]
+mod open_url;
+#[cfg(not(target_os = "android"))]
 mod screenshot;
+#[cfg(not(target_os = "android"))]
+mod system_run;
 #[cfg(not(target_os = "android"))]
 mod ui_elements;
 
@@ -15,25 +19,26 @@ use crate::tools::types::ToolResult;
 pub fn is_pc_control_tool(name: &str) -> bool {
     matches!(
         name,
-        "pc_activate" | "pc_set_text" | "pc_screenshot"
-            | "pc_ui_elements" | "pc_get_platform"
+        "pc_activate"
+            | "pc_set_text"
+            | "pc_screenshot"
+            | "pc_ui_elements"
+            | "pc_get_platform"
+            | "pc_open_url"
+            | "system_run"
     )
 }
 
 fn permission_denied(tool_name: &str) -> ToolResult {
-    ToolResult {
-        tool_name: tool_name.to_string(),
-        success: false,
-        output: format!("Permission denied: '{tool_name}' is not allowed in Settings → PC Control."),
-    }
+    ToolResult::err(
+        tool_name,
+        "PERMISSION_DENIED",
+        format!("Permission denied: '{tool_name}' is not allowed in Settings → PC Control."),
+    )
 }
 
 fn not_available(tool_name: &str) -> ToolResult {
-    ToolResult {
-        tool_name: tool_name.to_string(),
-        success: false,
-        output: "PC control tools are not available on this platform.".to_string(),
-    }
+    ToolResult::err(tool_name, "NOT_AVAILABLE", "PC control tools are not available on this platform.")
 }
 
 async fn check_permission(app: &AppHandle, tool_name: &str, field: &str, args: &Value) -> bool {
@@ -44,6 +49,7 @@ async fn check_permission(app: &AppHandle, tool_name: &str, field: &str, args: &
         "keyboard_input"  => &p.keyboard_input,
         "take_screenshot" => &p.take_screenshot,
         "launch_app"      => &p.launch_app,
+        "shell_execution" => &p.shell_execution,
         _                 => return false,
     };
     match state {
@@ -56,11 +62,7 @@ async fn check_permission(app: &AppHandle, tool_name: &str, field: &str, args: &
 fn get_platform_info() -> ToolResult {
     use std::env::consts;
     let info = serde_json::json!({ "os": consts::OS, "arch": consts::ARCH });
-    ToolResult {
-        tool_name: "pc_get_platform".to_string(),
-        success:   true,
-        output:    info.to_string(),
-    }
+    ToolResult::ok("pc_get_platform", info.to_string())
 }
 
 pub async fn execute_pc_tool(app: &AppHandle, name: &str, args: &Value) -> ToolResult {
@@ -78,6 +80,8 @@ pub async fn execute_pc_tool(app: &AppHandle, name: &str, args: &Value) -> ToolR
             "pc_set_text"    => "keyboard_input",
             "pc_screenshot"  => "take_screenshot",
             "pc_ui_elements" => "take_screenshot",
+            "pc_open_url"    => "launch_app",
+            "system_run"     => "shell_execution",
             _                => return not_available(name),
         };
 
@@ -90,6 +94,8 @@ pub async fn execute_pc_tool(app: &AppHandle, name: &str, args: &Value) -> ToolR
             "pc_set_text"    => activate::execute_set_text(name, args).await,
             "pc_screenshot"  => screenshot::execute(name, args),
             "pc_ui_elements" => ui_elements::execute(name, args).await,
+            "pc_open_url"    => open_url::execute(name, args),
+            "system_run"     => system_run::execute(name, args).await,
             _                => not_available(name),
         }
     }

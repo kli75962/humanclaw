@@ -8,11 +8,11 @@ pub async fn execute_activate(tool_name: &str, args: &Value) -> ToolResult {
     let window = args.get("window_title").and_then(Value::as_str).unwrap_or("");
     let name   = args.get("name").and_then(Value::as_str).unwrap_or("");
     if name.is_empty() {
-        return ToolResult { tool_name: tool_name.to_string(), success: false, output: "name is required".into() };
+        return ToolResult::err(tool_name, "INVALID_ARGS", "name is required");
     }
     match do_activate(window, name).await {
-        Ok(msg) => ToolResult { tool_name: tool_name.to_string(), success: true,  output: msg },
-        Err(e)  => ToolResult { tool_name: tool_name.to_string(), success: false, output: e },
+        Ok(msg) => ToolResult::ok(tool_name, msg),
+        Err(e)  => ToolResult::err(tool_name, "NOT_FOUND", e),
     }
 }
 
@@ -21,11 +21,11 @@ pub async fn execute_set_text(tool_name: &str, args: &Value) -> ToolResult {
     let name   = args.get("name").and_then(Value::as_str).unwrap_or("");
     let text   = args.get("text").and_then(Value::as_str).unwrap_or("");
     if name.is_empty() {
-        return ToolResult { tool_name: tool_name.to_string(), success: false, output: "name is required".into() };
+        return ToolResult::err(tool_name, "INVALID_ARGS", "name is required");
     }
     match do_set_text(window, name, text).await {
-        Ok(msg) => ToolResult { tool_name: tool_name.to_string(), success: true,  output: msg },
-        Err(e)  => ToolResult { tool_name: tool_name.to_string(), success: false, output: e },
+        Ok(msg) => ToolResult::ok(tool_name, msg),
+        Err(e)  => ToolResult::err(tool_name, "NOT_FOUND", e),
     }
 }
 

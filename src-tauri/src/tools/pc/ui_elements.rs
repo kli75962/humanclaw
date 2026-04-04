@@ -25,11 +25,11 @@ pub async fn execute(tool_name: &str, args: &Value) -> ToolResult {
         Ok(els) => {
             let output = serde_json::to_string(&els).unwrap_or_else(|_| "[]".to_string());
             eprintln!("[pc_ui_elements] {} elements:\n{output}", els.len());
-            ToolResult { tool_name: tool_name.to_string(), success: true, output }
+            ToolResult::ok(tool_name, output)
         },
         Err(e) => {
             eprintln!("[pc_ui_elements] error: {e}");
-            ToolResult { tool_name: tool_name.to_string(), success: false, output: e }
+            ToolResult::err(tool_name, "EXECUTION_FAILED", e)
         },
     }
 }

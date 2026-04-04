@@ -59,8 +59,10 @@
 .inputbar-btn:hover {
   background: var(--color-hover);
 }
-.inputbar-btn:disabled {
+.inputbar-btn:disabled,
+.inputbar-btn--disabled {
   opacity: 0.4;
+  pointer-events: none;
 }
 
 .inputbar-stt-btn {
@@ -78,6 +80,74 @@
 
 .inputbar-send-btn {
   color: #60a5fa;
+}
+
+.inputbar-attach-btn {
+  color: var(--color-text-2);
+}
+
+/* ── Attached file chips ── */
+.inputbar-files {
+  max-width: 768px;
+  margin: 0 auto 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 16px;
+}
+
+.inputbar-file-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--color-text-2);
+  max-width: 220px;
+}
+
+.inputbar-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inputbar-file-chip--loading {
+  opacity: 0.7;
+}
+
+.inputbar-file-chip--error {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.inputbar-file-spin {
+  animation: inputbar-spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes inputbar-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.inputbar-file-remove {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-3);
+  padding: 1px;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.inputbar-file-remove:hover {
+  color: var(--color-text-2);
 }
 
 .inputbar-quote-preview {

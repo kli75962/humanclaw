@@ -159,7 +159,8 @@ export function useOllamaChat(
       const newId = crypto.randomUUID();
       currentChatIdRef.current = newId;
       internalCreateRef.current = true;
-      onChatCreatedRef.current(newId, text.slice(0, 50));
+      const titleText = text.replace(/<file name="[^"]*">[\s\S]*?<\/file>/g, '').trim();
+      onChatCreatedRef.current(newId, titleText.slice(0, 50));
     }
 
     const activeChatId = currentChatIdRef.current!;

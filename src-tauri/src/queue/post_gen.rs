@@ -176,6 +176,7 @@ impl PostGenEntry {
     }
 
     /// Check if all comments are in a terminal state (Created or Failed).
+    #[allow(dead_code)]
     pub fn all_comments_done(&self) -> bool {
         self.comments.is_empty() || self.comments.iter().all(|c| c.state == CommentState::Created || c.state == CommentState::Failed)
     }
@@ -192,6 +193,7 @@ impl PostGenEntry {
     }
 
     /// Get total likes from tracked reactions.
+    #[allow(dead_code)]
     pub fn get_like_count(&self) -> u32 {
         self.likes.iter().filter(|l| l.did_like).count() as u32
     }
@@ -263,6 +265,7 @@ fn save_all(app: &AppHandle, entries: &[PostGenEntry]) -> Result<(), String> {
 // ── Mutations ────────────────────────────────────────────────────────────────
 
 /// Enqueue a new post generation task.
+#[allow(dead_code)]
 pub fn enqueue(
     app: &AppHandle,
     character_id: String,
@@ -299,6 +302,7 @@ pub fn save_queue_entry(app: &AppHandle, updated: PostGenEntry) -> Result<(), St
 }
 
 /// Update a single entry in the queue (only if it already exists).
+#[allow(dead_code)]
 pub fn update_entry(app: &AppHandle, updated: PostGenEntry) -> Result<(), String> {
     let mut all = load_all(app);
     for entry in &mut all {
@@ -337,6 +341,7 @@ pub fn cleanup_stale(app: &AppHandle) -> Result<u32, String> {
 }
 
 /// Remove all entries for a specific character (useful for cleanup).
+#[allow(dead_code)]
 pub fn remove_character_entries(app: &AppHandle, character_id: &str) -> Result<(), String> {
     let all = load_all(app);
     let kept: Vec<PostGenEntry> = all

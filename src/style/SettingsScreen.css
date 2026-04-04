@@ -214,6 +214,17 @@
   transform: rotate(180deg);
 }
 
+.settings-model-trigger--disabled {
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
+}
+
+.settings-model-trigger-label--muted {
+  color: var(--color-text-2);
+  font-style: italic;
+}
+
 .settings-model-dropdown {
   position: absolute;
   top: calc(100% + 8px);

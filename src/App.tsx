@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useOllamaChat } from './hooks/useOllamaChat';
 import { useCharacters } from './hooks/useCharacters';
 import { usePosts } from './hooks/usePosts';
@@ -17,7 +18,7 @@ import type { PermissionRequest as PermissionRequestData } from './components/Pe
 import { ExplainPopup } from './components/ExplainPopup';
 import { MemoChatView } from './components/MemoChatView';
 import type { WizardAnswers, MemoMeta } from './types';
-import { Bot, ChevronLeft, LayoutGrid, MessageCircle, Users } from 'lucide-react';
+import { Bot, ChevronLeft, File, LayoutGrid, MessageCircle, Users } from 'lucide-react';
 import { PostFeed } from './components/PostFeed';
 import type { ChatMeta, InputBarHandle, Message, Post } from './types';
 import './style/themes.css';
@@ -404,6 +405,33 @@ function App() {
 
   const handleOllamaEndpointChanged = useCallback(() => {}, []);
 
+  // ── File drag-drop via Tauri API ─────────────────────────────────────────
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let unlistenFn: (() => void) | null = null;
+    getCurrentWindow().onDragDropEvent((event) => {
+      if (event.payload.type === 'enter') {
+        setIsDraggingFile(true);
+      } else if (event.payload.type === 'leave') {
+        setIsDraggingFile(false);
+      } else if (event.payload.type === 'drop') {
+        setIsDraggingFile(false);
+        for (const path of event.payload.paths) {
+          inputBarRef.current?.attachFilePath(path);
+        }
+      }
+    }).then((fn) => {
+      if (cancelled) fn();
+      else unlistenFn = fn;
+    });
+    return () => {
+      cancelled = true;
+      unlistenFn?.();
+    };
+  }, []);
+
   const messageList = useMemo(() => {
     const lastUserMsgIdx = messages.reduce(
       (acc, m, i) => (m.role === 'user' ? i : acc),
@@ -532,6 +560,14 @@ function App() {
 
       {/* ── Right: main content ── */}
       <div className="app-right">
+        {isDraggingFile && (
+          <div className="drag-file-overlay">
+            <div className="drag-file-overlay-content">
+              <File size={48} strokeWidth={1.5} />
+              <span className="drag-file-overlay-text">Insert file</span>
+            </div>
+          </div>
+        )}
         {/* Content tabs — only when both chatMode and igMode are active */}
         {chatMode && igMode && (
           <div className="app-content-tabs">
