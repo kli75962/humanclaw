@@ -113,13 +113,16 @@ export interface SideMenuProps {
   onDeleteCharacter: (id: string) => void;
   igMode: boolean;
   onIgModeChange: (v: boolean) => void;
-  onAddPersona?: (answers: WizardAnswers) => void;
+  personaNotice?: { status: 'creating' | 'done' | 'interrupted'; displayName: string } | null;
+  onPersonaNoticeClose?: () => void;
 }
 
 export interface WizardAnswers {
   sex: string;
-  personality: string;
-  profession: string;
+  ageRange: string;
+  vibe: string;
+  world: string;
+  connectsBy: string;
   personaName: string;
 }
 

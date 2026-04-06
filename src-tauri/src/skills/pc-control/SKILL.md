@@ -1,17 +1,22 @@
 ---
 name: pc-control
-description: Control the user's PC by executing system commands directly. Use system_run as the primary tool; fall back to pc_screenshot only to verify results visually.
+description: Control the user's PC.
 compatibility: PhoneClaw (Tauri v2 Desktop agent)
 ---
 
 ## Core Principle
 
-Control this PC by running commands, not by simulating mouse clicks or reading pixel images. Every task should be achievable through `system_run`. Use `pc_screenshot` only after completing a task to confirm it worked.
+Control this PC by running commands. Every task should be achievable through `system_run`.
+Use ask_user() to gather structured information before proceeding — it shows clickable options and a text input directly in the chat. ONLY start executing after all required info is collected. Don't run any command and tools until you have fully understand user's request. 
+Only keep going when you have confirmed the previous steps, tool calls was successful. 
+Before remove anythings e.g files. You MUST confirm with user before proceed with showing everything of what you are going to remove first.
+
+When you want to gather more information from user, use ask_user() tool.
 
 ```
 system_run()    ← PRIMARY: run any command, script, or CLI tool
 pc_open_url()   ← open a URL in the default browser
-pc_screenshot() ← VERIFY ONLY: confirm the result visually
+pc_screenshot() ← use it when you need to see the screen
 pc_get_platform() ← check OS once at session start
 ```
 
@@ -38,45 +43,6 @@ Use for everything that can be expressed as a command:
 ❌ system_run(command: "bash -c ls ~/Downloads")
 ```
 
-**Timeout:** Default is 30 seconds. For long-running tasks, set `timeout_secs` higher or fire-and-forget with a short timeout.
-
----
-
-## pc_open_url — Open Browser
-
-```
-pc_open_url(url: "https://example.com")
-```
-
-Opens in the default browser. Faster than launching the browser through `system_run`.
-
----
-
-## pc_get_platform — Detect OS
-
-Call once at the start to adapt commands to the OS:
-
-```
-pc_get_platform() → { "os": "linux" | "windows" | "macos", "arch": "x86_64" | ... }
-```
-
-Use the result to choose the right commands:
-- Linux → `bash`, `xdg-open`, `notify-send`
-- Windows → `powershell`, `cmd /c start`
-
----
-
-## pc_screenshot — Verify Only
-
-Use `pc_screenshot` only to confirm that a task completed correctly, or when you must read content that commands cannot return (e.g. rendered UI state, image content).
-
-```
-1. system_run(...)          ← do the task
-2. pc_screenshot()          ← confirm it worked
-```
-
-Never use screenshots to decide what to do next — always prefer running a command to query state (`system_run("bash", ["-c", "cat ~/file.txt"])`).
-
 ---
 
 ## Recovery
@@ -95,6 +61,7 @@ Never use screenshots to decide what to do next — always prefer running a comm
 
 ## Output Format
 
-Report every step in plain text: what command you ran, what the output was, and what you will do next. Keep it conversational. Example:
+Report every step in plain text: what command you ran, what the output was, and what you will do next. Keep it conversational.
+Example:
 
 "I ran system_run with 'xdg-open Downloads' and the output was empty (success). I'll take a screenshot to confirm the file manager opened."

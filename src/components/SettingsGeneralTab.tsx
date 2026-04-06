@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Check, ChevronDown, ChevronRight, Cpu, Image, LayoutGrid, Monitor, Palette, Plus, RefreshCw, User } from 'lucide-react';
-import type { PcPermissions, PermissionState, SessionConfig, WizardAnswers } from '../types';
+import type { PcPermissions, PermissionState, SessionConfig } from '../types';
 import { Card, CardRow, SectionFooter, SectionHeader, SegmentControl } from './SettingsUI';
 import { PersonaWizard } from './PersonaWizard';
 import { BirthdayCalendar } from './BirthdayCalendar';
@@ -328,7 +328,6 @@ interface GeneralTabProps {
   onChatModeChange: (v: boolean) => void;
   igMode: boolean;
   onIgModeChange: (v: boolean) => void;
-  onAddPersona?: (answers: WizardAnswers) => void;
   setPcPermissions: (p: PcPermissions) => Promise<SessionConfig>;
 }
 
@@ -345,7 +344,6 @@ export function GeneralTab({
   onChatModeChange: _onChatModeChange,
   igMode,
   onIgModeChange,
-  onAddPersona,
   setPcPermissions,
 }: GeneralTabProps) {
   const [pcPerms, setPcPermsLocal] = useState<PcPermissions>(
@@ -371,6 +369,7 @@ export function GeneralTab({
   const personaTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const personaMenuRef = useRef<HTMLDivElement>(null);
   const [showAddPersona, setShowAddPersona] = useState(false);
+  const [personaBuilding, setPersonaBuilding] = useState(false);
 
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
   const themeMenuRef = useRef<HTMLDivElement>(null);
@@ -641,82 +640,107 @@ export function GeneralTab({
         {personaSaveMsg ? ` ${personaSaveMsg}` : ''}
       </SectionFooter>
 
-      {onAddPersona && (<>
-        <SectionHeader>Add Persona</SectionHeader>
-        <Card>
-          <CardRow onClick={() => setShowAddPersona((v) => !v)}>
-            <div className="settings-qr-row-left">
-              <div className="settings-icon-badge settings-icon-badge--emerald">
-                <Plus size={18} />
-              </div>
-              <div>
-                <p className="settings-item-title">Create new persona</p>
-                <p className="settings-item-subtitle">Let AI build a custom persona for you</p>
-              </div>
-            </div>
-            {showAddPersona
-              ? <ChevronDown size={18} className="settings-chevron" />
-              : <ChevronRight size={18} className="settings-chevron" />
-            }
-          </CardRow>
-          {showAddPersona && (
-            <div className="settings-inline-expand">
-              <PersonaWizard
-                onComplete={(answers) => {
-                  onAddPersona(answers);
-                  setShowAddPersona(false);
-                }}
-              />
-            </div>
-          )}
-        </Card>
-        </>)}</>}
+      </>}
 
-      {!chatMode && (
-        <>
-          <SectionHeader>PC Control</SectionHeader>
-          <Card>
-            <CardRow onClick={() => setShowPermConfig((v) => !v)}>
-              <div className="settings-qr-row-left">
-                <div className="settings-icon-badge settings-icon-badge--indigo">
-                  <Monitor size={18} />
+      <SectionHeader>Add Persona</SectionHeader>
+      <Card>
+        <CardRow onClick={() => { if (!personaBuilding) setShowAddPersona((v) => !v); }}>
+          <div className="settings-qr-row-left">
+            <div className="settings-icon-badge settings-icon-badge--emerald">
+              <Plus size={18} />
+            </div>
+            <div>
+              <p className="settings-item-title">Create new persona</p>
+              <p className="settings-item-subtitle">Let AI build a custom persona for you</p>
+            </div>
+          </div>
+          {!personaBuilding && (showAddPersona
+            ? <ChevronDown size={18} className="settings-chevron" />
+            : <ChevronRight size={18} className="settings-chevron" />
+          )}
+        </CardRow>
+        {showAddPersona && !personaBuilding && (
+          <div className="settings-inline-expand">
+            <PersonaWizard
+              onComplete={async (answers) => {
+                setShowAddPersona(false);
+                setPersonaBuilding(true);
+                document.dispatchEvent(new CustomEvent('persona-build-start', {
+                  detail: {
+                    displayName: answers.personaName === 'random' ? 'new persona' : answers.personaName,
+                    model,
+                    sex: answers.sex,
+                    ageRange: answers.ageRange,
+                    vibe: answers.vibe,
+                    world: answers.world,
+                    connectsBy: answers.connectsBy,
+                    personaName: answers.personaName,
+                  },
+                }));
+                try {
+                  await invoke('create_persona_background', {
+                    model,
+                    sex: answers.sex,
+                    ageRange: answers.ageRange,
+                    vibe: answers.vibe,
+                    world: answers.world,
+                    connectsBy: answers.connectsBy,
+                    personaName: answers.personaName,
+                  });
+                  // Rust already wrote the "done" status; App.tsx will pick it up via event
+                } catch {
+                  // Rust already wrote the "interrupted" status
+                } finally {
+                  setPersonaBuilding(false);
+                  document.dispatchEvent(new Event('persona-build-settled'));
+                }
+              }}
+            />
+          </div>
+        )}
+      </Card>
+
+      <SectionHeader>PC Control</SectionHeader>
+      <Card>
+        <CardRow onClick={() => setShowPermConfig((v) => !v)}>
+          <div className="settings-qr-row-left">
+            <div className="settings-icon-badge settings-icon-badge--indigo">
+              <Monitor size={18} />
+            </div>
+            <div>
+              <p className="settings-item-title">Tool permissions</p>
+              <p className="settings-item-subtitle">Control what the AI can do on this PC</p>
+            </div>
+          </div>
+          {showPermConfig
+            ? <ChevronDown size={18} className="settings-chevron" />
+            : <ChevronRight size={18} className="settings-chevron" />
+          }
+        </CardRow>
+        {showPermConfig && (
+          <div className="settings-inline-expand">
+            <div className="settings-perm-list">
+              {PERM_ROWS.map(({ field, label, subtitle }) => (
+                <div key={field} className="settings-perm-row">
+                  <div className="settings-perm-info">
+                    <span className="settings-perm-label">{label}</span>
+                    <span className="settings-perm-sub">{subtitle}</span>
+                  </div>
+                  <SegmentControl
+                    options={[
+                      { value: 'allow_all'      as PermissionState, label: 'Allow' },
+                      { value: 'ask_before_use' as PermissionState, label: 'Ask' },
+                      { value: 'not_allow'      as PermissionState, label: 'Block' },
+                    ]}
+                    value={pcPerms[field]}
+                    onChange={(v) => handlePermChange(field, v)}
+                  />
                 </div>
-                <div>
-                  <p className="settings-item-title">Tool permissions</p>
-                  <p className="settings-item-subtitle">Control what the AI can do on this PC</p>
-                </div>
-              </div>
-              {showPermConfig
-                ? <ChevronDown size={18} className="settings-chevron" />
-                : <ChevronRight size={18} className="settings-chevron" />
-              }
-            </CardRow>
-            {showPermConfig && (
-              <div className="settings-inline-expand">
-                <div className="settings-perm-list">
-                  {PERM_ROWS.map(({ field, label, subtitle }) => (
-                    <div key={field} className="settings-perm-row">
-                      <div className="settings-perm-info">
-                        <span className="settings-perm-label">{label}</span>
-                        <span className="settings-perm-sub">{subtitle}</span>
-                      </div>
-                      <SegmentControl
-                        options={[
-                          { value: 'allow_all'      as PermissionState, label: 'Allow' },
-                          { value: 'ask_before_use' as PermissionState, label: 'Ask' },
-                          { value: 'not_allow'      as PermissionState, label: 'Block' },
-                        ]}
-                        value={pcPerms[field]}
-                        onChange={(v) => handlePermChange(field, v)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </Card>
-        </>
-      )}
+              ))}
+            </div>
+          </div>
+        )}
+      </Card>
 
       <SectionHeader>Appearance</SectionHeader>
       <Card>

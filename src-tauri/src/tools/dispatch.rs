@@ -114,6 +114,22 @@ pub async fn execute_tool_with_context(
 ) -> ToolResult {
     match name {
         "memory" => ToolResult::ok(name, execute_memory_tool(app, args, context)),
+        "ask_user" => {
+            let questions = args.get("questions").cloned().unwrap_or(serde_json::Value::Array(vec![]));
+            let answers = super::ask_user::request_ask_user(app, &questions).await;
+
+            // Format answers as readable Q/A pairs for the LLM
+            let mut output = String::new();
+            if let Some(arr) = questions.as_array() {
+                for (i, q) in arr.iter().enumerate() {
+                    let question_text = q.get("question").and_then(|v| v.as_str()).unwrap_or("");
+                    let answer = answers.get(&i).map(|s| s.as_str()).unwrap_or("(no answer)");
+                    if !output.is_empty() { output.push('\n'); }
+                    output.push_str(&format!("Q: {question_text}\nA: {answer}"));
+                }
+            }
+            ToolResult::ok(name, output)
+        }
         "send_message" => {
             let content = args.get("content").and_then(Value::as_str).unwrap_or("");
             if !content.is_empty() {

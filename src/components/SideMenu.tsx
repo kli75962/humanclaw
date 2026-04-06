@@ -6,7 +6,8 @@ import { useSession } from '../hooks/useSession';
 import { GeneralTab } from './SettingsGeneralTab';
 import { ConnectTab } from './SettingsConnectTab';
 import { CreateFriendInline } from './CreateFriendInline';
-import type { SideMenuProps, WizardAnswers } from '../types';
+import { PersonaBuildNotice } from './PersonaBuildNotice';
+import type { SideMenuProps } from '../types';
 import '../style/SideMenu.css';
 import '../style/SettingsScreen.css';
 
@@ -18,7 +19,6 @@ function SettingsPanel({
   onChatModeChange,
   igMode,
   onIgModeChange,
-  onAddPersona,
 }: {
   model: string;
   onModelChange: (m: string) => void;
@@ -27,7 +27,6 @@ function SettingsPanel({
   onChatModeChange: (v: boolean) => void;
   igMode: boolean;
   onIgModeChange: (v: boolean) => void;
-  onAddPersona?: (answers: WizardAnswers) => void;
 }) {
   const { session, setOllamaEndpoint, listPersonas, setPersona, setPcPermissions } = useSession();
 
@@ -48,7 +47,6 @@ function SettingsPanel({
             onChatModeChange={onChatModeChange}
             igMode={igMode}
             onIgModeChange={onIgModeChange}
-            onAddPersona={onAddPersona}
             setPcPermissions={setPcPermissions}
           />
         </div>
@@ -160,8 +158,9 @@ export const SideMenu = memo(function SideMenu({
   isMobileOpen, onCloseSide,
   chatMode, onChatModeChange,
   characters, activeCharacterId, onSelectCharacter, onCreateCharacter, onDeleteCharacter,
-  igMode, onIgModeChange, onAddPersona,
+  igMode, onIgModeChange,
   activeMemoId, onSelectMemo,
+  personaNotice, onPersonaNoticeClose,
 }: SideMenuProps) {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -316,7 +315,6 @@ export const SideMenu = memo(function SideMenu({
             onChatModeChange={onChatModeChange}
             igMode={igMode}
             onIgModeChange={onIgModeChange}
-            onAddPersona={onAddPersona}
           />
         )}
 
@@ -325,6 +323,14 @@ export const SideMenu = memo(function SideMenu({
         {view === 'memos' && <MemosPanel activeMemoId={activeMemoId} onSelectMemo={onSelectMemo} />}
 
       </div>
+
+      {personaNotice && (
+        <PersonaBuildNotice
+          status={personaNotice.status}
+          displayName={personaNotice.displayName}
+          onClose={() => onPersonaNoticeClose?.()}
+        />
+      )}
     </div>
   );
 });

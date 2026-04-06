@@ -12,13 +12,16 @@ import { WelcomeScreen } from './components/WelcomeScreen';
 import { ChatMessage } from './components/ChatMessage';
 import { InputBar } from './components/InputBar';
 import { SideMenu } from './components/SideMenu';
+import type { PersonaBuildNoticeStatus } from './components/PersonaBuildNotice';
 import { AccessibilityDialog } from './components/AccessibilityDialog';
 import { PermissionRequest } from './components/PermissionDialog';
 import type { PermissionRequest as PermissionRequestData } from './components/PermissionDialog';
+import { AskUserBubble } from './components/AskUserBubble';
+import type { AskQuestion } from './components/AskUserBubble';
 import { ExplainPopup } from './components/ExplainPopup';
 import { MemoChatView } from './components/MemoChatView';
-import type { WizardAnswers, MemoMeta } from './types';
-import { Bot, ChevronLeft, File, LayoutGrid, MessageCircle, Users } from 'lucide-react';
+import type { MemoMeta } from './types';
+import { Bot, ChevronLeft, File, LayoutGrid, MessageCircle, Sparkles, Users } from 'lucide-react';
 import { PostFeed } from './components/PostFeed';
 import type { ChatMeta, InputBarHandle, Message, Post } from './types';
 import './style/themes.css';
@@ -47,7 +50,85 @@ function App() {
   const { posts, likedPostIds, toggleLike, deletePost, addPost, refresh: refreshPosts } = usePosts();
   const [quotedPost, setQuotedPost] = useState<Post | null>(null);
   const [permRequest, setPermRequest] = useState<PermissionRequestData | null>(null);
+  const [askUserRequest, setAskUserRequest] = useState<{ id: string; questions: AskQuestion[] } | null>(null);
   const { url: wallpaperUrl, blur: wallpaperBlur, dim: wallpaperDim } = useWallpaper();
+
+  // ── Persona build notice ────────────────────────────────────────────────────
+  const [personaNotice, setPersonaNotice] = useState<{
+    status: PersonaBuildNoticeStatus;
+    displayName: string;
+  } | null>(null);
+
+  // On startup: read persisted build status and auto-resume if interrupted mid-way
+  useEffect(() => {
+    invoke<{
+      status: string;
+      displayName: string;
+      model: string;
+      sex: string;
+      ageRange: string;
+      vibe: string;
+      world: string;
+      connectsBy: string;
+      personaName: string;
+    } | null>('get_persona_build_status').then((saved) => {
+      if (!saved) return;
+      if (saved.status === 'creating') {
+        // Previous session was interrupted — show notice and auto-resume
+        setPersonaNotice({ status: 'creating', displayName: saved.displayName });
+        invoke('create_persona_background', {
+          model: saved.model,
+          sex: saved.sex,
+          ageRange: saved.ageRange,
+          vibe: saved.vibe,
+          world: saved.world,
+          connectsBy: saved.connectsBy,
+          personaName: saved.personaName,
+        })
+          .then(() => {
+            invoke<{ displayName: string } | null>('get_persona_build_status').then((s) => {
+              setPersonaNotice({
+                status: 'done',
+                displayName: s?.displayName ?? saved.displayName,
+              });
+            }).catch(() => {});
+          })
+          .catch(() => {
+            setPersonaNotice({ status: 'interrupted', displayName: saved.displayName });
+          });
+      } else if (saved.status === 'done') {
+        setPersonaNotice({ status: 'done', displayName: saved.displayName });
+      } else if (saved.status === 'interrupted') {
+        setPersonaNotice({ status: 'interrupted', displayName: saved.displayName });
+      }
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Listen to DOM events from SettingsGeneralTab
+  useEffect(() => {
+    function onStart(e: Event) {
+      const detail = (e as CustomEvent).detail as { displayName: string };
+      setPersonaNotice({ status: 'creating', displayName: detail.displayName });
+    }
+    function onSettled() {
+      // Read the Rust-written status to determine done vs interrupted
+      invoke<{ status: string; displayName: string } | null>('get_persona_build_status').then((s) => {
+        if (!s) return;
+        if (s.status === 'done') {
+          setPersonaNotice({ status: 'done', displayName: s.displayName });
+        } else {
+          setPersonaNotice({ status: 'interrupted', displayName: s.displayName });
+        }
+      }).catch(() => {});
+    }
+    document.addEventListener('persona-build-start', onStart);
+    document.addEventListener('persona-build-settled', onSettled);
+    return () => {
+      document.removeEventListener('persona-build-start', onStart);
+      document.removeEventListener('persona-build-settled', onSettled);
+    };
+  }, []);
 
   usePostGeneration({
     characters,
@@ -381,24 +462,17 @@ function App() {
     }
   }, [handleSend, isListening, stopListening, quotedPost, characters]);
 
-  const handleAddPersona = useCallback((answers: WizardAnswers) => {
-    if (chatMode) handleChatModeChange(false);
-    setMainTab('chat');
-    setSideOpen(false);
-    startNewChat();
-    handleSend(
-      `Create a new persona using the create_skill tool based on these preferences:\n` +
-      `- Gender: ${answers.sex}\n` +
-      `- Personality: ${answers.personality}\n` +
-      `- Profession: ${answers.profession}\n` +
-      `- Name: ${answers.personaName}\n\n` +
-      `Follow the persona skill creation guide. The skill name must start with "persona_".`
-    );
-  }, [chatMode, handleChatModeChange, startNewChat, handleSend]);
 
   useEffect(() => {
     const unlisten = listen<PermissionRequestData>('pc-permission-request', (e) => {
       setPermRequest(e.payload);
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen<{ id: string; questions: AskQuestion[] }>('ask-user-request', (e) => {
+      setAskUserRequest(e.payload);
     });
     return () => { unlisten.then((fn) => fn()); };
   }, []);
@@ -543,9 +617,13 @@ function App() {
           onDeleteCharacter={deleteCharacter}
           igMode={igMode}
           onIgModeChange={handleIgModeChange}
-          onAddPersona={handleAddPersona}
           activeMemoId={activeMemoId}
           onSelectMemo={handleSelectMemo}
+          personaNotice={personaNotice}
+          onPersonaNoticeClose={() => {
+            setPersonaNotice(null);
+            invoke('clear_persona_build_status').catch(() => {});
+          }}
         />
       </div>
 
@@ -634,6 +712,19 @@ function App() {
                       request={permRequest}
                       onDone={() => setPermRequest(null)}
                     />
+                  )}
+
+                  {askUserRequest && (
+                    <div className="chat-message">
+                      <div className="chat-avatar">
+                        <Sparkles size={24} />
+                      </div>
+                      <AskUserBubble
+                        id={askUserRequest.id}
+                        questions={askUserRequest.questions}
+                        onDone={() => setAskUserRequest(null)}
+                      />
+                    </div>
                   )}
 
                   {error && (

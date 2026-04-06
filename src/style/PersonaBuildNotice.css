@@ -1,0 +1,52 @@
+.persona-notice {
+  position: relative;
+  margin: 0 10px 10px;
+  padding: 10px 32px 10px 12px;
+  border-radius: 8px;
+  background: var(--color-surface-2, #2a2b2d);
+  border: 1px solid var(--color-border, rgba(255,255,255,0.1));
+  flex-shrink: 0;
+}
+
+.persona-notice--creating {
+  border-color: var(--color-accent, #7b8cde);
+}
+
+.persona-notice--done {
+  border-color: #4caf50;
+}
+
+.persona-notice--interrupted {
+  border-color: #e6a033;
+}
+
+.persona-notice-msg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text, #e3e3e3);
+  word-break: break-word;
+}
+
+.persona-notice-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--color-text-2, #aaa);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.persona-notice-close:hover {
+  background: var(--color-hover, rgba(255,255,255,0.08));
+  color: var(--color-text, #e3e3e3);
+}

@@ -107,6 +107,12 @@
   cursor: default;
 }
 
+/* ── Persona build status text (shown in subtitle) ── */
+.settings-item-subtitle--building {
+  color: var(--color-text-3);
+  font-style: italic;
+}
+
 /* ── Wallpaper transparency effects for PersonaWizard ── */
 .app-root--wallpaper .persona-wizard {
   background: transparent;

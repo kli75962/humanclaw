@@ -20,7 +20,8 @@ use model::{cancel_chat, chat_claude, chat_ollama, list_models, list_models_at, 
 use stt::{stt_android_cancel, stt_android_once, stt_start, stt_stop};
 use secrets::{store_secret, load_secret};
 use session::{add_paired_device, get_session, list_personas, remove_paired_device, set_device_label, set_ollama_endpoint, set_pc_permissions, set_persona, set_session_hash_key};
-use tools::{respond_pc_permission, PendingPermissions};
+use skills::{create_persona_background, get_persona_build_status, clear_persona_build_status};
+use tools::{respond_pc_permission, PendingPermissions, respond_ask_user, PendingAskUserRequests};
 use phone::{check_accessibility_enabled, open_accessibility_settings};
 use bridge::{check_peer_online, discover_and_pair, get_all_local_addresses, get_all_peer_status, get_local_address, get_qr_pair_svg, pair_from_qr, send_to_device, start_bridge_server, start_peer_monitor};
 use queue::{flush_all_pending, flush_queue, get_pending_queue, get_queue, queue_command};
@@ -54,6 +55,7 @@ pub fn run() {
 
     builder
         .manage(PendingPermissions(std::sync::Mutex::new(std::collections::HashMap::new())))
+        .manage(PendingAskUserRequests(std::sync::Mutex::new(std::collections::HashMap::new())))
         .setup(|app| {
             // 1. Start the bridge HTTP server so peers can reach this device.
             start_bridge_server(app.handle().clone());
@@ -142,6 +144,8 @@ pub fn run() {
             remove_paired_device,
             // pc control permissions
             respond_pc_permission,
+            // ask_user interactive bubble
+            respond_ask_user,
             // bridge / health
             check_peer_online,
             get_all_peer_status,
@@ -171,6 +175,10 @@ pub fn run() {
             // phone
             check_accessibility_enabled,
             open_accessibility_settings,
+            // persona creation
+            create_persona_background,
+            get_persona_build_status,
+            clear_persona_build_status,
             // chat control
             cancel_chat,
             // file reading

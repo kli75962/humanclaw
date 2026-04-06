@@ -193,13 +193,15 @@ pub async fn trigger_character_reactions(
     for character in all_characters.iter().filter(|c| c.id != post.character_id) {
         // Like: score from LLM → used as probability %
         let like_score = generate::generate_like_score(&app, character, &post.text).await;
-        if pseudo_rand(&character.id, &format!("like{post_id}")) < like_score {
+        let did_like = pseudo_rand(&character.id, &format!("like{post_id}")) < like_score;
+        if did_like {
             let _ = fs::like_post(&app, &post_id);
         }
 
-        // Comment: extrovert 45%, introvert 2%
-        let chance: u8 = if is_extrovert(&character.persona) { 45 } else { 2 };
-        if pseudo_rand(&character.id, &post_id) < chance {
+        // Comment: only if liked, then roll again with personality-scaled chance
+        // Extroverts: full like_score; Introverts: like_score / 4
+        let comment_chance = if is_extrovert(&character.persona) { like_score } else { like_score / 4 };
+        if did_like && pseudo_rand(&character.id, &format!("comment{post_id}")) < comment_chance {
             if let Ok(comment_text) = generate::generate_comment_text(
                 &app, character, &author_name, &post.text, &prior,
             ).await {
@@ -298,19 +300,18 @@ pub async fn react_to_user_post(
     for character in &characters {
         // Like: score from LLM → used as probability %
         let like_score = generate::generate_like_score(&app, character, &post.text).await;
-        if pseudo_rand(&character.id, &format!("like{post_id}")) < like_score {
+        let did_like = pseudo_rand(&character.id, &format!("like{post_id}")) < like_score;
+        if did_like {
             let _ = fs::like_post(&app, &post_id);
         }
 
+        // Comment: only if liked, then roll again with personality-scaled chance
+        // Extroverts: full like_score; Introverts: like_score / 4
         let extrovert = is_extrovert(&character.persona);
-        // Extroverts: 60% chance, Introverts: 15% chance (higher than character posts)
-        let chance: u8 = if extrovert { 60 } else { 15 };
-        if pseudo_rand(&character.id, &post_id) < chance {
-            // Will comment
-        } else {
+        let comment_chance = if extrovert { like_score } else { like_score / 4 };
+        if !did_like || pseudo_rand(&character.id, &format!("comment{post_id}")) >= comment_chance {
             continue;
         }
-
         // Extroverts: 5% chance to DM instead of comment.
         if extrovert && pseudo_rand(&character.id, &format!("dm{post_id}")) < 5 {
             let trigger = format!(
@@ -447,23 +448,28 @@ pub async fn resume_post_gen_queue(app: tauri::AppHandle) -> Result<u32, String>
 
                     for character in all_characters.iter().filter(|c| c.id != post.character_id) {
                         // Generate like (if not already tracked)
-                        if !entry.likes.iter().any(|l| l.character_id == character.id) {
+                        let did_like = if let Some(like_entry) = entry.likes.iter().find(|l| l.character_id == character.id) {
+                            like_entry.did_like
+                        } else {
                             let like_score = generate::generate_like_score(&app, character, &post.text).await;
-                            let did_like = pseudo_rand(&character.id, &format!("like{}", &post_id)) < like_score;
-                            entry.add_like(character.id.clone(), like_score, did_like);
-                            if did_like {
+                            let liked = pseudo_rand(&character.id, &format!("like{}", &post_id)) < like_score;
+                            entry.add_like(character.id.clone(), like_score, liked);
+                            if liked {
                                 let _ = fs::like_post(&app, &post_id);
                             }
-                        }
+                            liked
+                        };
 
                         // Skip if comment already generated for this character
                         if entry.comments.iter().any(|c| c.character_id == character.id) {
                             continue;
                         }
 
-                        // Generate comment
-                        let chance: u8 = if is_extrovert(&character.persona) { 45 } else { 2 };
-                        if pseudo_rand(&character.id, &post_id) < chance {
+                        // Comment: only if liked, then roll again with personality-scaled chance
+                        // Extroverts: full like_score; Introverts: like_score / 4
+                        let like_score = entry.likes.iter().find(|l| l.character_id == character.id).map(|l| l.score).unwrap_or(0);
+                        let comment_chance = if is_extrovert(&character.persona) { like_score } else { like_score / 4 };
+                        if did_like && pseudo_rand(&character.id, &format!("comment{}", &post_id)) < comment_chance {
                             if let Ok(comment_text) = generate::generate_comment_text(
                                 &app, character, &author_name, &post.text, &prior,
                             ).await {

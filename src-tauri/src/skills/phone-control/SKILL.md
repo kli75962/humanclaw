@@ -1,8 +1,11 @@
 ---
 name: phone-control
-description: Read get_screen output and interact with UI elements to control any Android app.
+description: Control any Android app.
 compatibility: PhoneClaw (Tauri v2 Android agent)
 ---
+Keep ASKING. ONLY start proceed request have gather enough information. Don't run any tools until you have fully understand user's request. 
+
+When you want to gather more information from user, use ask_user() tool.
 
 ## Screen Output Format
 
