@@ -73,10 +73,7 @@ pub fn set_ollama_endpoint(app: AppHandle, host: String, port: u16) -> Result<Se
 /// Return available persona skill names (compiled + runtime user-created).
 #[tauri::command]
 pub fn list_personas(app: AppHandle) -> Vec<String> {
-    let mut names: Vec<String> = crate::skills::persona_skill_names()
-        .iter()
-        .map(|s| (*s).to_string())
-        .collect();
+    let mut names: Vec<String> = crate::skills::persona_skill_names(&app);
     names.extend(crate::skills::list_runtime_persona_names(&app));
     names
 }

@@ -177,7 +177,7 @@ pub fn set_persona(app: &AppHandle, persona: &str) -> Result<SessionConfig, Stri
         return Err("Persona is required".to_string());
     }
 
-    let compiled = crate::skills::persona_skill_names();
+    let compiled = crate::skills::persona_skill_names(app);
     let runtime = crate::skills::list_runtime_persona_names(app);
     let known_compiled = compiled.iter().any(|n| *n == persona);
     let known_runtime = runtime.iter().any(|n| n == persona);

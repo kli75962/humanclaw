@@ -1,0 +1,156 @@
+/// Headless Ollama agent loop — no Tauri event streaming, returns the final
+/// response text. Used by the bridge server for remote commands.
+use futures_util::StreamExt;
+use serde_json::Value;
+use tauri::AppHandle;
+
+use crate::chat::bootstrap_memory;
+use crate::skills::load_tool_schemas;
+use crate::tools::{execute_tool_with_context, ToolExecutionContext};
+use crate::ai::ollama::types::tool_message;
+use crate::ai::prompt::{build_base_prompt, prepare_system};
+use crate::ai::types::MAX_AGENT_LOOPS;
+use crate::ai::history::{compress_text_history, trim_tool_start_index, CompressMsg};
+
+use super::types::{OllamaChunk, OllamaMessage, OllamaRoundRequest, OllamaToolCall};
+
+async fn stream_once_headless(
+    app: &AppHandle,
+    system_msg: &OllamaMessage,
+    history: &[OllamaMessage],
+    tool_schemas: &[Value],
+    model: &str,
+) -> Result<OllamaMessage, String> {
+    let body = OllamaRoundRequest::new(model, system_msg, history, true, tool_schemas);
+
+    let response = super::ollama_client()
+        .post(super::types::ollama_chat_url(app))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to reach Ollama: {e}"))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!("Ollama returned {status}: {text}"));
+    }
+
+    let mut byte_stream = response.bytes_stream();
+    let mut content = String::new();
+    let mut tool_calls: Vec<OllamaToolCall> = Vec::new();
+    let mut role = "assistant".to_string();
+
+    while let Some(chunk_result) = byte_stream.next().await {
+        let bytes = chunk_result.map_err(|e| format!("Stream error: {e}"))?;
+        let text = String::from_utf8_lossy(&bytes);
+
+        for line in text.lines() {
+            let line = line.trim();
+            if line.is_empty() { continue; }
+            let Ok(parsed) = serde_json::from_str::<OllamaChunk>(line) else { continue };
+            if let Some(ref msg) = parsed.message {
+                role = msg.role.clone();
+                content.push_str(&msg.content);
+                if let Some(calls) = &msg.tool_calls {
+                    tool_calls.extend(calls.iter().cloned());
+                }
+            }
+            if parsed.done { break; }
+        }
+    }
+
+    Ok(OllamaMessage {
+        role,
+        content,
+        tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
+        images: None,
+        brief: None,
+    })
+}
+
+const MAX_TOOL_OUTPUT_CHARS: usize = 4000;
+
+fn truncate_tool_output(_tool_name: &str, output: String) -> String {
+    if output.starts_with("data:") { return output; }
+    if output.len() <= MAX_TOOL_OUTPUT_CHARS { return output; }
+    format!("{}…[truncated, {} chars total]", &output[..MAX_TOOL_OUTPUT_CHARS], output.len())
+}
+
+/// Run a full agentic loop without emitting Tauri events.
+/// Returns the final assistant response text.
+pub async fn run_headless(
+    app: &AppHandle,
+    conversation: Vec<OllamaMessage>,
+    model: &str,
+    source_device_id: Option<String>,
+    source_device_type: Option<String>,
+) -> Result<String, String> {
+    let tool_schemas = load_tool_schemas(app);
+    bootstrap_memory(app);
+
+    let base_prompt = build_base_prompt(app, None).await;
+    let tool_context = ToolExecutionContext { source_device_id, source_device_type };
+
+    let msgs_no_sys: Vec<_> = conversation.into_iter().filter(|m| m.role != "system").collect();
+    let compress_entries: Vec<CompressMsg> = msgs_no_sys.iter()
+        .map(|m| CompressMsg { role: m.role.clone(), content: m.content.clone(), brief: m.brief.clone() })
+        .collect();
+    let compressed = compress_text_history(&compress_entries);
+    let base_messages = msgs_no_sys[compressed.keep_from..].to_vec();
+
+    let mut tool_history: Vec<OllamaMessage> = Vec::new();
+    let mut final_result: Result<String, String> =
+        Err(format!("Agent exceeded maximum tool rounds ({MAX_AGENT_LOOPS})"));
+
+    'agent: for _ in 0..MAX_AGENT_LOOPS {
+        let system_content = prepare_system(app, &base_prompt);
+        let system_msg = OllamaMessage {
+            role: "system".to_string(),
+            content: system_content,
+            tool_calls: None,
+            images: None,
+            brief: None,
+        };
+
+        let tool_start = trim_tool_start_index(&tool_history, |m| {
+            m.role == "assistant" && m.tool_calls.is_some()
+        });
+        let tool_slice = &tool_history[tool_start..];
+
+        let history: Vec<OllamaMessage> = base_messages.iter()
+            .chain(tool_slice.iter())
+            .cloned()
+            .collect();
+
+        let mut final_msg = match stream_once_headless(app, &system_msg, &history, &tool_schemas, model).await {
+            Ok(msg) => msg,
+            Err(e) => {
+                final_result = Err(e);
+                break 'agent;
+            }
+        };
+
+        let tool_calls = final_msg.tool_calls.take().unwrap_or_default();
+
+        if tool_calls.is_empty() {
+            final_result = Ok(final_msg.content);
+            break 'agent;
+        }
+
+        final_msg.tool_calls = Some(tool_calls.clone());
+        tool_history.push(final_msg);
+
+        for call in &tool_calls {
+            let tool_name = &call.function.name;
+            let tool_args = &call.function.arguments;
+            let output = execute_tool_with_context(app, tool_name, tool_args, &tool_context)
+                .await
+                .output;
+
+            tool_history.push(tool_message(truncate_tool_output(tool_name, output)));
+        }
+    }
+
+    final_result
+}

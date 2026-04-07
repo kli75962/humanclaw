@@ -1,31 +1,28 @@
-mod memory;
-mod files;
-mod characters;
-mod posts;
-mod model;
-mod phone;
-mod tools;
+mod ai;
+mod chat;
+mod device;
+mod network;
 mod skills;
+mod social;
 mod session;
-mod bridge;
-mod queue;
-mod stt;
-mod secrets;
+mod tools;
+mod files;
 
-use memory::{get_memory_file, set_memory_file, list_chats, load_chat_messages, create_chat, save_chat_messages, delete_chat, list_memos, load_memo_messages, create_memo, save_memo_messages, delete_memo};
+use chat::{get_memory_file, set_memory_file, list_chats, load_chat_messages, create_chat, save_chat_messages, delete_chat, list_memos, load_memo_messages, create_memo, save_memo_messages, delete_memo};
 use files::{read_file_text, extract_file_text_from_bytes};
-use characters::{list_characters, save_character, delete_character};
-use posts::{list_posts, save_post, delete_post, like_post, unlike_post, list_comments, add_comment, generate_character_post, trigger_character_reactions, generate_character_dm, react_to_user_post, react_to_user_comment, resume_post_gen_queue, hide_post, record_post_preference, get_due_posts, mark_post_generated};
-use model::{cancel_chat, chat_claude, chat_ollama, list_models, list_models_at, explain_text};
-use stt::{stt_android_cancel, stt_android_once, stt_start, stt_stop};
-use secrets::{store_secret, load_secret};
+use social::character::{list_characters, save_character, delete_character};
+use social::post::{list_posts, save_post, delete_post, like_post, unlike_post, list_comments, add_comment, generate_character_post, trigger_character_reactions, generate_character_dm, react_to_user_post, react_to_user_comment, resume_post_gen_queue, hide_post, record_post_preference, get_due_posts, mark_post_generated};
+use ai::{cancel_chat, chat_claude, chat_ollama, list_models, list_models_at, explain_text};
+use device::stt::{stt_android_cancel, stt_android_once, stt_start, stt_stop};
+use device::secrets::{store_secret, load_secret};
 use session::{add_paired_device, get_session, list_personas, remove_paired_device, set_device_label, set_ollama_endpoint, set_pc_permissions, set_persona, set_session_hash_key};
 use skills::{create_persona_background, get_persona_build_status, clear_persona_build_status};
 use tools::{respond_pc_permission, PendingPermissions, respond_ask_user, PendingAskUserRequests};
-use phone::{check_accessibility_enabled, open_accessibility_settings};
-use bridge::{check_peer_online, discover_and_pair, get_all_local_addresses, get_all_peer_status, get_local_address, get_qr_pair_svg, pair_from_qr, send_to_device, start_bridge_server, start_peer_monitor};
-use queue::{flush_all_pending, flush_queue, get_pending_queue, get_queue, queue_command};
-use queue::commands::{get_post_gen_queue, get_post_gen_pending, cleanup_post_gen_stale};
+use device::phone::{check_accessibility_enabled, open_accessibility_settings};
+use network::{check_peer_online, discover_and_pair, get_all_local_addresses, get_all_peer_status, get_local_address, get_qr_pair_svg, pair_from_qr, send_to_device, start_bridge_server, start_peer_monitor};
+use network::delivery::flush_all_pending;
+use social::queue::commands::{flush_queue, get_pending_queue, get_queue, queue_command};
+use social::queue::commands::{get_post_gen_queue, get_post_gen_pending, cleanup_post_gen_stale};
 
 /// App entry point — registers Tauri commands and starts the event loop.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -41,7 +38,7 @@ pub fn run() {
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(phone::plugin::init());
+        .plugin(device::phone::plugin::init());
 
     #[cfg(not(target_os = "android"))]
     {
@@ -74,7 +71,7 @@ pub fn run() {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 // Resume pending post generation
-                let _ = crate::posts::resume_post_gen_queue(handle.clone()).await;
+                let _ = crate::social::post::resume_post_gen_queue(handle.clone()).await;
                 // Cleanup entries older than 7 days
                 let _ = cleanup_post_gen_stale(handle);
             });

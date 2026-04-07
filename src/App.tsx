@@ -1,125 +1,82 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useOllamaChat } from './hooks/useOllamaChat';
 import { useCharacters } from './hooks/useCharacters';
 import { usePosts } from './hooks/usePosts';
 import { usePostGeneration } from './hooks/usePostGeneration';
 import { useStt } from './hooks/useStt';
-import { useWallpaper } from './hooks/useWallpaper';
-import { WelcomeScreen } from './components/WelcomeScreen';
-import { ChatMessage } from './components/ChatMessage';
-import { InputBar } from './components/InputBar';
-import { SideMenu } from './components/SideMenu';
-import type { PersonaBuildNoticeStatus } from './components/PersonaBuildNotice';
-import { AccessibilityDialog } from './components/AccessibilityDialog';
-import { PermissionRequest } from './components/PermissionDialog';
-import type { PermissionRequest as PermissionRequestData } from './components/PermissionDialog';
-import { AskUserBubble } from './components/AskUserBubble';
-import type { AskQuestion } from './components/AskUserBubble';
-import { ExplainPopup } from './components/ExplainPopup';
-import { MemoChatView } from './components/MemoChatView';
-import type { MemoMeta } from './types';
-import { Bot, ChevronLeft, File, LayoutGrid, MessageCircle, Sparkles, Users } from 'lucide-react';
-import { PostFeed } from './components/PostFeed';
-import type { ChatMeta, InputBarHandle, Message, Post } from './types';
+import { useMemoChat } from './hooks/useMemoChat';
+import { AppLayout } from './components/layout/AppLayout';
+import { AppChat } from './components/chat/AppChat';
+import { AppSocial } from './components/social/AppSocial';
+import type { PersonaBuildNoticeStatus } from './components/persona/PersonaBuildNotice';
+import type { PermissionRequest as PermissionRequestData } from './components/ui/PermissionDialog';
+import type { AskQuestion } from './components/ui/AskUserBubble';
+import type { ChatMeta, Message, Post } from './types';
 import './style/themes.css';
 import './style/App.css';
 
 const DEFAULT_MODEL = 'kimi-k2.5:cloud';
 const MODEL_STORAGE_KEY = 'phoneclaw_model';
-const SIDE_WIDTH_KEY = 'phoneclaw_side_width';
 const CHAT_MODE_KEY = 'phoneclaw_chat_mode';
 const IG_MODE_KEY = 'phoneclaw_ig_mode';
-const MIN_SIDE = 200;
-const MAX_SIDE_RATIO = 0.6;
 
 function App() {
-  const [model, setModel] = useState(
-    () => localStorage.getItem(MODEL_STORAGE_KEY) ?? DEFAULT_MODEL
-  );
-  const [chatMode, setChatMode] = useState(
-    () => localStorage.getItem(CHAT_MODE_KEY) === 'true'
-  );
-  const [igMode, setIgMode] = useState(
-    () => localStorage.getItem(IG_MODE_KEY) === 'true'
-  );
+  const [model, setModel] = useState(() => localStorage.getItem(MODEL_STORAGE_KEY) ?? DEFAULT_MODEL);
+  const [chatMode, setChatMode] = useState(() => localStorage.getItem(CHAT_MODE_KEY) === 'true');
+  const [igMode, setIgMode] = useState(() => localStorage.getItem(IG_MODE_KEY) === 'true');
   const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);
+  
   const { characters, addCharacter, deleteCharacter } = useCharacters();
   const { posts, likedPostIds, toggleLike, deletePost, addPost, refresh: refreshPosts } = usePosts();
+  
   const [quotedPost, setQuotedPost] = useState<Post | null>(null);
   const [permRequest, setPermRequest] = useState<PermissionRequestData | null>(null);
   const [askUserRequest, setAskUserRequest] = useState<{ id: string; questions: AskQuestion[] } | null>(null);
-  const { url: wallpaperUrl, blur: wallpaperBlur, dim: wallpaperDim } = useWallpaper();
+  
+  const [personaNotice, setPersonaNotice] = useState<{ status: PersonaBuildNoticeStatus; displayName: string } | null>(null);
+  const [mainTab, setMainTab] = useState<'chat' | 'posts'>('chat');
+  const [sideView, setSideView] = useState<'history' | 'settings' | 'connect' | 'memos'>('history');
+  const [sideOpen, setSideOpen] = useState(false);
 
-  // ── Persona build notice ────────────────────────────────────────────────────
-  const [personaNotice, setPersonaNotice] = useState<{
-    status: PersonaBuildNoticeStatus;
-    displayName: string;
-  } | null>(null);
+  // Initialize hooks that span features
+  const {
+    activeMemoId, memoMessages, memoStreaming, memoStreamContent,
+    handleSelectMemo, handleSaveMemo, handleOpenMemo, handleMemoSend, setActiveMemoId
+  } = useMemoChat(model, setMainTab, setSideOpen, setSideView);
 
-  // On startup: read persisted build status and auto-resume if interrupted mid-way
+  // Resume persona build status
   useEffect(() => {
-    invoke<{
-      status: string;
-      displayName: string;
-      model: string;
-      sex: string;
-      ageRange: string;
-      vibe: string;
-      world: string;
-      connectsBy: string;
-      personaName: string;
-    } | null>('get_persona_build_status').then((saved) => {
-      if (!saved) return;
-      if (saved.status === 'creating') {
-        // Previous session was interrupted — show notice and auto-resume
-        setPersonaNotice({ status: 'creating', displayName: saved.displayName });
-        invoke('create_persona_background', {
-          model: saved.model,
-          sex: saved.sex,
-          ageRange: saved.ageRange,
-          vibe: saved.vibe,
-          world: saved.world,
-          connectsBy: saved.connectsBy,
-          personaName: saved.personaName,
-        })
-          .then(() => {
-            invoke<{ displayName: string } | null>('get_persona_build_status').then((s) => {
-              setPersonaNotice({
-                status: 'done',
-                displayName: s?.displayName ?? saved.displayName,
-              });
-            }).catch(() => {});
-          })
-          .catch(() => {
-            setPersonaNotice({ status: 'interrupted', displayName: saved.displayName });
-          });
-      } else if (saved.status === 'done') {
-        setPersonaNotice({ status: 'done', displayName: saved.displayName });
-      } else if (saved.status === 'interrupted') {
-        setPersonaNotice({ status: 'interrupted', displayName: saved.displayName });
-      }
-    }).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    invoke<{ status: string; displayName: string; model: string; sex: string; ageRange: string; vibe: string; world: string; connectsBy: string; personaName: string; } | null>('get_persona_build_status')
+      .then((saved) => {
+        if (!saved) return;
+        if (saved.status === 'creating') {
+          setPersonaNotice({ status: 'creating', displayName: saved.displayName });
+          invoke('create_persona_background', saved)
+            .then(() => {
+              invoke<{ displayName: string } | null>('get_persona_build_status').then((s) => {
+                setPersonaNotice({ status: 'done', displayName: s?.displayName ?? saved.displayName });
+              }).catch(() => {});
+            })
+            .catch(() => setPersonaNotice({ status: 'interrupted', displayName: saved.displayName }));
+        } else if (saved.status === 'done') {
+          setPersonaNotice({ status: 'done', displayName: saved.displayName });
+        } else if (saved.status === 'interrupted') {
+          setPersonaNotice({ status: 'interrupted', displayName: saved.displayName });
+        }
+      }).catch(() => {});
   }, []);
 
-  // Listen to DOM events from SettingsGeneralTab
   useEffect(() => {
     function onStart(e: Event) {
       const detail = (e as CustomEvent).detail as { displayName: string };
       setPersonaNotice({ status: 'creating', displayName: detail.displayName });
     }
     function onSettled() {
-      // Read the Rust-written status to determine done vs interrupted
       invoke<{ status: string; displayName: string } | null>('get_persona_build_status').then((s) => {
         if (!s) return;
-        if (s.status === 'done') {
-          setPersonaNotice({ status: 'done', displayName: s.displayName });
-        } else {
-          setPersonaNotice({ status: 'interrupted', displayName: s.displayName });
-        }
+        setPersonaNotice({ status: s.status as PersonaBuildNoticeStatus, displayName: s.displayName });
       }).catch(() => {});
     }
     document.addEventListener('persona-build-start', onStart);
@@ -130,12 +87,7 @@ function App() {
     };
   }, []);
 
-  usePostGeneration({
-    characters,
-    igMode,
-    chatMode,
-    onPostGenerated: () => refreshPosts(),
-  });
+  usePostGeneration({ characters, igMode, chatMode, onPostGenerated: refreshPosts });
 
   const activeCharacter = useMemo(
     () => characters.find((c) => c.id === activeCharacterId) ?? null,
@@ -143,219 +95,75 @@ function App() {
   );
   const characterModel = activeCharacter?.model ?? model;
 
-  const [mainTab, setMainTab] = useState<'chat' | 'posts'>('chat');
-  const [sideView, setSideView] = useState<'history' | 'settings' | 'connect' | 'memos'>('history');
-  const [sideOpen, setSideOpen] = useState(false);
-
   const handleSwitchView = useCallback((v: 'history' | 'settings' | 'connect' | 'memos') => {
     setSideView(v);
     setSideOpen(true);
   }, []);
-
-  // Explain popup
-  const [explainText, setExplainText] = useState('');
-  const [showExplain, setShowExplain] = useState(false);
-  const [floatBtn, setFloatBtn] = useState<{ x: number; y: number } | null>(null);
-
-  useEffect(() => {
-    function onMouseUp() {
-      const sel = window.getSelection();
-      if (!sel || sel.isCollapsed || !sel.toString().trim()) {
-        setFloatBtn(null);
-        return;
-      }
-      const range = sel.getRangeAt(0);
-      const messagesEl = document.querySelector('.app-messages');
-      if (!messagesEl?.contains(range.commonAncestorContainer)) {
-        setFloatBtn(null);
-        return;
-      }
-      const rect = range.getBoundingClientRect();
-      setFloatBtn({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
-    }
-    document.addEventListener('mouseup', onMouseUp);
-    return () => document.removeEventListener('mouseup', onMouseUp);
-  }, []);
-
-  const handleExplainClick = useCallback(() => {
-    const sel = window.getSelection();
-    const text = sel?.toString().trim() ?? '';
-    if (!text) return;
-    setExplainText(text);
-    setShowExplain(true);
-    setFloatBtn(null);
-    sel?.removeAllRanges();
-  }, []);
-
-  // ── Memo chat state ──────────────────────────────────────────────────────
-  const [activeMemoId, setActiveMemoId] = useState<string | null>(null);
-  const [memoMessages, setMemoMessages] = useState<Message[]>([]);
-  const [memoStreaming, setMemoStreaming] = useState(false);
-  const [memoStreamContent, setMemoStreamContent] = useState('');
-  const memoStreamBuf = useRef('');
-  const activeMemoIdRef = useRef<string | null>(null);
-  activeMemoIdRef.current = activeMemoId;
-
-  const handleSelectMemo = useCallback(async (id: string) => {
-    const msgs = await invoke<Message[]>('load_memo_messages', { id }).catch(() => []);
-    setActiveMemoId(id);
-    setMemoMessages(msgs);
-    setMainTab('chat');
-    setSideOpen(false);
-  }, []);
-
-  const handleSaveMemo = useCallback(async (title: string, msgs: Message[]): Promise<string | null> => {
-    const meta = await invoke<MemoMeta>('create_memo', { title, messages: msgs }).catch(() => null);
-    document.dispatchEvent(new Event('memo-saved'));
-    return meta?.id ?? null;
-  }, []);
-
-  const handleOpenMemo = useCallback((id: string) => {
-    invoke<Message[]>('load_memo_messages', { id }).then((msgs) => {
-      setActiveMemoId(id);
-      setMemoMessages(msgs);
-      setMainTab('chat');
-      setSideView('memos');
-    }).catch(() => {});
-  }, []);
-
-  const handleMemoSend = useCallback(async (text: string) => {
-    if (memoStreaming) return;
-    const userMsg: Message = { role: 'user', content: text };
-    const updatedMsgs = [...memoMessages, userMsg];
-    setMemoMessages(updatedMsgs);
-    setMemoStreaming(true);
-    setMemoStreamContent('');
-    memoStreamBuf.current = '';
-
-    let unlistenFn: (() => void) | null = null;
-    const unlistenPromise = listen<{ content: string; done: boolean }>('explain-stream', (e) => {
-      if (e.payload.done) {
-        const finalContent = memoStreamBuf.current;
-        const assistantMsg: Message = { role: 'assistant', content: finalContent };
-        const finalMsgs = [...updatedMsgs, assistantMsg];
-        setMemoMessages(finalMsgs);
-        setMemoStreaming(false);
-        setMemoStreamContent('');
-        memoStreamBuf.current = '';
-        const id = activeMemoIdRef.current;
-        if (id) invoke('save_memo_messages', { id, messages: finalMsgs }).catch(() => {});
-        unlistenFn?.();
-      } else {
-        memoStreamBuf.current += e.payload.content;
-        setMemoStreamContent(memoStreamBuf.current);
-      }
-    });
-    unlistenPromise.then((fn) => { unlistenFn = fn; });
-
-    const apiMsgs = updatedMsgs.map((m) => ({ role: m.role, content: m.content }));
-    invoke('explain_text', { messages: apiMsgs, model }).catch((err: unknown) => {
-      setMemoMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${err}` }]);
-      setMemoStreaming(false);
-      unlistenPromise.then((fn) => fn());
-    });
-  }, [memoStreaming, memoMessages, model]);
 
   const handleIgModeChange = useCallback((enabled: boolean) => {
     setIgMode(enabled);
     localStorage.setItem(IG_MODE_KEY, String(enabled));
     if (!enabled) setMainTab('chat');
   }, []);
-  const [sideWidth, setSideWidth] = useState(() => {
-    const saved = localStorage.getItem(SIDE_WIDTH_KEY);
-    return saved ? Number(saved) : Math.floor(window.innerWidth * 0.33);
-  });
 
-  const dragging = useRef(false);
-  const dragStartX = useRef(0);
-  const dragStartW = useRef(0);
-
-  const handleDividerPointerDown = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    dragging.current = true;
-    dragStartX.current = e.clientX;
-    dragStartW.current = sideWidth;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, [sideWidth]);
-
-  const handleDividerPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragging.current) return;
-    const delta = e.clientX - dragStartX.current;
-    const maxSide = Math.floor(window.innerWidth * MAX_SIDE_RATIO);
-    const next = Math.max(MIN_SIDE, Math.min(maxSide, dragStartW.current + delta));
-    setSideWidth(next);
-  }, []);
-
-  const handleDividerPointerUp = useCallback(() => {
-    if (!dragging.current) return;
-    dragging.current = false;
-    setSideWidth((w) => { localStorage.setItem(SIDE_WIDTH_KEY, String(w)); return w; });
-  }, []);
-
-  // Chat management
+  // Chat management state
   const [chatMetas, setChatMetas] = useState<ChatMeta[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [initMessages, setInitMessages] = useState<Message[]>([]);
 
-  const inputBarRef = useRef<InputBarHandle>(null);
+  const visibleChatMetas = useMemo(() => chatMetas.filter((m) => !m.id.startsWith('char_')), [chatMetas]);
 
-  // Only show normal chats (exclude character threads prefixed with "char_")
-  const visibleChatMetas = useMemo(
-    () => chatMetas.filter((m) => !m.id.startsWith('char_')),
-    [chatMetas],
-  );
-
-  useEffect(() => {
-    invoke<ChatMeta[]>('list_chats').then(setChatMetas).catch(() => {});
-  }, []);
+  useEffect(() => { invoke<ChatMeta[]>('list_chats').then(setChatMetas).catch(() => {}); }, []);
 
   useEffect(() => {
     const unlisten = listen('chat-sync-updated', async () => {
       const metas = await invoke<ChatMeta[]>('list_chats').catch(() => []);
       setChatMetas(metas);
-
       if (!activeChatId) return;
       const msgs = await invoke<Message[]>('load_chat_messages', { id: activeChatId }).catch(() => []);
       setInitMessages(msgs);
     });
-
     return () => { unlisten.then((fn) => fn()); };
   }, [activeChatId]);
 
   const onChatCreated = useCallback((id: string, title: string) => {
     const createdAt = new Date().toISOString();
     invoke('create_chat', { id, title, createdAt }).catch(() => {});
-    const meta: ChatMeta = { id, title, createdAt };
+    setChatMetas((prev) => [{ id, title, createdAt }, ...prev]);
     setActiveChatId(id);
-    setChatMetas((prev) => [meta, ...prev]);
   }, []);
 
-  const onSave = useCallback((id: string, messages: Message[]) => {
-    invoke('save_chat_messages', { id, messages }).catch(() => {});
-  }, []);
+  const onSave = useCallback((id: string, messages: Message[]) => { invoke('save_chat_messages', { id, messages }).catch(() => {}); }, []);
 
   const { messages, isThinking, agentStatus, error, handleSend, handleRetry, handleStop } = useOllamaChat(
     characterModel, activeChatId, initMessages, onChatCreated, onSave, activeCharacter,
   );
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   const sttPrefixRef = useRef('');
-
   const handleSttTranscript = useCallback((text: string) => {
     const prefix = sttPrefixRef.current;
-    inputBarRef.current?.setInput(prefix ? `${prefix} ${text}` : text);
+    // InputBar is deeply managed inside AppChat now, meaning we need AppChat to manage its own value.
+    // However, AppChat passes `onSend` and handles stt prefix if we structure it properly. 
+    // To minimize API changes, we'll dispatch an event that InputBar listens to.
+    document.dispatchEvent(new CustomEvent('stt-transcript', { detail: prefix ? `${prefix} ${text}` : text }));
   }, []);
 
   const { isListening, sttError, startListening, stopListening } = useStt(handleSttTranscript);
 
   const handleSttToggle = useCallback(() => {
-    if (isListening) {
-      stopListening();
-    } else {
-      sttPrefixRef.current = inputBarRef.current?.getInput() ?? '';
-      startListening();
+    if (isListening) stopListening();
+    else {
+      // InputBar sets prefix state globally
+      document.dispatchEvent(new Event('stt-request-prefix'));
+      setTimeout(() => startListening(), 50);
     }
   }, [isListening, startListening, stopListening]);
+
+  useEffect(() => {
+    function onPrefix(e: Event) { sttPrefixRef.current = (e as CustomEvent).detail; }
+    document.addEventListener('stt-provide-prefix', onPrefix);
+    return () => document.removeEventListener('stt-provide-prefix', onPrefix);
+  }, []);
 
   const handleModelChange = useCallback((m: string) => {
     setModel(m);
@@ -370,387 +178,78 @@ function App() {
     setActiveCharacterId(null);
     setActiveMemoId(null);
     if (!enabled) setMainTab('chat');
-  }, []);
+  }, [setActiveMemoId]);
 
   const selectCharacter = useCallback((id: string) => {
     setActiveMemoId(null);
     const charChatId = `char_${id}`;
     setMainTab('chat');
     invoke<Message[]>('load_chat_messages', { id: charChatId })
-      .then((msgs) => {
-        setActiveCharacterId(id);
-        setActiveChatId(charChatId);
-        setInitMessages(msgs);
-      })
-      .catch(() => {
-        setActiveCharacterId(id);
-        setActiveChatId(charChatId);
-        setInitMessages([]);
-      });
-  }, []);
+      .then((msgs) => { setActiveCharacterId(id); setActiveChatId(charChatId); setInitMessages(msgs); })
+      .catch(() => { setActiveCharacterId(id); setActiveChatId(charChatId); setInitMessages([]); });
+  }, [setActiveMemoId]);
 
-  // Clear the quoted post whenever the user navigates away from that character's chat.
   useEffect(() => {
-    if (quotedPost && activeChatId !== `char_${quotedPost.characterId}`) {
-      setQuotedPost(null);
-    }
+    if (quotedPost && activeChatId !== `char_${quotedPost.characterId}`) setQuotedPost(null);
   }, [activeChatId, quotedPost]);
 
-  const handleCreateUserPost = useCallback(async (text: string) => {
-    const post = await addPost({ characterId: 'user', text });
-    invoke<{ characterId: string; text: string }[]>('react_to_user_post', { postId: post.id })
-      .then(async (dms) => {
-        refreshPosts();
-        for (const dm of dms) {
-          const chatId = `char_${dm.characterId}`;
-          const msgs = await invoke<{ role: string; content: string }[]>('load_chat_messages', { id: chatId }).catch(() => []);
-          const updated = [...msgs, { role: 'assistant', content: dm.text }];
-          await invoke('save_chat_messages', { id: chatId, messages: updated }).catch(() => {});
-          // Refresh active chat if the user is already in it
-          if (activeChatId === chatId) {
-            setInitMessages(updated as Message[]);
-          }
-        }
-      })
-      .catch(() => {});
-  }, [addPost, refreshPosts, activeChatId]);
-
-  const startNewChat = useCallback(() => {
-    setActiveChatId(null);
-    setInitMessages([]);
-    setActiveMemoId(null);
-  }, []);
+  const startNewChat = useCallback(() => { setActiveChatId(null); setInitMessages([]); setActiveMemoId(null); }, [setActiveMemoId]);
 
   const switchChat = useCallback((id: string) => {
     setActiveMemoId(null);
     invoke<Message[]>('load_chat_messages', { id })
-      .then((msgs) => {
-        setActiveChatId(id);
-        setInitMessages(msgs);
-      })
-      .catch(() => {
-        setActiveChatId(id);
-        setInitMessages([]);
-      });
-  }, []);
-
-  const activeChatIdRef = useRef(activeChatId);
-  activeChatIdRef.current = activeChatId;
+      .then((msgs) => { setActiveChatId(id); setInitMessages(msgs); })
+      .catch(() => { setActiveChatId(id); setInitMessages([]); });
+  }, [setActiveMemoId]);
 
   const deleteChat = useCallback((id: string) => {
     invoke('delete_chat', { id }).catch(() => {});
     setChatMetas((prev) => prev.filter((m) => m.id !== id));
-    if (activeChatIdRef.current === id) {
-      setActiveChatId(null);
-      setInitMessages([]);
-    }
-  }, []);
+    if (activeChatId === id) { setActiveChatId(null); setInitMessages([]); }
+  }, [activeChatId]);
 
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isThinking, agentStatus]);
-
-  const onSend = useCallback((text: string) => {
+  const onSendWrapper = useCallback((text: string) => {
     if (isListening) stopListening();
     if (quotedPost) {
-      const character = characters.find((c) => c.id === quotedPost.characterId);
-      const authorName = character?.name ?? 'Unknown';
+      const authorName = characters.find((c) => c.id === quotedPost.characterId)?.name ?? 'Unknown';
       handleSend(`[postquote:${authorName}]${quotedPost.text}[/postquote]\n${text}`);
       setQuotedPost(null);
-    } else {
-      handleSend(text);
-    }
+    } else handleSend(text);
   }, [handleSend, isListening, stopListening, quotedPost, characters]);
 
-
   useEffect(() => {
-    const unlisten = listen<PermissionRequestData>('pc-permission-request', (e) => {
-      setPermRequest(e.payload);
-    });
-    return () => { unlisten.then((fn) => fn()); };
+    const unlisten = listen<PermissionRequestData>('pc-permission-request', (e) => setPermRequest(e.payload));
+    return () => { unlisten.then(fn => fn()); };
   }, []);
 
   useEffect(() => {
-    const unlisten = listen<{ id: string; questions: AskQuestion[] }>('ask-user-request', (e) => {
-      setAskUserRequest(e.payload);
-    });
-    return () => { unlisten.then((fn) => fn()); };
+    const unlisten = listen<{ id: string; questions: AskQuestion[] }>('ask-user-request', (e) => setAskUserRequest(e.payload));
+    return () => { unlisten.then(fn => fn()); };
   }, []);
-
-  const handleOllamaEndpointChanged = useCallback(() => {}, []);
-
-  // ── File drag-drop via Tauri API ─────────────────────────────────────────
-  const [isDraggingFile, setIsDraggingFile] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    let unlistenFn: (() => void) | null = null;
-    getCurrentWindow().onDragDropEvent((event) => {
-      if (event.payload.type === 'enter') {
-        setIsDraggingFile(true);
-      } else if (event.payload.type === 'leave') {
-        setIsDraggingFile(false);
-      } else if (event.payload.type === 'drop') {
-        setIsDraggingFile(false);
-        for (const path of event.payload.paths) {
-          inputBarRef.current?.attachFilePath(path);
-        }
-      }
-    }).then((fn) => {
-      if (cancelled) fn();
-      else unlistenFn = fn;
-    });
-    return () => {
-      cancelled = true;
-      unlistenFn?.();
-    };
-  }, []);
-
-  const messageList = useMemo(() => {
-    const lastUserMsgIdx = messages.reduce(
-      (acc, m, i) => (m.role === 'user' ? i : acc),
-      -1,
-    );
-    return messages.map((msg, idx) => (
-      <ChatMessage
-        key={idx}
-        message={msg}
-        isLastMessage={idx === messages.length - 1}
-        isThinking={isThinking}
-        onRetry={idx === lastUserMsgIdx && !isThinking ? handleRetry : undefined}
-      />
-    ));
-  }, [messages, isThinking, handleRetry]);
 
   return (
-    <div className={`app-root${sideOpen ? ' side-open' : ''}${wallpaperUrl ? ' app-root--wallpaper' : ''}`}>
-      {wallpaperUrl && (
-        <>
-          <div
-            className="app-wallpaper-bg"
-            style={{
-              backgroundImage: `url(${wallpaperUrl})`,
-              filter: wallpaperBlur > 0 ? `blur(${wallpaperBlur}px)` : undefined,
-            }}
-          />
-          {wallpaperDim > 0 && (
-            <div
-              className="app-wallpaper-dim"
-              style={{ background: `rgba(0,0,0,${wallpaperDim})` }}
-            />
-          )}
-        </>
-      )}
-      <AccessibilityDialog />
-
-      {floatBtn && (
-        <button
-          className="explain-float-btn"
-          style={{ left: floatBtn.x, top: floatBtn.y }}
-          onMouseDown={(e) => { e.preventDefault(); handleExplainClick(); }}
-        >
-          Explain more
-        </button>
-      )}
-
-      {showExplain && (
-        <ExplainPopup
-          selectedText={explainText}
-          model={model}
-          contextMessages={messages}
-          onClose={() => setShowExplain(false)}
-          onSaveMemo={handleSaveMemo}
-          onOpenMemo={handleOpenMemo}
+    <AppLayout
+      chatMode={chatMode} igMode={igMode} mainTab={mainTab} setMainTab={setMainTab} handleChatModeChange={handleChatModeChange} sideOpen={sideOpen} setSideOpen={setSideOpen}
+      sideView={sideView} handleSwitchView={handleSwitchView} startNewChat={startNewChat} visibleChatMetas={visibleChatMetas} activeChatId={activeChatId} switchChat={switchChat}
+      deleteChat={deleteChat} model={model} handleModelChange={handleModelChange} handleOllamaEndpointChanged={() => {}} characters={characters} activeCharacterId={activeCharacterId}
+      selectCharacter={selectCharacter} addCharacter={addCharacter} deleteCharacter={deleteCharacter} handleIgModeChange={handleIgModeChange} activeMemoId={activeMemoId}
+      handleSelectMemo={handleSelectMemo} personaNotice={personaNotice} onPersonaNoticeClose={() => { setPersonaNotice(null); invoke('clear_persona_build_status').catch(() => {}); }}
+    >
+      {mainTab === 'posts' ? (
+        <AppSocial
+          posts={posts} characters={characters} likedPostIds={likedPostIds} toggleLike={toggleLike} deletePost={deletePost}
+          addPost={addPost} refreshPosts={refreshPosts} activeChatId={activeChatId} setInitMessages={setInitMessages}
+        />
+      ) : (
+        <AppChat
+          activeMemoId={activeMemoId} memoMessages={memoMessages} memoStreaming={memoStreaming} memoStreamContent={memoStreamContent} handleMemoSend={handleMemoSend}
+          messages={messages} activeCharacter={activeCharacter} isThinking={isThinking} agentStatus={agentStatus} permRequest={permRequest} setPermRequest={setPermRequest}
+          askUserRequest={askUserRequest} setAskUserRequest={setAskUserRequest} error={error} handleRetry={handleRetry} onSend={onSendWrapper} isListening={isListening}
+          sttError={sttError} handleSttToggle={handleSttToggle} handleStop={handleStop} quotedPost={quotedPost} setQuotedPost={setQuotedPost} model={model}
+          handleSaveMemo={handleSaveMemo} handleOpenMemo={handleOpenMemo}
         />
       )}
-
-      {/* ── Tab bar (leftmost column) — mode switch ── */}
-      <div className="app-tab-bar">
-        <button
-          className={`tab-bar-btn${!chatMode ? ' tab-bar-btn--active' : ''}`}
-          onClick={() => { if (chatMode) handleChatModeChange(false); }}
-          aria-label="Normal mode"
-        >
-          <Bot size={26} />
-        </button>
-        <button
-          className={`tab-bar-btn${chatMode ? ' tab-bar-btn--active' : ''}`}
-          onClick={() => { if (!chatMode) handleChatModeChange(true); }}
-          aria-label="Chat mode"
-        >
-          <Users size={26} />
-        </button>
-      </div>
-
-      {/* ── Mobile nav overlay (phone only, shown when side panel is closed) ── */}
-      <div className="mobile-nav">
-        <button
-          className="top-nav-btn"
-          onClick={() => setSideOpen(true)}
-          aria-label="Open menu"
-        >
-          <ChevronLeft size={22} />
-        </button>
-      </div>
-
-      {/* ── Left panel ── */}
-      <div className="app-left" style={{ width: sideWidth }}>
-        <SideMenu
-          view={sideView}
-          onSwitchView={handleSwitchView}
-          onNewChat={startNewChat}
-          chats={visibleChatMetas}
-          activeChatId={activeChatId}
-          onSelectChat={switchChat}
-          onDeleteChat={deleteChat}
-          model={model}
-          onModelChange={handleModelChange}
-          onOllamaEndpointChanged={handleOllamaEndpointChanged}
-          isMobileOpen={sideOpen}
-          onCloseSide={() => setSideOpen(false)}
-          chatMode={chatMode}
-          onChatModeChange={handleChatModeChange}
-          characters={characters}
-          activeCharacterId={activeCharacterId}
-          onSelectCharacter={selectCharacter}
-          onCreateCharacter={addCharacter}
-          onDeleteCharacter={deleteCharacter}
-          igMode={igMode}
-          onIgModeChange={handleIgModeChange}
-          activeMemoId={activeMemoId}
-          onSelectMemo={handleSelectMemo}
-          personaNotice={personaNotice}
-          onPersonaNoticeClose={() => {
-            setPersonaNotice(null);
-            invoke('clear_persona_build_status').catch(() => {});
-          }}
-        />
-      </div>
-
-      {/* ── Draggable divider ── */}
-      <div
-        className="app-divider"
-        onPointerDown={handleDividerPointerDown}
-        onPointerMove={handleDividerPointerMove}
-        onPointerUp={handleDividerPointerUp}
-        onPointerCancel={handleDividerPointerUp}
-      />
-
-      {/* ── Right: main content ── */}
-      <div className="app-right">
-        {isDraggingFile && (
-          <div className="drag-file-overlay">
-            <div className="drag-file-overlay-content">
-              <File size={48} strokeWidth={1.5} />
-              <span className="drag-file-overlay-text">Insert file</span>
-            </div>
-          </div>
-        )}
-        {/* Content tabs — only when both chatMode and igMode are active */}
-        {chatMode && igMode && (
-          <div className="app-content-tabs">
-            <button
-              className={`content-tab-btn${mainTab === 'chat' ? ' content-tab-btn--active' : ''}`}
-              onClick={() => setMainTab('chat')}
-              aria-label="Chat"
-            >
-              <MessageCircle size={22} />
-            </button>
-            <button
-              className={`content-tab-btn${mainTab === 'posts' ? ' content-tab-btn--active' : ''}`}
-              onClick={() => setMainTab('posts')}
-              aria-label="Posts"
-            >
-              <LayoutGrid size={22} />
-            </button>
-          </div>
-        )}
-
-        {mainTab === 'posts' ? (
-          <div className="app-content custom-scrollbar">
-            <div className="app-posts-feed">
-              <PostFeed
-                posts={posts}
-                characters={characters}
-                likedPostIds={likedPostIds}
-                onLike={toggleLike}
-                onDelete={deletePost}
-                onCreatePost={handleCreateUserPost}
-              />
-            </div>
-          </div>
-        ) : activeMemoId ? (
-          <MemoChatView
-            key={activeMemoId}
-            messages={memoMessages}
-            streaming={memoStreaming}
-            streamContent={memoStreamContent}
-            onSend={handleMemoSend}
-          />
-        ) : (
-          <>
-            <div className="app-content custom-scrollbar">
-              {messages.length === 0 ? (
-                activeCharacter ? (
-                  <div className="app-friend-empty">Start to chat with your new friend</div>
-                ) : (
-                  <WelcomeScreen onSend={onSend} />
-                )
-              ) : (
-                <div className="app-messages">
-                  {messageList}
-
-                  {agentStatus && (
-                    <div className="app-agent-status">
-                      <span className="app-agent-dot" />
-                      {agentStatus}
-                    </div>
-                  )}
-
-                  {permRequest && (
-                    <PermissionRequest
-                      request={permRequest}
-                      onDone={() => setPermRequest(null)}
-                    />
-                  )}
-
-                  {askUserRequest && (
-                    <div className="chat-message">
-                      <div className="chat-avatar">
-                        <Sparkles size={24} />
-                      </div>
-                      <AskUserBubble
-                        id={askUserRequest.id}
-                        questions={askUserRequest.questions}
-                        onDone={() => setAskUserRequest(null)}
-                      />
-                    </div>
-                  )}
-
-                  {error && (
-                    <div className="app-error">{error}</div>
-                  )}
-
-                  <div ref={scrollRef} />
-                </div>
-              )}
-            </div>
-
-            <InputBar
-              ref={inputBarRef}
-              isThinking={isThinking}
-              isListening={isListening}
-              sttError={sttError}
-              onSend={onSend}
-              onSttToggle={handleSttToggle}
-              onStop={handleStop}
-              quotedPost={quotedPost}
-              onClearQuote={() => setQuotedPost(null)}
-            />
-          </>
-        )}
-      </div>
-    </div>
+    </AppLayout>
   );
 }
 

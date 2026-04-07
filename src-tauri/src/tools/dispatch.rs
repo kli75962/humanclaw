@@ -1,7 +1,7 @@
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
 
-use super::memory::execute_memory_tool;
+use super::core_tool::execute_memory_tool;
 use super::types::ToolResult;
 
 #[cfg(not(target_os = "android"))]
@@ -40,7 +40,7 @@ async fn execute_phone_control_tool(app: &AppHandle, name: &str, args: &Value) -
 
 #[cfg(not(target_os = "android"))]
 async fn forward_to_android(app: &AppHandle, name: &str, args: &Value) -> ToolResult {
-    use crate::bridge::types::ToolResponse;
+    use crate::network::types::ToolResponse;
     use crate::session::store;
 
     let cfg = store::bootstrap(app);
@@ -84,7 +84,7 @@ async fn forward_to_android(app: &AppHandle, name: &str, args: &Value) -> ToolRe
 
 #[cfg(target_os = "android")]
 async fn call_kotlin_tool(app: &AppHandle, name: &str, args: &Value) -> ToolResult {
-    use crate::phone::plugin::PhoneControlHandle;
+    use crate::device::phone::plugin::PhoneControlHandle;
     use serde_json::json;
 
     let handle = app.state::<PhoneControlHandle<tauri::Wry>>();
@@ -175,7 +175,7 @@ pub async fn execute_tool_with_context(
                     }
                     let app_clone = app.clone();
                     tauri::async_runtime::spawn(async move {
-                        crate::bridge::persona_sync::sync_to_all_peers(&app_clone).await;
+                        crate::network::sync::skills::sync_to_all_peers(&app_clone).await;
                     });
                     ToolResult::ok(
                         "create_skill",
