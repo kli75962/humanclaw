@@ -86,6 +86,22 @@
   background: var(--color-hover);
 }
 
+/* ── Image attachments in user bubble ── */
+.chat-image-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.chat-image-thumb {
+  max-width: 220px;
+  max-height: 220px;
+  border-radius: 10px;
+  object-fit: cover;
+  display: block;
+}
+
 /* ── File attachments in user bubble ── */
 .chat-file-attachments {
   display: flex;

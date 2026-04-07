@@ -14,6 +14,7 @@ pub struct Skill {
 
 #[derive(Clone, Debug)]
 pub struct Tool {
+    #[allow(dead_code)]
     pub name: String,
     pub content: String,
 }
@@ -21,6 +22,7 @@ pub struct Tool {
 // Memory caches
 static SKILLS: std::sync::RwLock<Option<Vec<Skill>>> = std::sync::RwLock::new(None);
 static TOOLS: std::sync::RwLock<Option<Vec<Tool>>> = std::sync::RwLock::new(None);
+#[allow(dead_code)]
 static TOOL_SCHEMAS: std::sync::OnceLock<Vec<Value>> = std::sync::OnceLock::new();
 
 // ── Dynamic Resolution ──

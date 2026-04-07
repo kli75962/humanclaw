@@ -86,6 +86,98 @@
   color: var(--color-text-2);
 }
 
+/* ── Unsupported file type alert ── */
+.inputbar-alert {
+  max-width: 768px;
+  margin: 0 auto 8px;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: inputbar-alert-in 0.15s ease;
+}
+
+@keyframes inputbar-alert-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.inputbar-alert-icon {
+  flex-shrink: 0;
+  color: #f87171;
+}
+
+.inputbar-alert-text {
+  flex: 1;
+  font-size: 12.5px;
+  color: #fca5a5;
+}
+
+.inputbar-alert-close {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: #f87171;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.inputbar-alert-close:hover {
+  opacity: 1;
+}
+
+/* ── Attached image previews ── */
+.inputbar-images {
+  max-width: 768px;
+  margin: 0 auto 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 16px;
+}
+
+.inputbar-image-preview {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.inputbar-image-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  display: block;
+}
+
+.inputbar-image-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.inputbar-image-remove:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
 /* ── Attached file chips ── */
 .inputbar-files {
   max-width: 768px;

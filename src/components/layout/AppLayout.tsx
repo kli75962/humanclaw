@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, ChevronLeft, LayoutGrid, MessageCircle } from 'lucide-react';
+import { Bot, ChevronLeft, LayoutGrid, MessageCircle, Users } from 'lucide-react';
 import { AccessibilityDialog } from '../ui/AccessibilityDialog';
 import { useWallpaper } from '../../hooks/useWallpaper';
 import { SideMenu } from '../ui/SideMenu';
@@ -29,7 +29,7 @@ interface AppLayoutProps {
   characters: Character[];
   activeCharacterId: string | null;
   selectCharacter: (id: string) => void;
-  addCharacter: (c: Partial<Character>) => Promise<Character>;
+  addCharacter: (c: Omit<Character, 'id' | 'createdAt'>) => Promise<Character>;
   deleteCharacter: (id: string) => void;
   handleIgModeChange: (enabled: boolean) => void;
   activeMemoId: string | null;
@@ -86,7 +86,7 @@ export function AppLayout(props: AppLayoutProps) {
           onClick={() => { if (!chatMode) handleChatModeChange(true); }}
           aria-label="Chat mode"
         >
-          <Bot size={26} />
+          <Users size={26} />
         </button>
       </div>
 

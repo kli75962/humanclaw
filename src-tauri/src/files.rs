@@ -26,6 +26,133 @@ pub async fn read_file_text(path: String) -> Result<String, String> {
     }
 }
 
+/// Read the current clipboard image as a data URL (Linux: wl-paste for Wayland, xclip for X11).
+/// Returns None if clipboard contains no image or tools are unavailable.
+#[tauri::command]
+pub async fn get_clipboard_image() -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        use base64::Engine;
+
+        if std::env::var("WAYLAND_DISPLAY").is_ok() {
+            // List available MIME types first, then read the first image type found.
+            // --no-newline is required for binary data — without it wl-paste appends
+            // a newline that corrupts the image bytes.
+            if let Ok(types_out) = std::process::Command::new("wl-paste")
+                .arg("--list-types")
+                .output()
+            {
+                if types_out.status.success() {
+                    for line in String::from_utf8_lossy(&types_out.stdout).lines() {
+                        let mime = line.trim();
+                        if mime.starts_with("image/") {
+                            if let Ok(out) = std::process::Command::new("wl-paste")
+                                .args(["--no-newline", "--type", mime])
+                                .output()
+                            {
+                                if out.status.success() && !out.stdout.is_empty() {
+                                    return Some(format!(
+                                        "data:{};base64,{}",
+                                        mime,
+                                        base64::engine::general_purpose::STANDARD
+                                            .encode(&out.stdout)
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return None;
+        }
+
+        // X11 fallback via xclip
+        for mime in &["image/png", "image/jpeg", "image/gif", "image/webp"] {
+            if let Ok(out) = std::process::Command::new("xclip")
+                .args(["-selection", "clipboard", "-t", mime, "-o"])
+                .output()
+            {
+                if out.status.success() && !out.stdout.is_empty() {
+                    return Some(format!(
+                        "data:{};base64,{}",
+                        mime,
+                        base64::engine::general_purpose::STANDARD.encode(&out.stdout)
+                    ));
+                }
+            }
+        }
+        None
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+/// Read file URIs from the clipboard (text/uri-list) and return decoded OS paths.
+/// Used for Ctrl+V file paste on Linux Wayland.
+#[tauri::command]
+pub async fn get_clipboard_uri_list() -> Vec<String> {
+    #[cfg(target_os = "linux")]
+    {
+        fn pct_decode(s: &str) -> String {
+            let b = s.as_bytes();
+            let mut out = String::with_capacity(b.len());
+            let mut i = 0;
+            while i < b.len() {
+                if b[i] == b'%' && i + 2 < b.len() {
+                    if let Ok(hex) = std::str::from_utf8(&b[i + 1..i + 3]) {
+                        if let Ok(byte) = u8::from_str_radix(hex, 16) {
+                            out.push(byte as char);
+                            i += 3;
+                            continue;
+                        }
+                    }
+                }
+                out.push(b[i] as char);
+                i += 1;
+            }
+            out
+        }
+
+        if std::env::var("WAYLAND_DISPLAY").is_ok() {
+            let has_uri = std::process::Command::new("wl-paste")
+                .arg("--list-types")
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .map(|o| String::from_utf8_lossy(&o.stdout).lines().any(|l| l.trim() == "text/uri-list"))
+                .unwrap_or(false);
+
+            if has_uri {
+                if let Ok(out) = std::process::Command::new("wl-paste")
+                    .args(["--no-newline", "--type", "text/uri-list"])
+                    .output()
+                {
+                    if out.status.success() {
+                        return String::from_utf8_lossy(&out.stdout)
+                            .lines()
+                            .filter(|l| l.starts_with("file://"))
+                            .map(|l| pct_decode(l.trim_start_matches("file://")))
+                            .collect();
+                    }
+                }
+            }
+        }
+        vec![]
+    }
+    #[cfg(not(target_os = "linux"))]
+    { vec![] }
+}
+
+/// Read any file from disk as a base64-encoded string (for images / binary files).
+#[tauri::command]
+pub async fn read_file_as_base64(path: String) -> Result<String, String> {
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    use base64::Engine;
+    Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
+}
+
 /// Same as read_file_text but accepts raw bytes from the frontend (file picker).
 #[tauri::command]
 pub async fn extract_file_text_from_bytes(bytes: Vec<u8>, filename: String) -> Result<String, String> {

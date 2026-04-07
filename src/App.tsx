@@ -23,7 +23,7 @@ const CHAT_MODE_KEY = 'phoneclaw_chat_mode';
 const IG_MODE_KEY = 'phoneclaw_ig_mode';
 
 function App() {
-  const [model, setModel] = useState(() => localStorage.getItem(MODEL_STORAGE_KEY) ?? DEFAULT_MODEL);
+  const [model, setModel] = useState<string>(() => localStorage.getItem(MODEL_STORAGE_KEY) ?? DEFAULT_MODEL);
   const [chatMode, setChatMode] = useState(() => localStorage.getItem(CHAT_MODE_KEY) === 'true');
   const [igMode, setIgMode] = useState(() => localStorage.getItem(IG_MODE_KEY) === 'true');
   const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);

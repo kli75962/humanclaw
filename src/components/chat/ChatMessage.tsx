@@ -14,8 +14,27 @@ function parseFileAttachments(content: string): { files: string[]; text: string 
   return { files, text: cleaned.trim() };
 }
 
+/** Extract <image name="..." mime="..." data="..."/> blocks from a user message. */
+function parseImageAttachments(content: string): { images: { name: string; dataUrl: string }[]; text: string } {
+  const images: { name: string; dataUrl: string }[] = [];
+  const cleaned = content.replace(/<image name="([^"]*)" mime="([^"]*)" data="([^"]*)"\s*\/>/g, (_m, name: string, mime: string, data: string) => {
+    images.push({ name, dataUrl: `data:${mime};base64,${data}` });
+    return '';
+  });
+  return { images, text: cleaned.trim() };
+}
+
+/** Strip [CORE MEMORY...] blocks or standalone MEMORY sections the LLM may echo. */
+function stripMemorySection(text: string): string {
+  return text
+    .replace(/\[CORE MEMORY[^\]]*\][\s\S]*/gi, '')
+    .replace(/^MEMORY[\s:].*$/gim, '')
+    .trim();
+}
+
 export function formatAssistantText(raw: string): string {
   if (!raw) return raw;
+  raw = stripMemorySection(raw);
 
   if (/\n/.test(raw)) {
     return raw.replace(/\n{3,}/g, '\n\n').trim();
@@ -65,12 +84,19 @@ export const ChatMessage = memo(function ChatMessage({ message, isLastMessage, i
   const isUser = message.role === 'user';
   const isStreaming = isThinking && isLastMessage && !isUser;
 
-  const attachments = useMemo(
-    () => isUser ? parseFileAttachments(message.content) : null,
+  const imageAttachments = useMemo(
+    () => isUser ? parseImageAttachments(message.content) : null,
     [isUser, message.content],
   );
 
-  const contentAfterFiles = attachments ? attachments.text : message.content;
+  const contentAfterImages = imageAttachments ? imageAttachments.text : message.content;
+
+  const attachments = useMemo(
+    () => isUser ? parseFileAttachments(contentAfterImages) : null,
+    [isUser, contentAfterImages],
+  );
+
+  const contentAfterFiles = attachments ? attachments.text : contentAfterImages;
   const parsed = useMemo(() => isUser ? parseQuoteBlock(contentAfterFiles) : null, [isUser, contentAfterFiles]);
   const bodyContent = parsed ? parsed.rest : contentAfterFiles;
 
@@ -88,6 +114,13 @@ export const ChatMessage = memo(function ChatMessage({ message, isLastMessage, i
       )}
 
       <div className={`chat-bubble${isUser ? ' chat-bubble--user' : ' chat-bubble--assistant'}`}>
+        {imageAttachments && imageAttachments.images.length > 0 && (
+          <div className="chat-image-attachments">
+            {imageAttachments.images.map((img, i) => (
+              <img key={i} src={img.dataUrl} alt={img.name} className="chat-image-thumb" />
+            ))}
+          </div>
+        )}
         {attachments && attachments.files.length > 0 && (
           <div className="chat-file-attachments">
             {attachments.files.map((name, i) => (

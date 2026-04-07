@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useEffect } from 'react';
+import { useRef, useMemo, useEffect } from 'react';
 import { ExplainPopup } from '../ui/ExplainPopup';
 import { WelcomeScreen } from './WelcomeScreen';
 import { ChatMessage } from './ChatMessage';
@@ -22,7 +22,7 @@ interface AppChatProps {
   messages: Message[];
   activeCharacter: Character | null;
   isThinking: boolean;
-  agentStatus: string;
+  agentStatus: string | null;
   permRequest: PermissionRequestData | null;
   setPermRequest: (req: PermissionRequestData | null) => void;
   askUserRequest: { id: string; questions: AskQuestion[] } | null;

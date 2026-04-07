@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import { useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { PostFeed } from '../social/PostFeed';
 import type { Character, Post, Message } from '../../types';

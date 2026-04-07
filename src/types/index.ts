@@ -74,6 +74,8 @@ export interface InputBarHandle {
   attachFile: (file: File) => void;
   /** Attach a file by its OS path string (from Tauri drag-drop). */
   attachFilePath: (path: string) => void;
+  /** Attach an image by its OS path string (from Tauri drag-drop). */
+  attachImagePath: (path: string) => void;
 }
 
 export interface ModalProps {

@@ -9,7 +9,7 @@ mod tools;
 mod files;
 
 use chat::{get_memory_file, set_memory_file, list_chats, load_chat_messages, create_chat, save_chat_messages, delete_chat, list_memos, load_memo_messages, create_memo, save_memo_messages, delete_memo};
-use files::{read_file_text, extract_file_text_from_bytes};
+use files::{read_file_text, extract_file_text_from_bytes, read_file_as_base64, get_clipboard_image, get_clipboard_uri_list};
 use social::character::{list_characters, save_character, delete_character};
 use social::post::{list_posts, save_post, delete_post, like_post, unlike_post, list_comments, add_comment, generate_character_post, trigger_character_reactions, generate_character_dm, react_to_user_post, react_to_user_comment, resume_post_gen_queue, hide_post, record_post_preference, get_due_posts, mark_post_generated};
 use ai::{cancel_chat, chat_claude, chat_ollama, list_models, list_models_at, explain_text};
@@ -183,6 +183,9 @@ pub fn run() {
             // file reading
             read_file_text,
             extract_file_text_from_bytes,
+            read_file_as_base64,
+            get_clipboard_image,
+            get_clipboard_uri_list,
             // explain + memos
             explain_text,
             list_memos,
