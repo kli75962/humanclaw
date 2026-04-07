@@ -45,6 +45,7 @@ export interface Character {
   createdAt: string;
   activeTime?: 'early' | 'night' | 'random';  // When character is most active
   birthday?: string;        // ISO date YYYY-MM-DD or 'random'
+  sociability?: number;     // 0–100, computed from persona config
 }
 
 export interface ChatMessageProps {
@@ -148,12 +149,16 @@ export interface TopBarProps {
 export interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
+  /** LLM-generated brief summary (<15 words) for history compression. */
+  brief?: string;
 }
 
 /** Payload emitted by the `ollama-stream` Tauri event for every token. */
 export interface StreamPayload {
   content: string;
   done: boolean;
+  /** LLM-generated brief, included when done=true. */
+  brief?: string;
 }
 
 /** Emitted by `agent-status` when the LLM is executing a tool. */

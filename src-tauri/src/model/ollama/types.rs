@@ -15,6 +15,10 @@ pub struct OllamaMessage {
     /// Populated when a tool returns a `data:image/...;base64,...` result.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub images: Option<Vec<String>>,
+    /// LLM-generated brief summary (<15 words) of this response.
+    /// Deserialized from frontend (saved chats), but NOT serialized to Ollama API.
+    #[serde(default, skip_serializing)]
+    pub brief: Option<String>,
 }
 
 /// Build a tool-result message. If `output` is an image data URL
@@ -29,6 +33,7 @@ pub fn tool_message(output: String) -> OllamaMessage {
                 content:    "[screenshot]".to_string(),
                 tool_calls: None,
                 images:     Some(vec![b64]),
+                brief:      None,
             };
         }
     }
@@ -37,6 +42,7 @@ pub fn tool_message(output: String) -> OllamaMessage {
         content:    output,
         tool_calls: None,
         images:     None,
+        brief:      None,
     }
 }
 

@@ -107,6 +107,7 @@ pub async fn create_persona_background(
         content: message,
         tool_calls: None,
         images: None,
+        brief: None,
     }];
 
     let result = run_headless(&app, conversation, &model, None, None).await;
@@ -118,11 +119,41 @@ pub async fn create_persona_background(
             let new_display = after_names
                 .difference(&before_names)
                 .next()
-                .map(|n| {
-                    n.strip_prefix("persona_")
-                        .or_else(|| n.strip_prefix("persona-"))
-                        .unwrap_or(n)
-                        .to_string()
+                .map(|dir_name| {
+                    // Prefer display_name from persona_config.json if the LLM wrote one
+                    if let Ok(data_dir) = app.path().app_data_dir() {
+                        let cfg_path = data_dir
+                            .join("custom_personas")
+                            .join(dir_name)
+                            .join("persona_config.json");
+                        if let Ok(text) = std::fs::read_to_string(&cfg_path) {
+                            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+                                if let Some(dn) = v.get("display_name").and_then(|x| x.as_str()) {
+                                    if !dn.is_empty() {
+                                        return dn.to_string();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Fallback: humanize the directory slug
+                    let slug = dir_name
+                        .strip_prefix("persona_")
+                        .or_else(|| dir_name.strip_prefix("persona-"))
+                        .unwrap_or(dir_name);
+                    let mut name = slug.replace('_', " ");
+                    // Capitalize first letter of each word
+                    name = name.split_whitespace()
+                        .map(|w| {
+                            let mut c = w.chars();
+                            match c.next() {
+                                None => String::new(),
+                                Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    name
                 })
                 .unwrap_or(display_name);
             write_persona_build_status(&app, &PersonaBuildStatus {
@@ -154,6 +185,62 @@ fn is_persona_skill(name: &str) -> bool {
 fn is_ig_skill(name: &str) -> bool {
     matches!(name, "generate-post" | "post-comment" | "post-dm"
                  | "generate_post" | "post_comment" | "post_dm")
+}
+
+/// Return the sociability score (0–100) for a persona name.
+/// Priority: embedded persona_config.json → runtime persona_config.json → keyword scan.
+/// Supports both new `sociability` field and legacy `personality_type` field.
+pub fn get_sociability_for_persona(app: &AppHandle, persona: &str) -> u8 {
+    let persona_lower = persona.to_lowercase();
+    let slug = persona_lower
+        .strip_prefix("persona_")
+        .or_else(|| persona_lower.strip_prefix("persona-"))
+        .unwrap_or(&persona_lower);
+    let underscore = format!("persona_{slug}");
+    let dash = format!("persona-{slug}");
+
+    // 1. Embedded compiled skill configs
+    for skill in SKILLS.iter() {
+        if skill.name == underscore || skill.name == dash {
+            if let Some(json) = skill.config {
+                if let Ok(v) = serde_json::from_str::<Value>(json) {
+                    if let Some(s) = v.get("sociability").and_then(|x| x.as_u64()) {
+                        return s.min(100) as u8;
+                    }
+                    if let Some(pt) = v.get("personality_type").and_then(|x| x.as_str()) {
+                        return match pt { "extrovert" => 75, _ => 25 };
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Runtime persona_config.json (user-created)
+    if let Ok(data_dir) = app.path().app_data_dir() {
+        for name in [&underscore, &dash] {
+            let path = data_dir.join("custom_personas").join(name).join("persona_config.json");
+            if let Ok(text) = std::fs::read_to_string(&path) {
+                if let Ok(v) = serde_json::from_str::<Value>(&text) {
+                    if let Some(s) = v.get("sociability").and_then(|x| x.as_u64()) {
+                        return s.min(100) as u8;
+                    }
+                    if let Some(pt) = v.get("personality_type").and_then(|x| x.as_str()) {
+                        return match pt { "extrovert" => 75, _ => 25 };
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Keyword scan fallback
+    let extrovert_kw = ["extrovert", "outgoing", "energetic", "enthusiastic", "lively",
+        "talkative", "confident", "vibrant", "social", "friendly", "cheerful", "playful",
+        "upbeat", "jk"];
+    let introvert_kw = ["introvert", "quiet", "reserved", "shy", "concise", "minimal",
+        "direct", "taciturn", "withdrawn"];
+    for kw in &extrovert_kw { if persona_lower.contains(kw) { return 75; } }
+    for kw in &introvert_kw { if persona_lower.contains(kw) { return 25; } }
+    60
 }
 
 /// Look up a skill's content by exact name. Returns None if not found.

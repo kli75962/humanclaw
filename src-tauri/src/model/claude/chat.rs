@@ -7,9 +7,11 @@ use crate::memory::bootstrap_memory;
 use crate::phone::{hide_overlay, show_overlay};
 use crate::skills::load_tool_schemas;
 use crate::tools::{execute_tool_with_context, ToolExecutionContext};
-use crate::model::shared::{
-    build_base_prompt, prepare_system, should_cancel, AgentStatusPayload, StreamPayload,
-    MAX_TOOL_ROUNDS,
+use crate::model::prompt::{build_base_prompt, prepare_system, should_cancel};
+use crate::model::types::{AgentStatusPayload, StreamPayload, MAX_AGENT_LOOPS};
+use crate::model::history::{
+    compress_text_history, extract_brief, memory_instruction,
+    trim_tool_start_index, CompressMsg,
 };
 
 use super::types::{
@@ -93,8 +95,6 @@ async fn stream_once(
 
     let mut byte_stream = response.bytes_stream();
     let mut buffer = String::new();
-
-    // Content blocks indexed by their position in the response
     let mut blocks: HashMap<usize, InFlightBlock> = HashMap::new();
     let mut stop_reason = String::new();
 
@@ -106,12 +106,10 @@ async fn stream_once(
         let bytes = chunk_result.map_err(|e| format!("Stream error: {e}"))?;
         buffer.push_str(&String::from_utf8_lossy(&bytes));
 
-        // Process complete SSE messages (each ends with \n\n)
         while let Some(end) = buffer.find("\n\n") {
             let message = buffer[..end].to_string();
             buffer = buffer[end + 2..].to_string();
 
-            // Parse event and data lines
             let mut event_type = String::new();
             let mut data_line = String::new();
 
@@ -143,14 +141,16 @@ async fn stream_once(
                 SseEvent::ContentBlockDelta { index, delta } => {
                     match delta {
                         ContentBlockDelta::TextDelta { text } => {
-                            // Emit token immediately to frontend
-                            app.emit("ollama-stream", StreamPayload {
-                                content: text.clone(),
-                                done: false,
-                            }).map_err(|e| e.to_string())?;
-
                             if let Some(InFlightBlock::Text { text: acc }) = blocks.get_mut(&index) {
                                 acc.push_str(&text);
+                                // Filter out ---MEMORY--- block from streaming to frontend
+                                if !acc.contains("---MEMORY---") {
+                                    app.emit("ollama-stream", StreamPayload {
+                                        content: text.clone(),
+                                        done: false,
+                                        brief: None,
+                                    }).map_err(|e| e.to_string())?;
+                                }
                             }
                         }
                         ContentBlockDelta::InputJsonDelta { partial_json } => {
@@ -180,7 +180,6 @@ async fn stream_once(
     let mut text = String::new();
     let mut tool_calls: Vec<ClaudeToolCall> = Vec::new();
 
-    // Process blocks in index order
     let mut ordered: Vec<(usize, InFlightBlock)> = blocks.into_iter().collect();
     ordered.sort_by_key(|(i, _)| *i);
 
@@ -207,7 +206,7 @@ pub async fn chat_claude(
     app: AppHandle,
     messages: Vec<InputMessage>,
     model: String,
-    character: Option<crate::model::shared::CharacterOverride>,
+    character: Option<crate::model::types::CharacterOverride>,
 ) -> Result<(), String> {
     crate::model::CHAT_CANCEL.store(false, std::sync::atomic::Ordering::Relaxed);
 
@@ -218,38 +217,90 @@ pub async fn chat_claude(
     let base_prompt = build_base_prompt(&app, character.as_ref()).await;
     let tool_context = local_tool_context(&app);
 
-    // Convert simple input messages to Claude format, filtering system messages
-    // (system prompt is handled separately via build_base_prompt)
-    let mut history: Vec<ClaudeMessage> = messages
-        .into_iter()
-        .filter(|m| m.role != "system")
+    // ── Tiered text history compression ──────────────────────────────────────
+    let msgs_no_sys: Vec<_> = messages.into_iter().filter(|m| m.role != "system").collect();
+    let compress_entries: Vec<CompressMsg> = msgs_no_sys
+        .iter()
+        .map(|m| CompressMsg {
+            role: m.role.clone(),
+            content: m.content.clone(),
+            brief: m.brief.clone(),
+        })
+        .collect();
+    let compressed = compress_text_history(&compress_entries);
+
+    // Convert kept messages to Claude format
+    let base_messages: Vec<ClaudeMessage> = msgs_no_sys[compressed.keep_from..]
+        .iter()
         .map(|m| ClaudeMessage {
-            role: m.role,
-            content: ClaudeContent::Text(m.content),
+            role: m.role.clone(),
+            content: ClaudeContent::Text(m.content.clone()),
         })
         .collect();
 
+    // ── Round-0 prompt ───────────────────────────────────────────────────────
+    let base_prompt_round0 = {
+        let mut p = base_prompt.clone();
+
+        if let Some(ref summary) = compressed.older_summary {
+            p.push_str("\n\n");
+            p.push_str(summary);
+        }
+
+        if let Some(ref char) = character {
+            if let Some(ref char_id) = char.id {
+                use crate::posts::character_memory::build_memory_context;
+                let mem = build_memory_context(&app, char_id);
+                if !mem.is_empty() {
+                    p.push_str("\n\n");
+                    p.push_str(&mem);
+                }
+            }
+        }
+
+        let has_character_id = character.as_ref().and_then(|c| c.id.as_ref()).is_some();
+        p.push_str("\n\n");
+        p.push_str(&memory_instruction(has_character_id));
+
+        p
+    };
+
+    // Tool-round messages accumulated during this invocation only.
+    let mut tool_history: Vec<ClaudeMessage> = Vec::new();
+
     show_overlay(&app);
 
-    for round in 0..MAX_TOOL_ROUNDS {
+    for round in 0..MAX_AGENT_LOOPS {
         if should_cancel(&app) {
             hide_overlay(&app);
             app.emit("ollama-stream", StreamPayload {
                 content: "\n\n[Cancelled by user]".to_string(),
                 done: true,
+                brief: None,
             }).ok();
             return Ok(());
         }
 
-        let system = prepare_system(&app, &base_prompt);
+        let effective_base = if round == 0 { &base_prompt_round0 } else { &base_prompt };
+        let system = prepare_system(&app, effective_base);
 
-        let result = match stream_once(&app, &api_key, &system, &history, tool_schemas, &model).await {
+        // Trim tool history to last MAX_TOOL_ROUNDS_KEPT rounds
+        let tool_start = trim_tool_start_index(&tool_history, |m| m.role == "assistant");
+        let tool_slice = &tool_history[tool_start..];
+
+        let conversation: Vec<ClaudeMessage> = base_messages.iter()
+            .chain(tool_slice.iter())
+            .cloned()
+            .collect();
+
+        let result = match stream_once(&app, &api_key, &system, &conversation, tool_schemas, &model).await {
             Ok(r) => r,
             Err(e) if e == "CANCELLED" => {
                 hide_overlay(&app);
                 app.emit("ollama-stream", StreamPayload {
                     content: "\n\n[Cancelled by user]".to_string(),
                     done: true,
+                    brief: None,
                 }).ok();
                 return Ok(());
             }
@@ -269,12 +320,15 @@ pub async fn chat_claude(
 
         if result.tool_calls.is_empty() {
             hide_overlay(&app);
-            app.emit("ollama-stream", StreamPayload { content: String::new(), done: true })
+
+            let brief = extract_brief(&result.text);
+
+            app.emit("ollama-stream", StreamPayload { content: String::new(), done: true, brief })
                 .map_err(|e| e.to_string())?;
             return Ok(());
         }
 
-        // Build assistant message with text + tool_use blocks for history
+        // Build assistant message with text + tool_use blocks for tool_history
         let mut assistant_blocks: Vec<ClaudeBlock> = Vec::new();
         if !result.text.is_empty() {
             assistant_blocks.push(ClaudeBlock::Text { text: result.text.clone() });
@@ -286,7 +340,7 @@ pub async fn chat_claude(
                 input: call.input.clone(),
             });
         }
-        history.push(ClaudeMessage {
+        tool_history.push(ClaudeMessage {
             role: "assistant".to_string(),
             content: ClaudeContent::Blocks(assistant_blocks),
         });
@@ -299,6 +353,7 @@ pub async fn chat_claude(
                 app.emit("ollama-stream", StreamPayload {
                     content: "\n\n[Cancelled by user]".to_string(),
                     done: true,
+                    brief: None,
                 }).ok();
                 return Ok(());
             }
@@ -317,12 +372,12 @@ pub async fn chat_claude(
             });
         }
 
-        history.push(ClaudeMessage {
+        tool_history.push(ClaudeMessage {
             role: "user".to_string(),
             content: ClaudeContent::Blocks(result_blocks),
         });
     }
 
     hide_overlay(&app);
-    Err(format!("Agent exceeded maximum tool rounds ({MAX_TOOL_ROUNDS})"))
+    Err(format!("Agent exceeded maximum tool rounds ({MAX_AGENT_LOOPS})"))
 }

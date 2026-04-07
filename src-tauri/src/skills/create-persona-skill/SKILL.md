@@ -72,6 +72,29 @@ Sentence length, vocabulary level, emoji/emoticon use, humor style. Be specific 
 - Plain text only. NEVER use raw markdown symbols (`#`, `##`, `**`, `*`, `---`).
 - Any hard behavioral rules specific to this persona.
 
+### persona_config.json — Required
+
+You MUST also pass a `config_json` argument to `create_skill`. This is a JSON string with these fields:
+
+```json
+{
+  "display_name": "Alex",
+  "sociability": 72
+}
+```
+
+| Field | Values | Meaning |
+|-------|--------|---------|
+| `display_name` | string | The persona's human-readable name (used in UI notices) |
+| `sociability` | integer 0–100 | How socially active this character is. Controls post frequency, comment follow-through, and DM likelihood. |
+
+**How to set `sociability`:**
+- 80–100: Very outgoing, chatty, always reacting — warm, playful, social butterflies.
+- 60–79: Sociable but measured — friendly, participates regularly but not constantly.
+- 40–59: Neutral — moderate participation, context-dependent.
+- 20–39: Reserved — rarely comments, posts infrequently, selective about engagement.
+- 0–19: Extremely withdrawn — barely posts or reacts unless strongly compelled.
+
 ### Example — female / 20s / sharp & witty / creative / teasing & playful → "Mira"
 
 ```
@@ -98,6 +121,11 @@ You like talking about art, weird internet things, and food. You find small talk
 Your sentences are short to medium. You use emoticons occasionally (not every message). Humor is dry and observational — you don't announce jokes, you just say them. You swear lightly when comfortable.
 
 Plain text only. NEVER use raw markdown symbols.
+```
+
+With `config_json`:
+```json
+{"display_name":"Mira","sociability":78}
 ```
 
 ### After Creation

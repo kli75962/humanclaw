@@ -1,34 +1,11 @@
 use chrono::Local;
-use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
 use crate::phone::get_installed_apps;
 use crate::skills::{build_persona_prompt_with_runtime, build_skills_prompt};
 use crate::tools::{build_core_prompt, read_core};
 
-pub const MAX_TOOL_ROUNDS: usize = 200;
-
-/// Character identity override — passed from the frontend when in Chat Mode.
-/// Replaces the session persona in the system prompt.
-#[derive(Deserialize, Clone)]
-pub struct CharacterOverride {
-    pub name: String,
-    pub persona: String,     // persona skill name, e.g. "persona_jk"
-    pub background: String,
-}
-
-/// Payload emitted via the `ollama-stream` Tauri event for every token.
-#[derive(Clone, Serialize)]
-pub struct StreamPayload {
-    pub content: String,
-    pub done: bool,
-}
-
-/// Status update emitted while the agent is executing tools.
-#[derive(Clone, Serialize)]
-pub struct AgentStatusPayload {
-    pub message: String,
-}
+use super::types::CharacterOverride;
 
 /// Build the static part of the system prompt (persona + skills + installed apps + paired devices).
 /// Core memory is injected separately each round via `prepare_system`.
@@ -49,8 +26,6 @@ pub async fn build_base_prompt(app: &AppHandle, character: Option<&CharacterOver
     buf.push_str("\n\n");
     buf.push_str(&skills);
 
-    // Installed apps list is only meaningful on Android (from Kotlin plugin).
-    // On desktop the list is empty/stub so we skip it.
     if !apps.is_empty() {
         buf.push_str("\n\n[INSTALLED APPS]\n");
         for (i, a) in apps.iter().enumerate() {

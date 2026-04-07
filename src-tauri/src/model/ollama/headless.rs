@@ -8,7 +8,9 @@ use crate::memory::bootstrap_memory;
 use crate::skills::load_tool_schemas;
 use crate::tools::{execute_tool_with_context, ToolExecutionContext};
 use crate::model::ollama::types::tool_message;
-use crate::model::shared::{build_base_prompt, prepare_system, MAX_TOOL_ROUNDS};
+use crate::model::prompt::{build_base_prompt, prepare_system};
+use crate::model::types::MAX_AGENT_LOOPS;
+use crate::model::history::{compress_text_history, trim_tool_start_index, CompressMsg};
 
 use super::types::{OllamaChunk, OllamaMessage, OllamaRoundRequest, OllamaToolCall};
 
@@ -63,15 +65,13 @@ async fn stream_once_headless(
         content,
         tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
         images: None,
+        brief: None,
     })
 }
 
 const MAX_TOOL_OUTPUT_CHARS: usize = 4000;
-const MAX_BASE_HISTORY: usize = 12;
-const MAX_TOOL_HISTORY_MSGS: usize = 8;
 
-fn truncate_tool_output(tool_name: &str, output: String) -> String {
-    // Never truncate data URLs — they are base64 images and must stay intact.
+fn truncate_tool_output(_tool_name: &str, output: String) -> String {
     if output.starts_with("data:") { return output; }
     if output.len() <= MAX_TOOL_OUTPUT_CHARS { return output; }
     format!("{}…[truncated, {} chars total]", &output[..MAX_TOOL_OUTPUT_CHARS], output.len())
@@ -92,33 +92,31 @@ pub async fn run_headless(
     let base_prompt = build_base_prompt(app, None).await;
     let tool_context = ToolExecutionContext { source_device_id, source_device_type };
 
-    let base_messages: Vec<OllamaMessage> = {
-        let msgs: Vec<_> = conversation.into_iter().collect();
-        if msgs.len() > MAX_BASE_HISTORY {
-            msgs[msgs.len() - MAX_BASE_HISTORY..].to_vec()
-        } else {
-            msgs
-        }
-    };
+    let msgs_no_sys: Vec<_> = conversation.into_iter().filter(|m| m.role != "system").collect();
+    let compress_entries: Vec<CompressMsg> = msgs_no_sys.iter()
+        .map(|m| CompressMsg { role: m.role.clone(), content: m.content.clone(), brief: m.brief.clone() })
+        .collect();
+    let compressed = compress_text_history(&compress_entries);
+    let base_messages = msgs_no_sys[compressed.keep_from..].to_vec();
 
     let mut tool_history: Vec<OllamaMessage> = Vec::new();
     let mut final_result: Result<String, String> =
-        Err(format!("Agent exceeded maximum tool rounds ({MAX_TOOL_ROUNDS})"));
+        Err(format!("Agent exceeded maximum tool rounds ({MAX_AGENT_LOOPS})"));
 
-    'agent: for _ in 0..MAX_TOOL_ROUNDS {
+    'agent: for _ in 0..MAX_AGENT_LOOPS {
         let system_content = prepare_system(app, &base_prompt);
         let system_msg = OllamaMessage {
             role: "system".to_string(),
             content: system_content,
             tool_calls: None,
             images: None,
+            brief: None,
         };
 
-        let tool_slice = if tool_history.len() > MAX_TOOL_HISTORY_MSGS {
-            &tool_history[tool_history.len() - MAX_TOOL_HISTORY_MSGS..]
-        } else {
-            &tool_history
-        };
+        let tool_start = trim_tool_start_index(&tool_history, |m| {
+            m.role == "assistant" && m.tool_calls.is_some()
+        });
+        let tool_slice = &tool_history[tool_start..];
 
         let history: Vec<OllamaMessage> = base_messages.iter()
             .chain(tool_slice.iter())

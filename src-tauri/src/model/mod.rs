@@ -1,6 +1,8 @@
 pub mod claude;
 pub mod ollama;
-pub(crate) mod shared;
+pub(crate) mod types;
+pub(crate) mod prompt;
+pub(crate) mod history;
 mod explain;
 
 use std::sync::atomic::{AtomicBool, Ordering};

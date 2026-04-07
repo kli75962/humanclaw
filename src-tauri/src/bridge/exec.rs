@@ -81,6 +81,7 @@ pub async fn exec_handler(
         content: req.message,
         tool_calls: None,
         images: None,
+        brief: None,
     });
 
     match run_headless(
@@ -129,6 +130,7 @@ pub async fn route_command(
             content: message.to_string(),
             tool_calls: None,
             images: None,
+            brief: None,
         });
         let source_device_type = Some(cfg.device.device_type.label().to_string());
         return match run_headless(

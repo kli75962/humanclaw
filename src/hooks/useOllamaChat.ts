@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { Message, StreamPayload, AgentStatusPayload, UseOllamaChatReturn } from '../types';
 
-type CharacterOverride = { name: string; persona: string; background: string };
+type CharacterOverride = { id?: string; name: string; persona: string; background: string };
 
 /**
  * Manages the full Ollama agentic chat lifecycle.
@@ -76,7 +76,7 @@ export function useOllamaChat(
       unlistenInjectedRef.current?.();
 
       unlistenStreamRef.current = await listen<StreamPayload>('ollama-stream', (event) => {
-        const { content, done } = event.payload;
+        const { content, done, brief } = event.payload;
 
         if (content) {
           setMessages((prev) => {
@@ -96,6 +96,15 @@ export function useOllamaChat(
             const copy = [...prev];
             if (copy[copy.length - 1]?.role === 'assistant' && copy[copy.length - 1].content === '') {
               copy.pop();
+            }
+            // Attach brief to the last assistant message for history compression
+            if (brief) {
+              for (let i = copy.length - 1; i >= 0; i--) {
+                if (copy[i].role === 'assistant') {
+                  copy[i] = { ...copy[i], brief };
+                  break;
+                }
+              }
             }
             messagesRef.current = copy;
             onSaveRef.current(activeChatId, copy);

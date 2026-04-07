@@ -8,9 +8,11 @@ use crate::phone::{hide_overlay, show_overlay};
 use crate::skills::load_tool_schemas;
 use crate::tools::{execute_tool_with_context, ToolExecutionContext};
 use crate::model::ollama::types::tool_message;
-use crate::model::shared::{
-    build_base_prompt, prepare_system, should_cancel, AgentStatusPayload, StreamPayload,
-    MAX_TOOL_ROUNDS,
+use crate::model::prompt::{build_base_prompt, prepare_system, should_cancel};
+use crate::model::types::{AgentStatusPayload, StreamPayload, MAX_AGENT_LOOPS};
+use crate::model::history::{
+    compress_text_history, extract_brief, memory_instruction,
+    trim_tool_start_index, CompressMsg,
 };
 
 use super::types::{OllamaChunk, OllamaMessage, OllamaRoundRequest, OllamaToolCall};
@@ -79,10 +81,13 @@ async fn stream_once(
                 final_role = msg.role.clone();
                 if !msg.content.is_empty() {
                     accumulated_content.push_str(&msg.content);
-                    app.emit("ollama-stream", StreamPayload {
-                        content: msg.content.clone(),
-                        done: false,
-                    }).map_err(|e| e.to_string())?;
+                    if !accumulated_content.contains("---MEMORY---") {
+                        app.emit("ollama-stream", StreamPayload {
+                            content: msg.content.clone(),
+                            done: false,
+                            brief: None,
+                        }).map_err(|e| e.to_string())?;
+                    }
                 }
                 if let Some(calls) = &msg.tool_calls {
                     accumulated_tool_calls.extend(calls.iter().cloned());
@@ -98,24 +103,15 @@ async fn stream_once(
         content: accumulated_content,
         tool_calls: if accumulated_tool_calls.is_empty() { None } else { Some(accumulated_tool_calls) },
         images: None,
+        brief: None,
     })
 }
 
 /// Maximum characters for a single tool result sent to the model.
-/// Prevents huge outputs (e.g. long element lists) from overflowing context.
 const MAX_TOOL_OUTPUT_CHARS: usize = 4000;
 
-/// Keep only the last N messages from the base conversation history
-/// so accumulated chat doesn't blow up the context window.
-const MAX_BASE_HISTORY: usize = 12;
-
-/// Keep at most this many tool-round messages (assistant tool_calls + tool results)
-/// within one agent invocation.
-const MAX_TOOL_HISTORY_MSGS: usize = 8; // 4 rounds × 2 messages
-
-fn truncate_tool_output(tool_name: &str, output: String) -> String {
-    // Never truncate data URLs — they are base64 images and must stay intact
-    // so tool_message() can move them to the `images` field correctly.
+fn truncate_tool_output(_tool_name: &str, output: String) -> String {
+    // Never truncate data URLs — they are base64 images and must stay intact.
     if output.starts_with("data:") { return output; }
     if output.len() <= MAX_TOOL_OUTPUT_CHARS { return output; }
     format!("{}…[truncated, {} chars total]", &output[..MAX_TOOL_OUTPUT_CHARS], output.len())
@@ -128,23 +124,57 @@ pub async fn chat_ollama(
     app: AppHandle,
     messages: Vec<OllamaMessage>,
     model: String,
-    character: Option<crate::model::shared::CharacterOverride>,
+    character: Option<crate::model::types::CharacterOverride>,
 ) -> Result<(), String> {
     crate::model::CHAT_CANCEL.store(false, std::sync::atomic::Ordering::Relaxed);
 
     let tool_schemas = load_tool_schemas();
     bootstrap_memory(&app);
 
+    // Base prompt without memory (reused for rounds after the first).
     let base_prompt = build_base_prompt(&app, character.as_ref()).await;
 
-    // Trim base history to avoid carrying too much prior conversation.
-    let base_messages: Vec<OllamaMessage> = {
-        let msgs: Vec<_> = messages.into_iter().filter(|m| m.role != "system").collect();
-        if msgs.len() > MAX_BASE_HISTORY {
-            msgs[msgs.len() - MAX_BASE_HISTORY..].to_vec()
-        } else {
-            msgs
+    // ── Tiered text history compression ──────────────────────────────────────
+    let msgs_no_sys: Vec<_> = messages.into_iter().filter(|m| m.role != "system").collect();
+    let compress_entries: Vec<CompressMsg> = msgs_no_sys
+        .iter()
+        .map(|m| CompressMsg {
+            role: m.role.clone(),
+            content: m.content.clone(),
+            brief: m.brief.clone(),
+        })
+        .collect();
+    let compressed = compress_text_history(&compress_entries);
+    let base_messages = msgs_no_sys[compressed.keep_from..].to_vec();
+
+    // ── Round-0 prompt ───────────────────────────────────────────────────────
+    let base_prompt_round0 = {
+        let mut p = base_prompt.clone();
+
+        // Older conversation summary
+        if let Some(ref summary) = compressed.older_summary {
+            p.push_str("\n\n");
+            p.push_str(summary);
         }
+
+        // Character memory context (post + comment + conversation)
+        if let Some(ref char) = character {
+            if let Some(ref char_id) = char.id {
+                use crate::posts::character_memory::build_memory_context;
+                let mem = build_memory_context(&app, char_id);
+                if !mem.is_empty() {
+                    p.push_str("\n\n");
+                    p.push_str(&mem);
+                }
+            }
+        }
+
+        // Memory instruction — always enabled (brief only for normal, brief+importance for character)
+        let has_character_id = character.as_ref().and_then(|c| c.id.as_ref()).is_some();
+        p.push_str("\n\n");
+        p.push_str(&memory_instruction(has_character_id));
+
+        p
     };
 
     // Tool-round messages accumulated during this agent invocation only.
@@ -153,30 +183,32 @@ pub async fn chat_ollama(
 
     show_overlay(&app);
 
-    for round in 0..MAX_TOOL_ROUNDS {
+    for round in 0..MAX_AGENT_LOOPS {
         if should_cancel(&app) {
             hide_overlay(&app);
             app.emit("ollama-stream", StreamPayload {
                 content: "\n\n[Cancelled by user]".to_string(),
                 done: true,
+                brief: None,
             }).ok();
             return Ok(());
         }
 
-        let system_content = prepare_system(&app, &base_prompt);
+        let effective_base = if round == 0 { &base_prompt_round0 } else { &base_prompt };
+        let system_content = prepare_system(&app, effective_base);
         let system_msg = OllamaMessage {
             role: "system".to_string(),
             content: system_content,
             tool_calls: None,
             images: None,
+            brief: None,
         };
 
-        // Trim tool history to last MAX_TOOL_HISTORY_MSGS messages.
-        let tool_slice = if tool_history.len() > MAX_TOOL_HISTORY_MSGS {
-            &tool_history[tool_history.len() - MAX_TOOL_HISTORY_MSGS..]
-        } else {
-            &tool_history
-        };
+        // Trim tool history to last MAX_TOOL_ROUNDS_KEPT rounds.
+        let tool_start = trim_tool_start_index(&tool_history, |m| {
+            m.role == "assistant" && m.tool_calls.is_some()
+        });
+        let tool_slice = &tool_history[tool_start..];
 
         // Combine base history + recent tool rounds into one slice for this request.
         let conversation: Vec<OllamaMessage> = base_messages.iter()
@@ -191,6 +223,7 @@ pub async fn chat_ollama(
                 app.emit("ollama-stream", StreamPayload {
                     content: "\n\n[Cancelled by user]".to_string(),
                     done: true,
+                    brief: None,
                 }).ok();
                 return Ok(());
             }
@@ -210,7 +243,30 @@ pub async fn chat_ollama(
 
         if tool_calls.is_empty() {
             hide_overlay(&app);
-            app.emit("ollama-stream", StreamPayload { content: String::new(), done: true })
+
+            // Extract brief from the response
+            let brief = extract_brief(&final_msg.content);
+
+            // Save conversation memory if character mode with id is active
+            if let Some(ref char_override) = character {
+                if let Some(ref char_id) = char_override.id {
+                    let (_, mem) = crate::posts::generate::parse_comment_output_full(&final_msg.content);
+                    if let Some(m) = mem {
+                        use crate::posts::character_memory::{add_entry, current_ts, MemoryEntry, MemoryEntryType};
+                        let entry = MemoryEntry {
+                            id: format!("{:x}", current_ts()),
+                            character_id: char_id.clone(),
+                            entry_type: MemoryEntryType::Conversation,
+                            brief: m.brief,
+                            importance: m.importance,
+                            created_at: current_ts(),
+                        };
+                        let _ = add_entry(&app, entry);
+                    }
+                }
+            }
+
+            app.emit("ollama-stream", StreamPayload { content: String::new(), done: true, brief })
                 .map_err(|e| e.to_string())?;
             return Ok(());
         }
@@ -224,6 +280,7 @@ pub async fn chat_ollama(
                 app.emit("ollama-stream", StreamPayload {
                     content: "\n\n[Cancelled by user]".to_string(),
                     done: true,
+                    brief: None,
                 }).ok();
                 return Ok(());
             }
@@ -244,5 +301,5 @@ pub async fn chat_ollama(
     }
 
     hide_overlay(&app);
-    Err(format!("Agent exceeded maximum tool rounds ({MAX_TOOL_ROUNDS})"))
+    Err(format!("Agent exceeded maximum tool rounds ({MAX_AGENT_LOOPS})"))
 }

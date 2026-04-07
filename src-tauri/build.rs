@@ -5,6 +5,7 @@ use std::{
 
 /// Scans `skills_dir` for subdirectories that contain a `SKILL.md` file.
 /// The subdirectory name is used as the skill name (matches agentskills.io spec).
+/// If a `persona_config.json` exists alongside `SKILL.md`, it is embedded as `config`.
 fn generate_skills_registry(skills_dir: &Path) -> String {
     let mut entries = Vec::new();
 
@@ -22,7 +23,17 @@ fn generate_skills_registry(skills_dir: &Path) -> String {
                 let abs = fs::canonicalize(&skill_md).unwrap();
                 let name = dir.file_name().unwrap().to_str().unwrap().to_owned();
                 println!("cargo:rerun-if-changed={}", abs.display());
-                entries.push((name, abs));
+
+                let config_path = dir.join("persona_config.json");
+                let config_abs = if config_path.exists() {
+                    let abs_cfg = fs::canonicalize(&config_path).unwrap();
+                    println!("cargo:rerun-if-changed={}", abs_cfg.display());
+                    Some(abs_cfg)
+                } else {
+                    None
+                };
+
+                entries.push((name, abs, config_abs));
             }
         }
     }
@@ -32,9 +43,13 @@ fn generate_skills_registry(skills_dir: &Path) -> String {
 
     let items: Vec<String> = entries
         .iter()
-        .map(|(name, path)| {
+        .map(|(name, path, config)| {
+            let config_field = match config {
+                Some(cfg_path) => format!("Some(include_str!({:?}))", cfg_path),
+                None => "None".to_string(),
+            };
             format!(
-                r#"    Skill {{ name: {:?}, content: include_str!({:?}) }}"#,
+                r#"    Skill {{ name: {:?}, content: include_str!({:?}), config: {config_field} }}"#,
                 name,
                 path,
             )
@@ -100,6 +115,8 @@ fn main() {
 pub struct Skill {{
     pub name: &'static str,
     pub content: &'static str,
+    /// Embedded persona_config.json, if present alongside SKILL.md.
+    pub config: Option<&'static str>,
 }}
 
 #[allow(dead_code)]

@@ -1,9 +1,12 @@
 mod fs;
-mod generate;
+pub mod generate;
+pub mod character_memory;
+mod schedule;
 
 pub use fs::{PostComment, PostMeta};
 
 use serde::Serialize;
+use tauri::Manager;
 use crate::characters::list_characters_fs;
 
 #[derive(Serialize)]
@@ -77,6 +80,26 @@ pub fn add_comment(app: tauri::AppHandle, comment: PostComment) -> Result<(), St
     fs::add_comment(&app, &comment)
 }
 
+// ── Sociability helpers ────────────────────────────────────────────────────────
+
+/// Probability (0–100) that a character follows through on a comment decision.
+/// s=0 → 15%, s=50 → 55%, s=100 → 95%
+fn comment_follow_through(sociability: u8) -> u8 {
+    15u8.saturating_add((sociability as u32 * 80 / 100) as u8)
+}
+
+/// Probability (0–100) that a character replies to a thread they've already joined.
+/// s=0 → 35%, s=50 → 62%, s=100 → 90%
+fn thread_reply_pct(sociability: u8) -> u8 {
+    35u8.saturating_add((sociability as u32 * 55 / 100) as u8)
+}
+
+/// Probability (0–100) that a character sends a DM instead of a comment.
+/// Only non-zero above sociability 55; s=100 → 5%
+fn dm_pct(sociability: u8) -> u8 {
+    sociability.saturating_sub(55) / 9
+}
+
 // ── AI Generation ─────────────────────────────────────────────────────────────
 
 /// Generate and save a new post for a character.
@@ -87,6 +110,7 @@ pub async fn generate_character_post(
     app: tauri::AppHandle,
     character_id: String,
     context: Option<String>,
+    target_time: Option<String>,
 ) -> Result<PostMeta, String> {
     let characters = list_characters_fs(&app);
     let character = characters
@@ -94,61 +118,35 @@ pub async fn generate_character_post(
         .find(|c| c.id == character_id)
         .ok_or_else(|| format!("Character {character_id} not found"))?;
 
-    let (created_at, text) = generate::generate_post_text(&app, character, context.as_deref()).await?;
+    let result = generate::generate_post_text_with_memory(&app, character, context.as_deref(), target_time.as_deref()).await?;
 
     let post = PostMeta {
         id: uuid_v4(),
         character_id: character_id.clone(),
-        text: text.clone(),
+        text: result.text.clone(),
         image: None,
-        created_at: created_at.clone(),
+        created_at: result.timestamp.clone(),
         like_count: 0,
     };
 
     fs::save_post(&app, &post)?;
 
-    // Log this to the post generation queue for crash recovery tracking
-    let mut queue_entry = pg::PostGenEntry::new(character_id, text, created_at);
+    let mut queue_entry = pg::PostGenEntry::new(character_id.clone(), result.text.clone(), result.timestamp);
     queue_entry.mark_post_created(post.id.clone());
-    let _ = pg::save_queue_entry(&app, queue_entry); // Non-critical, log silently
+    let _ = pg::save_queue_entry(&app, queue_entry);
+
+    // Save memory entry — brief and importance already generated alongside the post
+    let entry = character_memory::MemoryEntry {
+        id: uuid_v4(),
+        character_id: character_id,
+        entry_type: character_memory::MemoryEntryType::Post,
+        brief: result.brief,
+        importance: result.importance,
+        created_at: character_memory::current_ts(),
+    };
+    let _ = character_memory::add_entry(&app, entry);
 
     Ok(post)
-}
-
-/// Return true if the character's persona suggests an extroverted personality.
-fn is_extrovert(persona: &str) -> bool {
-    let lower = persona.to_lowercase();
-
-    // Keywords that indicate extroverted personality
-    let extrovert_keywords = [
-        "extrovert", "outgoing", "energetic", "enthusiastic", "lively", "talkative",
-        "confident", "vibrant", "social", "friendly", "cheerful", "playful", "upbeat",
-        "jk", // jk persona is playful and friendly
-    ];
-
-    // Keywords that indicate introverted personality
-    let introvert_keywords = [
-        "introvert", "quiet", "reserved", "shy", "concise", "minimal", "direct",
-        "quiet", "taciturn", "withdrawn",
-    ];
-
-    // Check extrovert keywords first
-    for keyword in &extrovert_keywords {
-        if lower.contains(keyword) {
-            return true;
-        }
-    }
-
-    // Check introvert keywords
-    for keyword in &introvert_keywords {
-        if lower.contains(keyword) {
-            return false;
-        }
-    }
-
-    // Default: moderate extroversion (50% chance)
-    // This applies to neutral personas like "default", "mentor", etc.
-    true
 }
 
 /// Resolve a character's display name for comment context.
@@ -166,7 +164,7 @@ fn load_comment_context(app: &tauri::AppHandle, post_id: &str, characters: &[cra
 }
 
 /// Trigger other characters to comment on a post with naturally delayed timestamps.
-/// Chance is personality-based: extrovert ~45%, introvert ~2%.
+/// Comment probability scales continuously with sociability (0–100).
 #[tauri::command]
 pub async fn trigger_character_reactions(
     app: tauri::AppHandle,
@@ -191,18 +189,16 @@ pub async fn trigger_character_reactions(
     let prior = load_comment_context(&app, &post_id, &all_characters);
 
     for character in all_characters.iter().filter(|c| c.id != post.character_id) {
-        // Like: score from LLM → used as probability %
-        let like_score = generate::generate_like_score(&app, character, &post.text).await;
-        let did_like = pseudo_rand(&character.id, &format!("like{post_id}")) < like_score;
-        if did_like {
+        let (will_like, will_comment) = generate::generate_reaction_decision(&app, character, &post.text).await;
+        if will_like {
             let _ = fs::like_post(&app, &post_id);
         }
-
-        // Comment: only if liked, then roll again with personality-scaled chance
-        // Extroverts: full like_score; Introverts: like_score / 4
-        let comment_chance = if is_extrovert(&character.persona) { like_score } else { like_score / 4 };
-        if did_like && pseudo_rand(&character.id, &format!("comment{post_id}")) < comment_chance {
-            if let Ok(comment_text) = generate::generate_comment_text(
+        // Follow-through probability scales with sociability
+        let sociability = crate::skills::get_sociability_for_persona(&app, &character.persona);
+        let actually_comment = will_comment
+            && pseudo_rand(&character.id, &format!("fthr{post_id}")) < comment_follow_through(sociability);
+        if actually_comment {
+            if let Ok(result) = generate::generate_comment_text_with_memory(
                 &app, character, &author_name, &post.text, &prior,
             ).await {
                 let seed = str_hash(&format!("reaction{}{}", character.id, post_id));
@@ -210,10 +206,19 @@ pub async fn trigger_character_reactions(
                     id: uuid_v4(),
                     post_id: post_id.clone(),
                     author_id: character.id.clone(),
-                    text: comment_text,
+                    text: result.text.clone(),
                     created_at: generate::pick_comment_timestamp(&post.created_at, seed),
                 };
                 let _ = fs::add_comment(&app, &comment);
+                let entry = character_memory::MemoryEntry {
+                    id: uuid_v4(),
+                    character_id: character.id.clone(),
+                    entry_type: character_memory::MemoryEntryType::Comment,
+                    brief: result.brief,
+                    importance: result.importance,
+                    created_at: character_memory::current_ts(),
+                };
+                let _ = character_memory::add_entry(&app, entry);
             }
         }
     }
@@ -257,8 +262,9 @@ pub async fn react_to_user_comment(
         if !already_commented.contains(character.id.as_str()) {
             continue;
         }
-        if pseudo_rand(&character.id, &format!("ucreply{post_id}")) < 70 {
-            if let Ok(comment_text) = generate::generate_comment_text(
+        let sociability = crate::skills::get_sociability_for_persona(&app, &character.persona);
+        if pseudo_rand(&character.id, &format!("ucreply{post_id}")) < thread_reply_pct(sociability) {
+            if let Ok(result) = generate::generate_comment_text_with_memory(
                 &app, character, &author_name, &post.text, &prior,
             ).await {
                 let seed = str_hash(&format!("ucreact{}{}", character.id, post_id));
@@ -266,10 +272,19 @@ pub async fn react_to_user_comment(
                     id: uuid_v4(),
                     post_id: post_id.clone(),
                     author_id: character.id.clone(),
-                    text: comment_text,
+                    text: result.text.clone(),
                     created_at: generate::pick_comment_timestamp(&post.created_at, seed),
                 };
                 let _ = fs::add_comment(&app, &comment);
+                let entry = character_memory::MemoryEntry {
+                    id: uuid_v4(),
+                    character_id: character.id.clone(),
+                    entry_type: character_memory::MemoryEntryType::Comment,
+                    brief: result.brief,
+                    importance: result.importance,
+                    created_at: character_memory::current_ts(),
+                };
+                let _ = character_memory::add_entry(&app, entry);
             }
         }
     }
@@ -298,22 +313,17 @@ pub async fn react_to_user_post(
     let mut dms = Vec::new();
 
     for character in &characters {
-        // Like: score from LLM → used as probability %
-        let like_score = generate::generate_like_score(&app, character, &post.text).await;
-        let did_like = pseudo_rand(&character.id, &format!("like{post_id}")) < like_score;
-        if did_like {
+        let (will_like, will_comment) = generate::generate_reaction_decision(&app, character, &post.text).await;
+        if will_like {
             let _ = fs::like_post(&app, &post_id);
         }
+        let sociability = crate::skills::get_sociability_for_persona(&app, &character.persona);
+        let actually_comment = will_comment
+            && pseudo_rand(&character.id, &format!("fthr{post_id}")) < comment_follow_through(sociability);
+        if !actually_comment { continue; }
 
-        // Comment: only if liked, then roll again with personality-scaled chance
-        // Extroverts: full like_score; Introverts: like_score / 4
-        let extrovert = is_extrovert(&character.persona);
-        let comment_chance = if extrovert { like_score } else { like_score / 4 };
-        if !did_like || pseudo_rand(&character.id, &format!("comment{post_id}")) >= comment_chance {
-            continue;
-        }
-        // Extroverts: 5% chance to DM instead of comment.
-        if extrovert && pseudo_rand(&character.id, &format!("dm{post_id}")) < 5 {
+        let dmp = dm_pct(sociability);
+        if dmp > 0 && pseudo_rand(&character.id, &format!("dm{post_id}")) < dmp {
             let trigger = format!(
                 "The user posted: \"{}\". React naturally and start a conversation.",
                 post.text
@@ -323,17 +333,26 @@ pub async fn react_to_user_post(
             }
         } else {
             let comment_seed = str_hash(&format!("comment{}{}", character.id, post_id));
-            if let Ok(comment_text) = generate::generate_comment_text(
+            if let Ok(result) = generate::generate_comment_text_with_memory(
                 &app, character, "you", &post.text, &[],
             ).await {
                 let comment = PostComment {
                     id: uuid_v4(),
                     post_id: post_id.clone(),
                     author_id: character.id.clone(),
-                    text: comment_text,
+                    text: result.text.clone(),
                     created_at: generate::pick_comment_timestamp(&post.created_at, comment_seed),
                 };
                 let _ = fs::add_comment(&app, &comment);
+                let entry = character_memory::MemoryEntry {
+                    id: uuid_v4(),
+                    character_id: character.id.clone(),
+                    entry_type: character_memory::MemoryEntryType::Comment,
+                    brief: result.brief,
+                    importance: result.importance,
+                    created_at: character_memory::current_ts(),
+                };
+                let _ = character_memory::add_entry(&app, entry);
             }
         }
     }
@@ -447,17 +466,15 @@ pub async fn resume_post_gen_queue(app: tauri::AppHandle) -> Result<u32, String>
                     let prior = load_comment_context(&app, &post_id, &all_characters);
 
                     for character in all_characters.iter().filter(|c| c.id != post.character_id) {
-                        // Generate like (if not already tracked)
-                        let did_like = if let Some(like_entry) = entry.likes.iter().find(|l| l.character_id == character.id) {
-                            like_entry.did_like
+                        // Generate reaction decision (if not already tracked)
+                        let (did_like, will_comment_r) = if let Some(like_entry) = entry.likes.iter().find(|l| l.character_id == character.id) {
+                            // Already decided like; re-ask for comment decision since it wasn't stored
+                            (like_entry.did_like, generate::generate_reaction_decision(&app, character, &post.text).await.1)
                         } else {
-                            let like_score = generate::generate_like_score(&app, character, &post.text).await;
-                            let liked = pseudo_rand(&character.id, &format!("like{}", &post_id)) < like_score;
-                            entry.add_like(character.id.clone(), like_score, liked);
-                            if liked {
-                                let _ = fs::like_post(&app, &post_id);
-                            }
-                            liked
+                            let (wl, wc) = generate::generate_reaction_decision(&app, character, &post.text).await;
+                            entry.add_like(character.id.clone(), if wl { 80 } else { 20 }, wl);
+                            if wl { let _ = fs::like_post(&app, &post_id); }
+                            (wl, wc)
                         };
 
                         // Skip if comment already generated for this character
@@ -465,28 +482,35 @@ pub async fn resume_post_gen_queue(app: tauri::AppHandle) -> Result<u32, String>
                             continue;
                         }
 
-                        // Comment: only if liked, then roll again with personality-scaled chance
-                        // Extroverts: full like_score; Introverts: like_score / 4
-                        let like_score = entry.likes.iter().find(|l| l.character_id == character.id).map(|l| l.score).unwrap_or(0);
-                        let comment_chance = if is_extrovert(&character.persona) { like_score } else { like_score / 4 };
-                        if did_like && pseudo_rand(&character.id, &format!("comment{}", &post_id)) < comment_chance {
-                            if let Ok(comment_text) = generate::generate_comment_text(
+                        let sociability = crate::skills::get_sociability_for_persona(&app, &character.persona);
+                        let actually_comment = will_comment_r
+                            && pseudo_rand(&character.id, &format!("fthr{}", &post_id)) < comment_follow_through(sociability);
+                        if did_like && actually_comment {
+                            if let Ok(comment_result) = generate::generate_comment_text_with_memory(
                                 &app, character, &author_name, &post.text, &prior,
                             ).await {
-                                entry.add_comment(character.id.clone(), comment_text.clone());
-
+                                entry.add_comment(character.id.clone(), comment_result.text.clone());
                                 let seed = str_hash(&format!("reaction{}{}", character.id, &post_id));
                                 let comment = PostComment {
                                     id: uuid_v4(),
                                     post_id: post_id.clone(),
                                     author_id: character.id.clone(),
-                                    text: comment_text,
+                                    text: comment_result.text.clone(),
                                     created_at: generate::pick_comment_timestamp(&post.created_at, seed),
                                 };
                                 if let Err(e) = fs::add_comment(&app, &comment) {
                                     entry.mark_comment_failed(&character.id, e);
                                 } else {
-                                    entry.mark_comment_created(&character.id, comment.id);
+                                    entry.mark_comment_created(&character.id, comment.id.clone());
+                                    let mem_entry = character_memory::MemoryEntry {
+                                        id: uuid_v4(),
+                                        character_id: character.id.clone(),
+                                        entry_type: character_memory::MemoryEntryType::Comment,
+                                        brief: comment_result.brief,
+                                        importance: comment_result.importance,
+                                        created_at: character_memory::current_ts(),
+                                    };
+                                    let _ = character_memory::add_entry(&app, mem_entry);
                                 }
                             }
                         }
@@ -505,4 +529,74 @@ pub async fn resume_post_gen_queue(app: tauri::AppHandle) -> Result<u32, String>
     }
 
     Ok(completed)
+}
+
+// ── Daily schedule ────────────────────────────────────────────────────────────
+
+/// A post slot that is due for generation.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuePost {
+    pub character_id: String,
+    /// RFC 3339 target datetime — passed as `target_time` to `generate_character_post`.
+    pub target_time: String,
+    /// HH:MM string used to mark the slot as generated.
+    pub time_str: String,
+}
+
+/// For each character, ensure today's schedule exists (asking LLM if needed),
+/// then return all slots that are due and not yet generated.
+#[tauri::command]
+pub async fn get_due_posts(app: tauri::AppHandle) -> Vec<DuePost> {
+    let characters = list_characters_fs(&app);
+    let today = schedule::today_str();
+    let mut due = Vec::new();
+
+    for character in &characters {
+        let sched = match schedule::load(&app, &character.id) {
+            Some(s) if s.date == today => s,
+            _ => {
+                let sociability = crate::skills::get_sociability_for_persona(&app, &character.persona);
+                let max_posts: u8 = match sociability {
+                    71..=100 => 3,
+                    41..=70  => 2,
+                    _        => 1,
+                };
+                let mut times = generate::decide_posting_times(&app, character, max_posts).await;
+                if times.is_empty() {
+                    times = schedule::fallback_times(sociability);
+                }
+                let new_sched = schedule::DaySchedule {
+                    character_id: character.id.clone(),
+                    date: today.clone(),
+                    times,
+                    generated: vec![],
+                };
+                let _ = schedule::save(&app, &new_sched);
+                new_sched
+            }
+        };
+
+        for time_str in schedule::due_times(&sched) {
+            if let Some(target_time) = schedule::hhmm_to_rfc3339_today(&time_str) {
+                due.push(DuePost {
+                    character_id: character.id.clone(),
+                    target_time,
+                    time_str,
+                });
+            }
+        }
+    }
+
+    due
+}
+
+/// Mark a scheduled time slot as generated so it won't be re-generated on next open.
+#[tauri::command]
+pub fn mark_post_generated(
+    app: tauri::AppHandle,
+    character_id: String,
+    time_str: String,
+) -> Result<(), String> {
+    schedule::mark_generated(&app, &character_id, &time_str)
 }

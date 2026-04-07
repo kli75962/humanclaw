@@ -140,6 +140,7 @@ pub async fn execute_tool_with_context(
         "create_skill" => {
             let skill_name = args.get("name").and_then(Value::as_str).unwrap_or("").trim().to_string();
             let content = args.get("content").and_then(Value::as_str).unwrap_or("");
+            let config_json = args.get("config_json").and_then(Value::as_str);
 
             if !skill_name.starts_with("persona_") || skill_name.len() < 9 {
                 return ToolResult::err(
@@ -162,19 +163,24 @@ pub async fn execute_tool_with_context(
                     if let Err(e) = std::fs::create_dir_all(&skill_dir) {
                         return ToolResult::err("create_skill", "EXECUTION_FAILED", format!("Failed to create directory: {e}"));
                     }
-                    match std::fs::write(skill_dir.join("SKILL.md"), content) {
-                        Ok(_) => {
-                            let app_clone = app.clone();
-                            tauri::async_runtime::spawn(async move {
-                                crate::bridge::persona_sync::sync_to_all_peers(&app_clone).await;
-                            });
-                            ToolResult::ok(
-                                "create_skill",
-                                format!("Persona '{skill_name}' saved. The user can now select it from Settings → Persona."),
-                            )
-                        }
-                        Err(e) => ToolResult::err("create_skill", "EXECUTION_FAILED", format!("Failed to write SKILL.md: {e}")),
+                    if let Err(e) = std::fs::write(skill_dir.join("SKILL.md"), content) {
+                        return ToolResult::err("create_skill", "EXECUTION_FAILED", format!("Failed to write SKILL.md: {e}"));
                     }
+                    // Write persona_config.json if provided
+                    if let Some(cfg) = config_json {
+                        // Validate it's parseable JSON before writing
+                        if serde_json::from_str::<serde_json::Value>(cfg).is_ok() {
+                            let _ = std::fs::write(skill_dir.join("persona_config.json"), cfg);
+                        }
+                    }
+                    let app_clone = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        crate::bridge::persona_sync::sync_to_all_peers(&app_clone).await;
+                    });
+                    ToolResult::ok(
+                        "create_skill",
+                        format!("Persona '{skill_name}' saved. The user can now select it from Settings → Persona."),
+                    )
                 }
                 Err(e) => ToolResult::err("create_skill", "EXECUTION_FAILED", format!("Could not resolve app data directory: {e}")),
             }

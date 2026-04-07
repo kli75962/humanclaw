@@ -17,6 +17,9 @@ pub struct CharacterMeta {
     pub persona: String,
     pub background: String,
     pub created_at: String,
+    /// Sociability score 0–100, computed from persona config. Not stored in JSON.
+    #[serde(default, skip_deserializing)]
+    pub sociability: u8,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

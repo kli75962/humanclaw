@@ -4,7 +4,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::model::claude::InputMessage;
 use crate::model::ollama::types::{OllamaChunk, OllamaMessage, OllamaRoundRequest};
-use crate::model::shared::{build_base_prompt, prepare_system};
+use crate::model::prompt::{build_base_prompt, prepare_system};
 
 #[derive(Serialize, Clone)]
 pub struct ExplainPayload {
@@ -36,11 +36,12 @@ async fn explain_ollama(app: &AppHandle, messages: &[InputMessage], model: &str)
         content: system_content,
         tool_calls: None,
         images: None,
+        brief: None,
     };
 
     let ollama_msgs: Vec<OllamaMessage> = messages.iter()
         .filter(|m| m.role != "system")
-        .map(|m| OllamaMessage { role: m.role.clone(), content: m.content.clone(), tool_calls: None, images: None })
+        .map(|m| OllamaMessage { role: m.role.clone(), content: m.content.clone(), tool_calls: None, images: None, brief: None })
         .collect();
 
     let body = OllamaRoundRequest::new(model, &system_msg, &ollama_msgs, true, &[]);

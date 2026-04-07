@@ -10,10 +10,14 @@ fn emit_and_sync(app: &tauri::AppHandle) {
     });
 }
 
-/// List all characters.
+/// List all characters with sociability scores injected from persona configs.
 #[tauri::command]
 pub fn list_characters(app: tauri::AppHandle) -> Vec<CharacterMeta> {
-    fs::list_characters(&app)
+    let mut chars = fs::list_characters(&app);
+    for c in &mut chars {
+        c.sociability = crate::skills::get_sociability_for_persona(&app, &c.persona);
+    }
+    chars
 }
 
 /// Create or update a character.

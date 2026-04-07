@@ -14,6 +14,10 @@
         "content": {
           "type": "string",
           "description": "Full SKILL.md content including the YAML frontmatter block (--- name, description, compatibility ---) followed by the persona system prompt."
+        },
+        "config_json": {
+          "type": "string",
+          "description": "Optional JSON string for persona_config.json. Must include 'display_name' (string) and 'personality_type' ('extrovert' or 'introvert'). Example: {\"display_name\":\"Alex\",\"personality_type\":\"extrovert\"}"
         }
       }
     }

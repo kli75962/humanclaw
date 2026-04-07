@@ -17,4 +17,6 @@ pub fn claude_client() -> &'static reqwest::Client {
 pub struct InputMessage {
     pub role: String,
     pub content: String,
+    #[serde(default)]
+    pub brief: Option<String>,
 }
