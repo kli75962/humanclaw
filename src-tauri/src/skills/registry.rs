@@ -14,16 +14,12 @@ pub struct Skill {
 
 #[derive(Clone, Debug)]
 pub struct Tool {
-    #[allow(dead_code)]
-    pub name: String,
     pub content: String,
 }
 
 // Memory caches
 static SKILLS: std::sync::RwLock<Option<Vec<Skill>>> = std::sync::RwLock::new(None);
 static TOOLS: std::sync::RwLock<Option<Vec<Tool>>> = std::sync::RwLock::new(None);
-#[allow(dead_code)]
-static TOOL_SCHEMAS: std::sync::OnceLock<Vec<Value>> = std::sync::OnceLock::new();
 
 // ── Dynamic Resolution ──
 
@@ -110,12 +106,7 @@ fn load_tools_from_disk(base: &Path) -> Vec<Tool> {
 
         for file in files {
             if let Ok(content) = fs::read_to_string(&file) {
-                let name = file
-                    .file_stem()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .into_owned();
-                entries.push(Tool { name, content });
+                entries.push(Tool { content });
             }
         }
     }
