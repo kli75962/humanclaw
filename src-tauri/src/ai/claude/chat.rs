@@ -129,7 +129,7 @@ async fn stream_once(
                 SseEvent::ContentBlockStart { index, content_block } => {
                     let block = match content_block {
                         ContentBlockStartData::Text { .. } => {
-                            InFlightBlock::Text { text: String::new() }
+                            InFlightBlock::Text { text: String::new(), emitted: 0 }
                         }
                         ContentBlockStartData::ToolUse { id, name } => {
                             InFlightBlock::ToolUse { id, name, input_json: String::new() }
@@ -141,15 +141,22 @@ async fn stream_once(
                 SseEvent::ContentBlockDelta { index, delta } => {
                     match delta {
                         ContentBlockDelta::TextDelta { text } => {
-                            if let Some(InFlightBlock::Text { text: acc }) = blocks.get_mut(&index) {
+                            if let Some(InFlightBlock::Text { text: acc, emitted }) = blocks.get_mut(&index) {
                                 acc.push_str(&text);
-                                // Filter out ---MEMORY--- block from streaming to frontend
-                                if !acc.contains("---MEMORY---") {
+                                const MEMORY_MARKER: &str = "---MEMORY";
+                                let mut safe_end = acc.find(MEMORY_MARKER)
+                                    .unwrap_or_else(|| acc.len().saturating_sub(MEMORY_MARKER.len()));
+                                while safe_end > 0 && !acc.is_char_boundary(safe_end) {
+                                    safe_end -= 1;
+                                }
+                                if safe_end > *emitted {
+                                    let to_emit = acc[*emitted..safe_end].to_string();
                                     app.emit("ollama-stream", StreamPayload {
-                                        content: text.clone(),
+                                        content: to_emit,
                                         done: false,
                                         brief: None,
                                     }).map_err(|e| e.to_string())?;
+                                    *emitted = safe_end;
                                 }
                             }
                         }
@@ -185,7 +192,7 @@ async fn stream_once(
 
     for (_, block) in ordered {
         match block {
-            InFlightBlock::Text { text: t } => {
+            InFlightBlock::Text { text: t, .. } => {
                 text = t;
             }
             InFlightBlock::ToolUse { id, name, input_json } => {

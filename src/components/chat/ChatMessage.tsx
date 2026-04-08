@@ -28,6 +28,7 @@ function parseImageAttachments(content: string): { images: { name: string; dataU
 function stripMemorySection(text: string): string {
   return text
     .replace(/\[CORE MEMORY[^\]]*\][\s\S]*/gi, '')
+    .replace(/\n?---MEMORY[\s\S]*/g, '')
     .replace(/^MEMORY[\s:].*$/gim, '')
     .trim();
 }

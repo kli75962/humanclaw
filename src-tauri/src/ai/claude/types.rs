@@ -79,7 +79,7 @@ pub fn openai_tool_to_claude(tool: &Value) -> Option<Value> {
 /// An in-flight content block being assembled during streaming.
 #[derive(Debug)]
 pub enum InFlightBlock {
-    Text { text: String },
+    Text { text: String, emitted: usize },
     ToolUse { id: String, name: String, input_json: String },
 }
 

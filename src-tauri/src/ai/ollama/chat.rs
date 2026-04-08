@@ -53,6 +53,8 @@ async fn stream_once(
     let mut accumulated_content = String::new();
     let mut accumulated_tool_calls: Vec<OllamaToolCall> = Vec::new();
     let mut final_role = "assistant".to_string();
+    let mut emitted_up_to: usize = 0;
+    const MEMORY_MARKER: &str = "---MEMORY";
 
     // 120 s idle timeout per chunk — prevents indefinite hang when a model stalls mid-stream.
     const CHUNK_IDLE_SECS: u64 = 120;
@@ -81,12 +83,19 @@ async fn stream_once(
                 final_role = msg.role.clone();
                 if !msg.content.is_empty() {
                     accumulated_content.push_str(&msg.content);
-                    if !accumulated_content.contains("---MEMORY---") {
+                    let mut safe_end = accumulated_content.find(MEMORY_MARKER)
+                        .unwrap_or_else(|| accumulated_content.len().saturating_sub(MEMORY_MARKER.len()));
+                    while safe_end > 0 && !accumulated_content.is_char_boundary(safe_end) {
+                        safe_end -= 1;
+                    }
+                    if safe_end > emitted_up_to {
+                        let to_emit = accumulated_content[emitted_up_to..safe_end].to_string();
                         app.emit("ollama-stream", StreamPayload {
-                            content: msg.content.clone(),
+                            content: to_emit,
                             done: false,
                             brief: None,
                         }).map_err(|e| e.to_string())?;
+                        emitted_up_to = safe_end;
                     }
                 }
                 if let Some(calls) = &msg.tool_calls {
