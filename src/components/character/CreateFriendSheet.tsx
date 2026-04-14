@@ -359,7 +359,7 @@ export function CreateFriendSheet({ onClose, onSave, defaultModel = '' }: Create
           {/* ── Live2D Character ── */}
           {live2dModels.length > 0 && (
             <>
-              <SectionHeader>Live2D Character</SectionHeader>
+              <SectionHeader>Live2D Character <span style={{ fontWeight: 'normal', color: 'var(--color-text-3)', fontSize: '0.85em', textTransform: 'none' }}>(optional)</span></SectionHeader>
               <Live2DPicker models={live2dModels} selectedId={live2dModelId} onSelect={setLive2dModelId} />
             </>
           )}

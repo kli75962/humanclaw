@@ -17,6 +17,12 @@ pub struct CharacterMeta {
     pub persona: String,
     pub background: String,
     pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_time: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub birthday: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub live2d_model_id: Option<String>,
     /// Sociability score 0–100, computed from persona config. Not stored in JSON.
     #[serde(default, skip_deserializing)]
     pub sociability: u8,

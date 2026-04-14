@@ -329,7 +329,7 @@ export function CreateFriendInline({ defaultModel = '', onSave, onCancel }: Prop
       {/* Live2D Character */}
       {live2dModels.length > 0 && (
         <>
-          <p className="settings-modal-field-label">Live2D Character</p>
+          <p className="settings-modal-field-label">Live2D Character <span style={{ fontWeight: 'normal', color: 'var(--color-text-3)', fontSize: '0.9em' }}>(optional)</span></p>
           <Live2DPicker models={live2dModels} selectedId={live2dModelId} onSelect={setLive2dModelId} />
         </>
       )}

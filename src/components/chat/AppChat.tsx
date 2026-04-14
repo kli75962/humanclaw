@@ -189,7 +189,7 @@ export function AppChat(props: AppChatProps) {
             onStop={handleStop}
             quotedPost={quotedPost}
             onClearQuote={() => setQuotedPost(null)}
-            onLive2DToggle={handleMeetingToggle}
+            onLive2DToggle={activeCharacter?.live2dModelId ? handleMeetingToggle : undefined}
             live2DOpen={live2DOpen}
           />
         </>
