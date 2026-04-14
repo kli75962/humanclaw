@@ -79,12 +79,14 @@ export function Live2DWindowApp() {
     };
     document.addEventListener('mousemove', bumpHover);
     document.addEventListener('mouseleave', hideNow);
-    document.addEventListener('mouseout', (e) => {
-      if (!(e as MouseEvent).relatedTarget) hideNow();
-    });
+    const onMouseOut = (e: MouseEvent) => {
+      if (!e.relatedTarget) hideNow();
+    };
+    document.addEventListener('mouseout', onMouseOut);
     return () => {
       document.removeEventListener('mousemove', bumpHover);
       document.removeEventListener('mouseleave', hideNow);
+      document.removeEventListener('mouseout', onMouseOut);
       if (hoverTimerRef.current !== null) window.clearTimeout(hoverTimerRef.current);
     };
   }, []);
@@ -262,7 +264,7 @@ export function Live2DWindowApp() {
 
       await win.setSize(new LogicalSize(clampW, clampH));
       await win.setPosition(new LogicalPosition(adjX, adjY));
-      await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+      await rAF(); await rAF();
       controlsRef.current?.setScale(pixiScale);
       // Sync GTK overlay to the clamped size.
       await invoke('show_live2d_overlay', {

@@ -2,13 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 
 const GAP = 5;
 
-export interface ModelBounds {
-  top: number;
-  right: number;
-  bottom: number;
-  left: number;
-}
-
 export interface NaturalSize {
   width: number;
   height: number;
@@ -18,14 +11,12 @@ export interface Live2DControls {
   scaleBy(factor: number): void;
   setScale(scale: number): void;
   getScale(): number;
-  getBounds(): ModelBounds | null;
   getNaturalSize(): NaturalSize | null;
 }
 
 interface Props {
   modelUrl?: string;
   controlsRef?: React.RefObject<Live2DControls | null>;
-  onBoundsChange?: (bounds: ModelBounds) => void;
   onReady?: () => void;
   /**
    * Linux native overlay path — called each frame with a pre-packed buffer:
@@ -34,18 +25,6 @@ interface Props {
    * the same buffer is reused across frames.
    */
   onFrame?: (packed: Uint8Array) => void;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function computeBounds(model: any): ModelBounds {
-  const hw = model.width  / 2;
-  const hh = model.height / 2;
-  return {
-    left:   model.x - hw,
-    right:  model.x + hw,
-    top:    model.y - hh,
-    bottom: model.y + hh,
-  };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -61,7 +40,7 @@ function initialFit(model: any, w: number, h: number) {
   model.y = h / 2;
 }
 
-export function Live2DCanvas({ modelUrl, controlsRef, onBoundsChange, onReady, onFrame }: Props) {
+export function Live2DCanvas({ modelUrl, controlsRef, onReady, onFrame }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   // This is the VISIBLE 2D canvas shown in the DOM.
   // PIXI renders to an off-DOM WebGL canvas, and we blit the result here
@@ -290,24 +269,20 @@ export function Live2DCanvas({ modelUrl, controlsRef, onBoundsChange, onReady, o
             model.scale.set(next);
             model.x = renderer.screen.width  / 2;
             model.y = renderer.screen.height / 2;
-            onBoundsChange?.(computeBounds(model));
           },
           setScale(scale: number) {
             const next = Math.max(0.05, Math.min(10, scale));
             model.scale.set(next);
             model.x = renderer.screen.width  / 2;
             model.y = renderer.screen.height / 2;
-            onBoundsChange?.(computeBounds(model));
           },
           getScale() { return model.scale.x; },
-          getBounds() { return computeBounds(model); },
           getNaturalSize() {
             return { width: naturalW, height: naturalH };
           },
         } satisfies Live2DControls;
       }
 
-      onBoundsChange?.(computeBounds(model));
       setLoading(false);
       onReady?.();
 
@@ -324,7 +299,6 @@ export function Live2DCanvas({ modelUrl, controlsRef, onBoundsChange, onReady, o
         displayRef.current.height = Math.round(nh * ndpr);
         model.x = renderer.screen.width  / 2;
         model.y = renderer.screen.height / 2;
-        onBoundsChange?.(computeBounds(model));
       });
       observer.observe(wrapperRef.current);
     })().catch((err) => {

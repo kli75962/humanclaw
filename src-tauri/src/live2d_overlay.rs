@@ -395,7 +395,6 @@ pub fn create_overlay(app: tauri::AppHandle, latest_frame: std::sync::Arc<Mutex<
                 let wi = width  as i32;
                 let hi = height as i32;
                 let wu = width  as usize;
-                let hu = height as usize;
 
                 // ── Reuse cairo surface when dimensions haven't changed ─────
                 // Avoids a heap allocation + cairo surface creation per frame.

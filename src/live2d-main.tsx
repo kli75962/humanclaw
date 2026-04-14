@@ -1,4 +1,4 @@
-import React from 'react';
+// live2d-main.tsx — entry point for the Live2D character overlay window.
 import ReactDOM from 'react-dom/client';
 import { invoke } from '@tauri-apps/api/core';
 import { Live2DWindowApp } from './components/live2d/Live2DWindowApp';
@@ -15,7 +15,6 @@ import './style/Live2DWindow.css';
   class PatchedXHR extends OrigXHR {
     private _localPath: string | null = null;
     private _responseType2: XMLHttpRequestResponseType = '';
-    private _readyStateCallbacks: (() => void)[] = [];
 
     open(method: string, url: string, ...rest: Parameters<XMLHttpRequest['open']> extends [string, string, ...infer R] ? R : never[]) {
       // Detect asset:// or absolute filesystem paths
