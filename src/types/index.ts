@@ -46,6 +46,7 @@ export interface Character {
   activeTime?: 'early' | 'night' | 'random';  // When character is most active
   birthday?: string;        // ISO date YYYY-MM-DD or 'random'
   sociability?: number;     // 0–100, computed from persona config
+  live2dModelId?: string | null;  // ID of the Live2D model to use for this character
 }
 
 export interface ChatMessageProps {
@@ -64,6 +65,8 @@ export interface InputBarProps {
   onStop: () => void;
   quotedPost?: Post | null;
   onClearQuote?: () => void;
+  onLive2DToggle?: () => void;
+  live2DOpen?: boolean;
 }
 
 /** Imperative handle exposed by InputBar for STT integration. */

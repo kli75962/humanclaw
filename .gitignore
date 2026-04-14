@@ -27,3 +27,8 @@ dist-ssr
 *.sw?
 
 .secrets
+
+# Live2D model files (redistribution prohibited)
+src-tauri/live2d-src/
+src-tauri/live2d-encrypted/
+src-tauri/src/live2d_key.rs

@@ -1,0 +1,38 @@
+/* Mobile full-screen overlay — black background */
+.l2d-mobile-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Back button — top left */
+.l2d-mobile-back {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.l2d-mobile-back:active {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Canvas container fills the full screen */
+.l2d-mobile-canvas-wrap {
+  width: 100vw;
+  height: 100vh;
+}

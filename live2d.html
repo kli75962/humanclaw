@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Live2D</title>
+    <!-- Cubism 4 Core — local copy, no CDN dependency -->
+    <script src="/live2dcubismcore.min.js"></script>
+    <!-- Transparent background must be set before React mounts to avoid flash -->
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body, #root { width: 100%; height: 100%; background: transparent; overflow: hidden; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/live2d-main.tsx"></script>
+  </body>
+</html>

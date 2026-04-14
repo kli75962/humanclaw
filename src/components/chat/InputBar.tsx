@@ -1,6 +1,6 @@
 import { forwardRef, memo, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Send, PhoneCall, X, Paperclip, File, Loader, AlertCircle } from 'lucide-react';
+import { Send, PhoneCall, X, Paperclip, File, Loader, AlertCircle, Video } from 'lucide-react';
 import type { InputBarProps, InputBarHandle } from '../../types';
 import '../../style/InputBar.css';
 
@@ -94,7 +94,7 @@ async function readPathImageFile(path: string): Promise<AttachedImage | null> {
 }
 
 export const InputBar = memo(forwardRef<InputBarHandle, InputBarProps>(function InputBar(
-  { isThinking, isListening, sttError, onSend, onSttToggle, onStop, quotedPost, onClearQuote },
+  { isThinking, isListening, sttError, onSend, onSttToggle, onStop, quotedPost, onClearQuote, onLive2DToggle, live2DOpen },
   ref,
 ) {
   const [value, setValue] = useState('');
@@ -364,6 +364,16 @@ export const InputBar = memo(forwardRef<InputBarHandle, InputBarProps>(function 
           disabled={isThinking}
           className="inputbar-input"
         />
+        {onLive2DToggle && (
+          <button
+            type="button"
+            onClick={onLive2DToggle}
+            className={`inputbar-btn inputbar-live2d-btn${live2DOpen ? ' inputbar-live2d-btn--active' : ''}`}
+            title={live2DOpen ? 'Close meeting' : 'Open meeting'}
+          >
+            <Video size={20} />
+          </button>
+        )}
         <button
           onClick={onSttToggle}
           disabled={isThinking}

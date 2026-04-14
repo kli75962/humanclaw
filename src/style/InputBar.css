@@ -65,6 +65,15 @@
   pointer-events: none;
 }
 
+.inputbar-live2d-btn {
+  color: var(--color-text-2);
+}
+.inputbar-live2d-btn--active {
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.15);
+  border-radius: 50%;
+}
+
 .inputbar-stt-btn {
   color: var(--color-text-2);
 }

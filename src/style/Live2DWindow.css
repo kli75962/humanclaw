@@ -1,0 +1,2 @@
+/* No special CSS needed — ghost trail is fixed by the dual-canvas
+   architecture in Live2DCanvas.tsx (off-DOM WebGL → visible 2D blit). */

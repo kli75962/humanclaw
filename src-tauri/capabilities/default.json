@@ -7,6 +7,11 @@
     "core:default",
     "opener:default",
     "barcode-scanner:allow-scan",
-    "barcode-scanner:allow-cancel"
+    "barcode-scanner:allow-cancel",
+    "core:window:allow-create",
+    "core:window:allow-destroy",
+    "core:window:allow-close",
+    "core:webview:allow-create-webview-window",
+    "dialog:allow-open"
   ]
 }

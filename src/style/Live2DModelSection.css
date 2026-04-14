@@ -1,0 +1,158 @@
+.live2d-model-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Import row */
+.live2d-model-row--import {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 4px;
+}
+
+.live2d-import-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px dashed var(--color-border);
+  background: transparent;
+  color: var(--color-text-2);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.live2d-import-btn:hover {
+  border-color: var(--color-text-2);
+  color: var(--color-text);
+}
+
+/* Each model row */
+.live2d-model-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+/* Square icon button */
+.live2d-model-icon-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text-2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+.live2d-model-icon-btn:hover {
+  border-color: var(--color-text-2);
+}
+.live2d-model-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Name input */
+.live2d-model-name-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 14px;
+  padding: 4px 2px;
+  outline: none;
+  transition: border-color 0.15s;
+  min-width: 0;
+}
+.live2d-model-name-input:focus {
+  border-bottom-color: var(--color-text-2);
+}
+
+/* Remove button */
+.live2d-remove-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.live2d-remove-btn:hover {
+  background: rgba(248, 113, 113, 0.12);
+  color: #f87171;
+}
+
+/* Inline confirmation */
+.live2d-model-entry {
+  border-radius: 8px;
+}
+
+.live2d-confirm-row {
+  padding: 8px 0 8px 54px; /* align with name input */
+  border-top: 1px solid var(--color-border);
+  margin-top: 2px;
+}
+
+.live2d-confirm-msg {
+  font-size: 12px;
+  color: var(--color-text-2);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.live2d-confirm-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.live2d-confirm-yes {
+  padding: 5px 16px;
+  border-radius: 6px;
+  border: none;
+  background: #f87171;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.live2d-confirm-yes:hover {
+  opacity: 0.85;
+}
+
+.live2d-confirm-no {
+  padding: 5px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-2);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.live2d-confirm-no:hover {
+  background: var(--color-hover);
+}
+
+.live2d-empty-hint {
+  font-size: 12px;
+  color: var(--color-text-2);
+  padding: 8px 0;
+  font-style: italic;
+}

@@ -4,6 +4,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { Check, ChevronDown, Image, RefreshCw, X } from 'lucide-react';
 import type { Character } from '../../types';
 import { SectionHeader } from '../settings/SettingsUI';
+import { useLive2DModels } from '../../hooks/useLive2DModels';
+import { Live2DPicker } from './Live2DPicker';
 import '../../style/CreateFriendSheet.css';
 import '../../style/Modal.css';
 
@@ -133,6 +135,10 @@ export function CreateFriendSheet({ onClose, onSave, defaultModel = '' }: Create
     return () => window.removeEventListener('pointerdown', onDown);
   }, []);
 
+  // ── Live2D model ──────────────────────────────────────────────────────────
+  const { models: live2dModels } = useLive2DModels();
+  const [live2dModelId, setLive2dModelId] = useState<string | null>(null);
+
   // ── Persona dropdown ──────────────────────────────────────────────────────
   const [personas, setPersonas] = useState<string[]>(FALLBACK_PERSONAS);
   const [persona, setPersona] = useState(FALLBACK_PERSONAS[0]);
@@ -166,6 +172,7 @@ export function CreateFriendSheet({ onClose, onSave, defaultModel = '' }: Create
       model: model.trim(),
       persona,
       background: background.trim(),
+      live2dModelId: live2dModelId ?? null,
     });
   }
 
@@ -348,6 +355,14 @@ export function CreateFriendSheet({ onClose, onSave, defaultModel = '' }: Create
               </div>
             )}
           </div>
+
+          {/* ── Live2D Character ── */}
+          {live2dModels.length > 0 && (
+            <>
+              <SectionHeader>Live2D Character</SectionHeader>
+              <Live2DPicker models={live2dModels} selectedId={live2dModelId} onSelect={setLive2dModelId} />
+            </>
+          )}
 
           {/* ── Background ── */}
           <SectionHeader>Background</SectionHeader>

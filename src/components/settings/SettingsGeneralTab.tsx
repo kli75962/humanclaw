@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Check, ChevronDown, ChevronRight, Cpu, Image, LayoutGrid, Monitor, Palette, Plus, RefreshCw, User } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Cpu, Image, LayoutGrid, Mic, Monitor, Palette, Plus, RefreshCw, User } from 'lucide-react';
 import type { PcPermissions, PermissionState, SessionConfig } from '../../types';
 import { Card, CardRow, SectionFooter, SectionHeader, SegmentControl } from '../settings/SettingsUI';
 import { PersonaWizard } from '../persona/PersonaWizard';
 import { BirthdayCalendar } from '../character/BirthdayCalendar';
+import { Live2DModelSection } from '../live2d/Live2DModelSection';
 import { ImageCropperModal } from '../ui/ImageCropperModal';
 import { useTheme } from '../../hooks/useTheme';
 import type { Theme } from '../../hooks/useTheme';
@@ -362,6 +363,7 @@ export function GeneralTab({
   const [showModelConfig, setShowModelConfig] = useState(false);
   const [showPermConfig, setShowPermConfig] = useState(false);
   const [showWallpaperConfig, setShowWallpaperConfig] = useState(false);
+  const [showLive2DConfig, setShowLive2DConfig] = useState(false);
 
   const [isPersonaMenuOpen, setIsPersonaMenuOpen] = useState(false);
   const [personas, setPersonas] = useState<string[]>(FALLBACK_PERSONAS);
@@ -543,6 +545,34 @@ export function GeneralTab({
             </div>
           </Card>
           <SectionFooter>This will cause more token spend base on how many character you create.</SectionFooter>
+        </>
+      )}
+
+      {chatMode && (
+        <>
+          <SectionHeader>Live2D Characters</SectionHeader>
+          <Card>
+            <CardRow onClick={() => setShowLive2DConfig((v) => !v)}>
+              <div className="settings-qr-row-left">
+                <div className="settings-icon-badge settings-icon-badge--indigo">
+                  <Mic size={18} />
+                </div>
+                <div>
+                  <p className="settings-item-title">Characters</p>
+                  <p className="settings-item-subtitle">Manage your Live2D characters</p>
+                </div>
+              </div>
+              {showLive2DConfig
+                ? <ChevronDown size={18} className="settings-chevron" />
+                : <ChevronRight size={18} className="settings-chevron" />
+              }
+            </CardRow>
+            {showLive2DConfig && (
+              <div className="settings-inline-expand">
+                <Live2DModelSection />
+              </div>
+            )}
+          </Card>
         </>
       )}
 

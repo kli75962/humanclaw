@@ -7,6 +7,9 @@ mod social;
 mod session;
 mod tools;
 mod files;
+mod live2d_key;
+#[cfg(target_os = "linux")]
+mod live2d_overlay;
 
 use chat::{get_memory_file, set_memory_file, list_chats, load_chat_messages, create_chat, save_chat_messages, delete_chat, list_memos, load_memo_messages, create_memo, save_memo_messages, delete_memo};
 use files::{read_file_text, extract_file_text_from_bytes, read_file_as_base64, get_clipboard_image, get_clipboard_uri_list};
@@ -24,6 +27,57 @@ use network::delivery::flush_all_pending;
 use social::queue::commands::{flush_queue, get_pending_queue, get_queue, queue_command};
 use social::queue::commands::{get_post_gen_queue, get_post_gen_pending, cleanup_post_gen_stale};
 
+// ── Live2D native GTK overlay commands (Linux only) ──────────────────────────
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+fn send_live2d_frame(
+    sender: tauri::State<'_, live2d_overlay::OverlaySender>,
+    latest: tauri::State<'_, live2d_overlay::LatestFrame>,
+    request: tauri::ipc::Request<'_>,
+) {
+    let tauri::ipc::InvokeBody::Raw(data) = request.body() else { return; };
+    if data.len() < 8 { return; }
+    let width  = u32::from_le_bytes(data[0..4].try_into().unwrap());
+    let height = u32::from_le_bytes(data[4..8].try_into().unwrap());
+    let pixels = data[8..].to_vec();
+    // Overwrite latest-frame slot — any undrawn frame already in the glib
+    // channel will find None and become a no-op, so Y-flip only runs once.
+    *latest.0.lock().unwrap() = Some((pixels, width, height));
+    let _ = sender.0.lock().unwrap().send(live2d_overlay::OverlayCmd::DrawLatest);
+}
+
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+fn send_live2d_frame(_request: tauri::ipc::Request<'_>) {}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+fn show_live2d_overlay(
+    state: tauri::State<'_, live2d_overlay::OverlaySender>,
+    x: i32, y: i32, width: i32, height: i32,
+    nat_aspect: f64,
+) {
+    let _ = state.0.lock().unwrap()
+        .send(live2d_overlay::OverlayCmd::Show { x, y, width, height, nat_aspect });
+}
+
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+fn show_live2d_overlay(_x: i32, _y: i32, _width: i32, _height: i32, _nat_aspect: f64) {}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+fn hide_live2d_overlay(state: tauri::State<'_, live2d_overlay::OverlaySender>) {
+    let _ = state.0.lock().unwrap().send(live2d_overlay::OverlayCmd::Hide);
+}
+
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+fn hide_live2d_overlay() {}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 /// App entry point — registers Tauri commands and starts the event loop.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[allow(dependency_on_unit_never_type_fallback)]
@@ -38,11 +92,20 @@ pub fn run() {
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(device::phone::plugin::init());
 
     #[cfg(not(target_os = "android"))]
     {
-        builder = builder.plugin(tauri_plugin_window_state::Builder::new().build());
+        // Exclude the live2d overlay window from state persistence —
+        // restoring stale size/position cascades into wrong canvas size,
+        // wrong initial fit, and wrong character bounds on every open.
+        builder = builder.plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_filter(|label| label != "live2d")
+                .skip_initial_state("live2d")
+                .build(),
+        );
     }
 
     #[cfg(target_os = "android")]
@@ -53,7 +116,77 @@ pub fn run() {
     builder
         .manage(PendingPermissions(std::sync::Mutex::new(std::collections::HashMap::new())))
         .manage(PendingAskUserRequests(std::sync::Mutex::new(std::collections::HashMap::new())))
+        .register_uri_scheme_protocol("live2d", |app, request| {
+            use aes_gcm::{Aes256Gcm, Key, Nonce, aead::{Aead, KeyInit}};
+            use tauri::Manager;
+
+            let uri_path = request.uri().path().trim_start_matches('/');
+            let enc_filename = format!("{}.enc", uri_path);
+
+            let resource_path = match app.app_handle().path().resource_dir() {
+                Ok(dir) => dir.join("live2d-encrypted").join(&enc_filename),
+                Err(_) => return tauri::http::Response::builder()
+                    .status(500).body(vec![]).unwrap(),
+            };
+
+            let raw = match std::fs::read(&resource_path) {
+                Ok(d) => d,
+                Err(_) => return tauri::http::Response::builder()
+                    .status(404).body(vec![]).unwrap(),
+            };
+
+            if raw.len() < 28 {
+                return tauri::http::Response::builder()
+                    .status(400).body(vec![]).unwrap();
+            }
+
+            let iv = &raw[0..12];
+            let tag = &raw[12..28];
+            let ciphertext = &raw[28..];
+
+            let key = Key::<Aes256Gcm>::from_slice(live2d_key::KEY);
+            let cipher = Aes256Gcm::new(key);
+            let nonce = Nonce::from_slice(iv);
+
+            // aes-gcm expects tag appended to ciphertext for decryption
+            let mut payload = ciphertext.to_vec();
+            payload.extend_from_slice(tag);
+
+            let decrypted = match cipher.decrypt(nonce, payload.as_ref()) {
+                Ok(d) => d,
+                Err(_) => return tauri::http::Response::builder()
+                    .status(403).body(vec![]).unwrap(),
+            };
+
+            let mime = match uri_path.rsplit('.').next().unwrap_or("") {
+                "json" => "application/json",
+                "png"  => "image/png",
+                "jpg" | "jpeg" => "image/jpeg",
+                "moc3" | "bin" => "application/octet-stream",
+                _ => "application/octet-stream",
+            };
+
+            tauri::http::Response::builder()
+                .header("Content-Type", mime)
+                .header("Access-Control-Allow-Origin", "*")
+                .body(decrypted)
+                .unwrap()
+        })
         .setup(|app| {
+            // 0. On Linux: create the native GTK overlay window and register it
+            //    as Tauri state so commands can send frames to it.
+            //    Must be done here (after GTK is initialized by Tauri) not in run().
+            #[cfg(target_os = "linux")]
+            {
+                use tauri::Manager;
+                let latest = live2d_overlay::LatestFrame(
+                    std::sync::Arc::new(std::sync::Mutex::new(None::<live2d_overlay::LatestFrameData>))
+                );
+                let overlay_tx = live2d_overlay::create_overlay(app.handle().clone(), latest.0.clone());
+                app.manage(live2d_overlay::OverlaySender(std::sync::Mutex::new(overlay_tx)));
+                app.manage(latest);
+            }
+
             // 1. Start the bridge HTTP server so peers can reach this device.
             start_bridge_server(app.handle().clone());
 
@@ -193,6 +326,10 @@ pub fn run() {
             create_memo,
             save_memo_messages,
             delete_memo,
+            // live2d native GTK overlay (Linux)
+            send_live2d_frame,
+            show_live2d_overlay,
+            hide_live2d_overlay,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

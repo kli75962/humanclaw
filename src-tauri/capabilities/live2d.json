@@ -1,0 +1,23 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "live2d",
+  "description": "Live2D overlay window capabilities",
+  "windows": ["live2d"],
+  "platforms": ["linux", "macOS", "windows"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-start-resize-dragging",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-close",
+    "core:window:allow-destroy",
+    "core:window:allow-set-size",
+    "core:window:allow-inner-size",
+    "core:window:allow-outer-size",
+    "core:window:allow-outer-position",
+    "core:window:allow-set-position",
+    "core:window:allow-set-ignore-cursor-events",
+    "core:window:allow-show",
+    "core:window:allow-current-monitor"
+  ]
+}

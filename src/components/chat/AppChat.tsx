@@ -1,4 +1,4 @@
-import { useRef, useMemo, useEffect } from 'react';
+import { useRef, useMemo, useEffect, useCallback } from 'react';
 import { ExplainPopup } from '../ui/ExplainPopup';
 import { WelcomeScreen } from './WelcomeScreen';
 import { ChatMessage } from './ChatMessage';
@@ -6,9 +6,12 @@ import { InputBar } from './InputBar';
 import { PermissionRequest } from '../ui/PermissionDialog';
 import { AskUserBubble } from '../ui/AskUserBubble';
 import { MemoChatView } from './MemoChatView';
+import { Live2DMobileView } from '../live2d/Live2DMobileView';
 import { File, Sparkles } from 'lucide-react';
 import { useExplainPopup } from '../../hooks/useExplainPopup';
 import { useFileDragDrop } from '../../hooks/useFileDragDrop';
+import { useLive2D } from '../../hooks/useLive2D';
+import { useLive2DModels } from '../../hooks/useLive2DModels';
 import type { Message, Post, Character, InputBarHandle } from '../../types';
 import type { PermissionRequest as PermissionRequestData } from '../ui/PermissionDialog';
 import type { AskQuestion } from '../ui/AskUserBubble';
@@ -51,6 +54,18 @@ export function AppChat(props: AppChatProps) {
   } = props;
 
   const { explainText, showExplain, setShowExplain, floatBtn, handleExplainClick } = useExplainPopup();
+  const { isOpen: live2DOpen, toggle: toggleLive2D, isMobileDevice } = useLive2D();
+  const { models: live2dModels, activeModel: activeLive2DModel, setActive: setLive2DActive } = useLive2DModels();
+
+  const handleMeetingToggle = useCallback(() => {
+    const modelId = activeCharacter?.live2dModelId;
+    // Prefer character's assigned model, fall back to the globally active model
+    const model = modelId
+      ? live2dModels.find((m) => m.id === modelId)
+      : activeLive2DModel;
+    if (model) setLive2DActive(model.id);
+    toggleLive2D(model?.modelUrl);
+  }, [activeCharacter?.live2dModelId, live2dModels, activeLive2DModel, setLive2DActive, toggleLive2D]);
   const inputBarRef = useRef<InputBarHandle>(null);
   const isDraggingFile = useFileDragDrop(inputBarRef);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -174,9 +189,14 @@ export function AppChat(props: AppChatProps) {
             onStop={handleStop}
             quotedPost={quotedPost}
             onClearQuote={() => setQuotedPost(null)}
+            onLive2DToggle={handleMeetingToggle}
+            live2DOpen={live2DOpen}
           />
         </>
       )}
+
+      {/* Mobile: full-screen overlay (desktop window is managed by useLive2D hook) */}
+      {isMobileDevice && live2DOpen && <Live2DMobileView onClose={toggleLive2D} />}
     </>
   );
 }

@@ -18,7 +18,11 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
     }
   },
   "bundle": {
@@ -33,7 +37,8 @@
     ],
     "resources": [
       "src/skills/**/*",
-      "src/tools/regtools/**/*"
+      "src/tools/regtools/**/*",
+      "live2d-encrypted/**/*"
     ]
   }
 }

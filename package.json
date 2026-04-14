@@ -11,11 +11,16 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@sentry/core": "^10.48.0",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-barcode-scanner": "^2.4.4",
+    "@tauri-apps/plugin-dialog": "^2.7.0",
     "@tauri-apps/plugin-opener": "^2",
     "jsqr": "^1.4.0",
+    "live2dcubismcore": "^1.0.2",
     "lucide-react": "^0.575.0",
+    "pixi-live2d-display": "^0.4.0",
+    "pixi.js": "7",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-easy-crop": "^5.5.7"

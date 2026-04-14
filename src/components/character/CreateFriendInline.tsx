@@ -4,6 +4,8 @@ import { Check, ChevronDown, ImageIcon, RefreshCw } from 'lucide-react';
 import type { Character } from '../../types';
 import { BirthdayCalendar } from '../character/BirthdayCalendar';
 import { ImageCropperModal } from '../ui/ImageCropperModal';
+import { useLive2DModels } from '../../hooks/useLive2DModels';
+import { Live2DPicker } from './Live2DPicker';
 import '../../style/SettingsScreen.css';
 
 const PROVIDER_KEY = 'phoneclaw_provider';
@@ -111,6 +113,10 @@ export function CreateFriendInline({ defaultModel = '', onSave, onCancel }: Prop
   const [personaOpen, setPersonaOpen] = useState(false);
   const personaRef = useRef<HTMLDivElement>(null);
 
+  // ── Live2D model ──────────────────────────────────────────────────────────
+  const { models: live2dModels } = useLive2DModels();
+  const [live2dModelId, setLive2dModelId] = useState<string | null>(null);
+
   // ── Active Time ────────────────────────────────────────────────────────────
   const [activeTime, setActiveTime] = useState<'early' | 'night' | 'random'>('random');
 
@@ -155,6 +161,7 @@ export function CreateFriendInline({ defaultModel = '', onSave, onCancel }: Prop
       background: background.trim(),
       activeTime: activeTime === 'random' ? undefined : activeTime,
       birthday: birthdayRandom ? undefined : selectedBirthday || undefined,
+      live2dModelId: live2dModelId ?? null,
     });
   }
 
@@ -318,6 +325,14 @@ export function CreateFriendInline({ defaultModel = '', onSave, onCancel }: Prop
           </div>
         )}
       </div>
+
+      {/* Live2D Character */}
+      {live2dModels.length > 0 && (
+        <>
+          <p className="settings-modal-field-label">Live2D Character</p>
+          <Live2DPicker models={live2dModels} selectedId={live2dModelId} onSelect={setLive2dModelId} />
+        </>
+      )}
 
       {/* Background */}
       <p className="settings-modal-field-label">Background</p>
