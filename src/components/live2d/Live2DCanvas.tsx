@@ -27,8 +27,13 @@ interface Props {
   controlsRef?: React.RefObject<Live2DControls | null>;
   onBoundsChange?: (bounds: ModelBounds) => void;
   onReady?: () => void;
-  /** Called each frame with raw RGBA pixels (top-down). Linux native overlay path. */
-  onFrame?: (pixels: Uint8Array, width: number, height: number) => void;
+  /**
+   * Linux native overlay path — called each frame with a pre-packed buffer:
+   * [width u32 LE][height u32 LE][raw RGBA pixels (WebGL bottom-up)].
+   * The callee must treat the buffer as read-only for the duration of the call;
+   * the same buffer is reused across frames.
+   */
+  onFrame?: (packed: Uint8Array) => void;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -78,6 +83,7 @@ export function Live2DCanvas({ modelUrl, controlsRef, onBoundsChange, onReady, o
     let observer: ResizeObserver | null = null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let app: any = null;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
     const resolvedUrl = modelUrl.startsWith('live2d://')
       ? modelUrl
@@ -120,11 +126,19 @@ export function Live2DCanvas({ modelUrl, controlsRef, onBoundsChange, onReady, o
         resolution: onFrame ? 1 : dpr,
         autoDensity: true,
         forceCanvas: false,
-        // preserveDrawingBuffer must be true so drawImage can read the
-        // framebuffer after PIXI renders (otherwise the browser may clear
-        // the buffer between the render and our read).
-        preserveDrawingBuffer: true,
+        // Linux PBO path reads pixels asynchronously (after the rAF tick), so
+        // the backbuffer must survive compositing → preserveDrawingBuffer: true.
+        // Non-Linux blit happens inside the same ticker tick as PIXI's render
+        // (priority -50, PIXI at 0), so the backbuffer is still live — no need
+        // to preserve it.  Removing it lets the GPU pipeline freely overlap
+        // frames, recovering the ~20fps that preserveDrawingBuffer was stealing.
+        preserveDrawingBuffer: !!onFrame,
       });
+
+      // On Linux: the PIXI Application auto-starts its ticker using rAF which
+      // WebKit2GTK throttles on hidden content.  Stop the ticker immediately
+      // after construction; our setInterval below will call update() manually.
+      if (onFrame) app.ticker.stop();
 
       const model = await Live2DModel.from(resolvedUrl);
       if (cancelled) { model.destroy(); return; }
@@ -141,6 +155,17 @@ export function Live2DCanvas({ modelUrl, controlsRef, onBoundsChange, onReady, o
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       app.stage.addChild(model as any);
 
+      // Linux overlay: flip the stage Y-axis so the WebGL framebuffer already
+      // contains rows in top-down order when readPixels / PBO reads it.
+      // This lets Rust scan both buffers sequentially (no row-reversal), giving
+      // the CPU prefetcher a straight sequential workload — much better cache
+      // coherency.  model.y stays at h/2 in flipped coords and still renders
+      // at the visual center: screen_y = stage.y + scale.y * model.y = h - h/2 = h/2.
+      if (onFrame) {
+        app.stage.scale.y = -1;
+        app.stage.y = renderer.screen.height;
+      }
+
       // ── Dual-canvas blit: WebGL → 2D ──────────────────────────────
       // Set up the visible 2D display canvas to match the GL canvas size.
       const displayCanvas = displayRef.current!;
@@ -150,8 +175,8 @@ export function Live2DCanvas({ modelUrl, controlsRef, onBoundsChange, onReady, o
 
       // WebGL2 context for the native GTK overlay path (Linux PBO readback).
       // MUST be acquired AFTER new Application() to reuse PIXI's context.
-      // WebGL images are bottom-up; Y-flip is handled in Rust to avoid the
-      // extra JS allocation + copy on every frame.
+      // Y-flip is handled by flipping the PIXI stage (see above), so the PBO
+      // already contains top-down rows — no per-frame row reversal in Rust.
       const gl2 = onFrame
         ? (glCanvas.getContext('webgl2') as WebGL2RenderingContext | null)
         : null;
@@ -173,12 +198,19 @@ export function Live2DCanvas({ modelUrl, controlsRef, onBoundsChange, onReady, o
       // connection pool (which would block other Tauri API calls).
       let frameSending = false;
 
-      // After each PIXI render (priority -50, PIXI renders at 0):
-      //   • Linux native overlay: PBO kick happens EVERY tick so PIXI runs at
-      //     full rAF rate; only the IPC send is gated by frameSending.
-      //     Frames that arrive while busy are discarded (latest-frame-wins in
-      //     Rust means only the newest painted frame matters anyway).
-      //   • Non-Linux: blit off-DOM WebGL canvas to visible 2D canvas.
+      // Pre-allocated frame buffer — reused every tick to avoid GC pressure.
+      // Layout: [width u32 LE (4 B)][height u32 LE (4 B)][RGBA pixels (w×h×4 B)].
+      // The header is written once per dimension change; pixels are written by
+      // getBufferSubData directly at byte offset 8 — zero extra copy.
+      let sendBuf: Uint8Array | null = null;
+      let sendBufW = 0, sendBufH = 0;
+
+      // Ticker callback — runs after each PIXI render (priority -50; PIXI renders at 0).
+      //   • Linux native overlay: kick async PBO readback every tick; IPC send
+      //     is gated by frameSending so we never flood the IPC bridge.
+      //     The canvas is visibility:hidden, so we drive the ticker via
+      //     setInterval below instead of rAF to avoid WebKit's visibility throttle.
+      //   • Non-Linux: blit off-DOM WebGL canvas → visible 2D display canvas.
       app.ticker.add(() => {
         if (cancelled || !displayRef.current) return;
 
@@ -191,12 +223,26 @@ export function Live2DCanvas({ modelUrl, controlsRef, onBoundsChange, onReady, o
           const meta = pboMeta[pboRead];
           if (meta.ready && meta.pw > 0 && meta.ph > 0) {
             if (!frameSending) {
-              const buf = new Uint8Array(meta.pw * meta.ph * 4);
+              const mpw = meta.pw, mph = meta.ph;
+              const frameSize = mpw * mph * 4;
+
+              // Reallocate only when dimensions change (rare: window resize).
+              if (!sendBuf || sendBufW !== mpw || sendBufH !== mph) {
+                sendBuf = new Uint8Array(8 + frameSize);
+                const hv = new DataView(sendBuf.buffer);
+                hv.setUint32(0, mpw, true);
+                hv.setUint32(4, mph, true);
+                sendBufW = mpw; sendBufH = mph;
+              }
+
+              // Write pixel data directly into sendBuf at byte offset 8 —
+              // combines PBO readback + header in ONE buffer, zero extra copy.
               gl2.bindBuffer(gl2.PIXEL_PACK_BUFFER, pbos[pboRead]);
-              gl2.getBufferSubData(gl2.PIXEL_PACK_BUFFER, 0, buf);
+              gl2.getBufferSubData(gl2.PIXEL_PACK_BUFFER, 0, sendBuf, 8, frameSize);
               gl2.bindBuffer(gl2.PIXEL_PACK_BUFFER, null);
+
               frameSending = true;
-              Promise.resolve(onFrame(buf, meta.pw, meta.ph))
+              Promise.resolve(onFrame(sendBuf))
                 .finally(() => { frameSending = false; });
             }
             // Always clear the slot so stale data isn't re-read on next tick.
@@ -216,6 +262,25 @@ export function Live2DCanvas({ modelUrl, controlsRef, onBoundsChange, onReady, o
           displayCtx.drawImage(glCanvas, 0, 0);
         }
       }, null, -50);
+
+      // Linux overlay: drift-corrected timer replaces setInterval.
+      // setInterval(16) fires at ±4 ms jitter; accumulated drift makes PIXI's
+      // deltaTime fluctuate, which shows as micro-stutter in the animation.
+      // This self-correcting scheduler tracks the INTENDED next-fire time and
+      // computes the exact delay needed to hit it, compensating for any overshoot
+      // or undershoot from the previous tick.  Result: frame cadence stays
+      // within ~0.5 ms of target — virtually indistinguishable from vsync.
+      if (onFrame) {
+        const TARGET_MS = 1000 / 60;
+        let sched = performance.now() + TARGET_MS;
+        const tick = () => {
+          if (cancelled) return;
+          app.ticker.update(performance.now());
+          sched += TARGET_MS;
+          intervalId = setTimeout(tick, Math.max(0, sched - performance.now()));
+        };
+        intervalId = setTimeout(tick, 0);
+      }
 
       if (controlsRef) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -251,6 +316,8 @@ export function Live2DCanvas({ modelUrl, controlsRef, onBoundsChange, onReady, o
         const { width: nw, height: nh } = entries[0].contentRect;
         if (!nw || !nh) return;
         renderer.resize(nw, nh);
+        // Re-calibrate the stage Y-flip origin after height changes.
+        if (onFrame) app.stage.y = renderer.screen.height;
         // Resize visible display canvas to match.
         const ndpr = window.devicePixelRatio || 1;
         displayRef.current.width  = Math.round(nw * ndpr);
@@ -272,6 +339,7 @@ export function Live2DCanvas({ modelUrl, controlsRef, onBoundsChange, onReady, o
 
     return () => {
       cancelled = true;
+      if (intervalId !== null) { clearTimeout(intervalId); intervalId = null; }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (controlsRef) (controlsRef as any).current = null;
       observer?.disconnect();

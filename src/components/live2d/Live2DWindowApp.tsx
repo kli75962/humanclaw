@@ -39,10 +39,14 @@ export function Live2DWindowApp() {
   const controlsRef  = useRef<Live2DControls | null>(null);
   // Linux: GTK overlay position/size in logical pixels, updated by live2d-moved events.
   const overlayPosRef = useRef({ x: 0, y: 0, w: 400, h: 600 });
-  // Linux: desired (unclamped) scale — needed because ctrls.getScale() returns the
-  // clamped PIXI scale, which would make further growth impossible once screen-capped.
+  // Linux: desired logical scale — kept separately because ctrls.getScale() returns the
+  // PIXI display scale which may differ after a resize, so this gives a stable baseline.
   const virtualScaleRef = useRef(1.0);
-  // Linux: screen logical size — used to clamp WebviewWindow so X11 never clips it.
+  // Linux: screen logical size — remembered so handleScale and live2d-resized
+  // can clamp the WebviewWindow.  X11 clips windows that exceed screen bounds,
+  // making the PIXI canvas smaller than the GTK overlay → Cairo upscales →
+  // the character stretches.  The GTK overlay itself uses override_redirect and
+  // can be placed/sized freely, but both must agree on the same clamped size.
   const screenSizeRef = useRef({ w: 1280, h: 800 });
   // Linux: natural model aspect ratio (width/height), sent to Rust so resize uses exact ratio.
   const natAspectRef = useRef(0.0);
@@ -118,9 +122,9 @@ export function Live2DWindowApp() {
       if (!ctrls) return;
 
       if (IS_LINUX_DESKTOP) {
-        // Linux: resize WebviewWindow AND GTK overlay together (same size → no stretch,
-        // no GTK upscaling blur).  Clamp to screen so X11/WM never clips the window
-        // (which would make the PIXI canvas smaller than the overlay → stretch again).
+        // Linux: resize WebviewWindow AND GTK overlay to the same size.
+        // Clamp to screen so X11 never clips the WebviewWindow (clipping makes
+        // the PIXI canvas smaller than the overlay → Cairo stretches the frame).
         const cur = virtualScaleRef.current;
         const next = Math.max(0.05, Math.min(10, cur * factor));
         if (next === cur) return;
@@ -131,7 +135,7 @@ export function Live2DWindowApp() {
         const newW = Math.min(desired.w, screenW);
         const newH = Math.min(desired.h, screenH);
 
-        // Effective PIXI scale for the (possibly clamped) canvas — preserves aspect.
+        // Effective PIXI scale for the (clamped) canvas — preserves aspect.
         const nat = controlsRef.current?.getNaturalSize();
         if (!nat) return;
         const pixiScale = Math.min(next, (newW - PAD * 2) / nat.width, (newH - PAD * 2) / nat.height);
@@ -139,9 +143,7 @@ export function Live2DWindowApp() {
         const { x: oldX, y: oldY, w: oldW, h: oldH } = overlayPosRef.current;
         const newX = Math.round(oldX + oldW - newW);
         const newY = Math.max(0, Math.round(oldY + oldH / 2 - newH / 2));
-        // Always track the actual achieved scale, not the unclamped desired scale.
-        // If virtualScaleRef accumulated past the screen limit, further grow/shrink
-        // would appear frozen (virtual scale changes but visual size doesn't).
+        // Track the actual achieved scale so shrinking after hitting the cap works.
         virtualScaleRef.current = pixiScale;
         overlayPosRef.current = { x: newX, y: newY, w: newW, h: newH };
 
@@ -243,11 +245,11 @@ export function Live2DWindowApp() {
       const { w: screenW, h: screenH } = screenSizeRef.current;
       const aspect = nat.width / nat.height;
 
-      // Clamp to screen, preserving aspect ratio.
+      // Clamp to screen so the WebviewWindow doesn't get X11-clipped (which
+      // would make the PIXI canvas smaller than the GTK overlay → stretch).
       let clampW = w, clampH = h;
       if (clampH > screenH) { clampH = screenH; clampW = Math.round(clampH * aspect); }
       if (clampW > screenW) { clampW = screenW; clampH = Math.round(clampW / aspect); }
-      // Keep the right/centre anchor: shift x so right edge stays, centre y.
       const adjX = x + w - clampW;
       const adjY = Math.max(0, Math.round(y + h / 2 - clampH / 2));
 
@@ -262,7 +264,7 @@ export function Live2DWindowApp() {
       await win.setPosition(new LogicalPosition(adjX, adjY));
       await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())));
       controlsRef.current?.setScale(pixiScale);
-      // Sync GTK overlay to clamped size — prevents stretch when drag exceeds screen.
+      // Sync GTK overlay to the clamped size.
       await invoke('show_live2d_overlay', {
         x: adjX, y: adjY, width: clampW, height: clampH,
         natAspect: natAspectRef.current,
@@ -289,7 +291,6 @@ export function Live2DWindowApp() {
         const dpr = window.devicePixelRatio || 1;
         if (mon) { monH = mon.size.height / dpr; monW = mon.size.width / dpr; }
       } catch { /* use fallback */ }
-      screenSizeRef.current = { w: monW, h: monH };
 
       const size = computeWindowSize((monH * INIT_HEIGHT_FRAC) / nat.height);
       if (!size) return;
@@ -300,6 +301,7 @@ export function Live2DWindowApp() {
       await win.setSize(new LogicalSize(size.w, size.h));
       await win.setPosition(new LogicalPosition(newX, newY));
       await rAF(); await rAF();
+      screenSizeRef.current = { w: monW, h: monH };
       ctrls.setScale(initScale);
       await rAF();
 
@@ -319,18 +321,11 @@ export function Live2DWindowApp() {
   }, [computeWindowSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Frame sender (Linux only) ─────────────────────────────────────────
-  // Pack [width u32 LE][height u32 LE][pixels…] into a single Uint8Array and
-  // pass it as the args directly — Tauri sends it as application/octet-stream,
-  // received via tauri::ipc::InvokeBody::Raw on the Rust side.
+  // Live2DCanvas pre-packs [width u32 LE][height u32 LE][RGBA pixels…] into
+  // a single reused buffer and calls this with it directly — no extra copy.
+  // Tauri sends it as application/octet-stream (InvokeBody::Raw on Rust side).
   const handleFrame = useCallback(
-    (pixels: Uint8Array, width: number, height: number) => {
-      const packed = new Uint8Array(8 + pixels.length);
-      const view = new DataView(packed.buffer);
-      view.setUint32(0, width,  true);
-      view.setUint32(4, height, true);
-      packed.set(pixels, 8);
-      return invoke('send_live2d_frame', packed);
-    },
+    (packed: Uint8Array) => invoke('send_live2d_frame', packed),
     [],
   );
 
