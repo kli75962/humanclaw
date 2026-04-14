@@ -4072,6 +4072,7 @@ name = "phoneclaw"
 version = "0.1.5"
 dependencies = [
  "aes-gcm",
+ "async-channel",
  "atspi",
  "axum",
  "base64 0.22.1",

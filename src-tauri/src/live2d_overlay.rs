@@ -160,7 +160,7 @@ pub enum OverlayCmd {
     Hide,
 }
 
-pub struct OverlaySender(pub Mutex<glib::Sender<OverlayCmd>>);
+pub struct OverlaySender(pub std::sync::Mutex<async_channel::Sender<OverlayCmd>>);
 
 /// Shared slot holding the most recent RGBA frame from JS.
 /// IPC handler overwrites it on every incoming frame; the glib main loop
@@ -170,11 +170,11 @@ pub struct OverlaySender(pub Mutex<glib::Sender<OverlayCmd>>);
 pub type LatestFrameData = (Vec<u8>, u32, u32); // (pixels, width, height)
 pub struct LatestFrame(pub std::sync::Arc<Mutex<Option<LatestFrameData>>>);
 
-pub fn create_overlay(app: tauri::AppHandle, latest_frame: std::sync::Arc<Mutex<Option<LatestFrameData>>>) -> glib::Sender<OverlayCmd> {
+pub fn create_overlay(app: tauri::AppHandle, latest_frame: std::sync::Arc<Mutex<Option<LatestFrameData>>>) -> async_channel::Sender<OverlayCmd> {
     use gtk::prelude::*;
     use glib::clone::Downgrade;
 
-    let (tx, rx) = glib::MainContext::channel::<OverlayCmd>(glib::Priority::DEFAULT);
+    let (tx, rx) = async_channel::unbounded::<OverlayCmd>();
 
     // ── Window ───────────────────────────────────────────────────────────
     let window = gtk::Window::new(gtk::WindowType::Toplevel);
@@ -381,84 +381,87 @@ pub fn create_overlay(app: tauri::AppHandle, latest_frame: std::sync::Arc<Mutex<
     let frame_rx      = frame_state.clone();
     let nat_aspect_rx = nat_aspect_st.clone();
     let weak2: glib::WeakRef<gtk::Window> = Downgrade::downgrade(&window);
-    rx.attach(None, move |cmd| {
-        let Some(w) = glib::clone::Upgrade::upgrade(&weak2) else {
-            return glib::ControlFlow::Break;
-        };
-        match cmd {
-            OverlayCmd::DrawLatest => {
-                // Take the latest frame; if multiple DrawLatest commands queued up
-                // before glib ran, subsequent finds find None and become no-ops.
-                let Some((pixels, width, height)) = latest_frame.lock().unwrap().take() else {
-                    return glib::ControlFlow::Continue;
-                };
-                let wi = width  as i32;
-                let hi = height as i32;
-                let wu = width  as usize;
 
-                // ── Reuse cairo surface when dimensions haven't changed ─────
-                // Avoids a heap allocation + cairo surface creation per frame.
-                // On the first call, or after a window resize, we create a new
-                // surface; all subsequent same-size calls write in-place.
-                {
-                    let mut state = frame_rx.borrow_mut();
-                    let reuse = state.as_ref()
-                        .map_or(false, |s| s.width() == wi && s.height() == hi);
-                    if !reuse {
-                        *state = cairo::ImageSurface::create(
-                            cairo::Format::ARgb32, wi, hi,
-                        ).ok();
-                    }
+    glib::MainContext::default().spawn_local(async move {
+        while let Ok(cmd) = rx.recv().await {
+            let Some(w) = glib::clone::Upgrade::upgrade(&weak2) else {
+                break;
+            };
 
-                    if let Some(ref mut surface) = *state {
-                        // Obtain stride before the mutable data() borrow.
-                        let stride = surface.stride() as usize;
-                        if let Ok(mut data) = surface.data() {
-                            // Pixels arrive top-down (PIXI stage Y-flipped in JS),
-                            // so src and dst are both scanned sequentially — optimal
-                            // for the CPU prefetcher and store buffer.
-                            // chunks_exact(4) tells LLVM the body is exactly 4 bytes
-                            // wide, enabling SSE2/AVX2 auto-vectorization.
-                            for (y, src_row) in pixels.chunks_exact(wu * 4).enumerate() {
-                                let dst_off = y * stride;
-                                for (x, s) in src_row.chunks_exact(4).enumerate() {
-                                    let di = dst_off + x * 4;
-                                    let r = s[0] as u32;
-                                    let g = s[1] as u32;
-                                    let b = s[2] as u32;
-                                    let a = s[3] as u32;
-                                    // Fast integer premultiply (no division):
-                                    // equivalent to (c * a + 127) / 255.
-                                    let pm = |c: u32| -> u8 {
-                                        let p = c * a + 128;
-                                        ((p + (p >> 8)) >> 8) as u8
-                                    };
-                                    data[di]   = pm(b);
-                                    data[di+1] = pm(g);
-                                    data[di+2] = pm(r);
-                                    data[di+3] = a as u8;
+            match cmd {
+                OverlayCmd::DrawLatest => {
+                    // Take the latest frame; if multiple DrawLatest commands queued up
+                    // before glib ran, subsequent finds find None and become no-ops.
+                    let Some((pixels, width, height)) = latest_frame.lock().unwrap().take() else {
+                        continue;
+                    };
+                    let wi = width  as i32;
+                    let hi = height as i32;
+                    let wu = width  as usize;
+
+                    // ── Reuse cairo surface when dimensions haven't changed ─────
+                    // Avoids a heap allocation + cairo surface creation per frame.
+                    // On the first call, or after a window resize, we create a new
+                    // surface; all subsequent same-size calls write in-place.
+                    {
+                        let mut state = frame_rx.borrow_mut();
+                        let reuse = state.as_ref()
+                            .map_or(false, |s| s.width() == wi && s.height() == hi);
+                        if !reuse {
+                            *state = cairo::ImageSurface::create(
+                                cairo::Format::ARgb32, wi, hi,
+                            ).ok();
+                        }
+
+                        if let Some(ref mut surface) = *state {
+                            // Obtain stride before the mutable data() borrow.
+                            let stride = surface.stride() as usize;
+                            if let Ok(mut data) = surface.data() {
+                                // Pixels arrive top-down (PIXI stage Y-flipped in JS),
+                                // so src and dst are both scanned sequentially — optimal
+                                // for the CPU prefetcher and store buffer.
+                                // chunks_exact(4) tells LLVM the body is exactly 4 bytes
+                                // wide, enabling SSE2/AVX2 auto-vectorization.
+                                for (y, src_row) in pixels.chunks_exact(wu * 4).enumerate() {
+                                    let dst_off = y * stride;
+                                    for (x, s) in src_row.chunks_exact(4).enumerate() {
+                                        let di = dst_off + x * 4;
+                                        let r = s[0] as u32;
+                                        let g = s[1] as u32;
+                                        let b = s[2] as u32;
+                                        let a = s[3] as u32;
+                                        // Fast integer premultiply (no division):
+                                        // equivalent to (c * a + 127) / 255.
+                                        let pm = |c: u32| -> u8 {
+                                            let p = c * a + 128;
+                                            ((p + (p >> 8)) >> 8) as u8
+                                        };
+                                        data[di]   = pm(b);
+                                        data[di+1] = pm(g);
+                                        data[di+2] = pm(r);
+                                        data[di+3] = a as u8;
+                                    }
                                 }
+                                // ImageSurfaceData drops here → marks surface dirty.
                             }
-                            // ImageSurfaceData drops here → marks surface dirty.
+                        }
+                    } // RefMut dropped before queue_draw to avoid borrow conflicts.
+                    w.queue_draw();
+                }
+                OverlayCmd::Show { x, y, width, height, nat_aspect } => {
+                    if nat_aspect > 0.0 { *nat_aspect_rx.borrow_mut() = nat_aspect; }
+                    if width > 0 && height > 0 {
+                        w.resize(width, height);
+                        w.move_(x, y);
+                        if !gtk::prelude::WidgetExt::is_visible(&w) {
+                            w.show_all();
+                            w.present();
                         }
                     }
-                } // RefMut dropped before queue_draw to avoid borrow conflicts.
-                w.queue_draw();
-            }
-            OverlayCmd::Show { x, y, width, height, nat_aspect } => {
-                if nat_aspect > 0.0 { *nat_aspect_rx.borrow_mut() = nat_aspect; }
-                if width > 0 && height > 0 {
-                    w.resize(width, height);
-                    w.move_(x, y);
-                    if !gtk::prelude::WidgetExt::is_visible(&w) {
-                        w.show_all();
-                        w.present();
-                    }
                 }
+                OverlayCmd::Hide => { w.hide(); }
             }
-            OverlayCmd::Hide => { w.hide(); }
         }
-        glib::ControlFlow::Continue
     });
 
     tx

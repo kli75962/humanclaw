@@ -43,6 +43,7 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 tauri-plugin-barcode-scanner = "2.4.4"
 aes-gcm = "0.10"
 tauri-plugin-dialog = "2"
+async-channel = "2.0"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 tauri-plugin-window-state = "2"

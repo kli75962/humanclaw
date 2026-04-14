@@ -44,7 +44,7 @@ fn send_live2d_frame(
     // Overwrite latest-frame slot — any undrawn frame already in the glib
     // channel will find None and become a no-op, so Y-flip only runs once.
     *latest.0.lock().unwrap() = Some((pixels, width, height));
-    let _ = sender.0.lock().unwrap().send(live2d_overlay::OverlayCmd::DrawLatest);
+    let _ = sender.0.lock().unwrap().try_send(live2d_overlay::OverlayCmd::DrawLatest);
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -59,7 +59,7 @@ fn show_live2d_overlay(
     nat_aspect: f64,
 ) {
     let _ = state.0.lock().unwrap()
-        .send(live2d_overlay::OverlayCmd::Show { x, y, width, height, nat_aspect });
+        .try_send(live2d_overlay::OverlayCmd::Show { x, y, width, height, nat_aspect });
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -69,7 +69,7 @@ fn show_live2d_overlay(_x: i32, _y: i32, _width: i32, _height: i32, _nat_aspect:
 #[cfg(target_os = "linux")]
 #[tauri::command]
 fn hide_live2d_overlay(state: tauri::State<'_, live2d_overlay::OverlaySender>) {
-    let _ = state.0.lock().unwrap().send(live2d_overlay::OverlayCmd::Hide);
+    let _ = state.0.lock().unwrap().try_send(live2d_overlay::OverlayCmd::Hide);
 }
 
 #[cfg(not(target_os = "linux"))]
