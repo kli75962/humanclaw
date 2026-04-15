@@ -5,7 +5,6 @@ import path from "path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 // Mobile (android/ios) dev uses a different port so desktop and mobile
 // can run simultaneously without conflicting.
@@ -40,6 +39,8 @@ function pixiLive2dCompatPlugin() {
 }
 
 export default defineConfig(async () => ({
+  root: "src",
+  publicDir: "../public",
   plugins: [react(), pixiLive2dCompatPlugin()],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
@@ -105,10 +106,12 @@ export default defineConfig(async () => ({
 
   // Multi-page: main app + live2d overlay window
   build: {
+    outDir: "../dist",
+    emptyOutDir: true,
     rollupOptions: {
       input: {
-        main: "index.html",
-        live2d: "live2d.html",
+        main: path.resolve(__dirname, "src/index.html"),
+        live2d: path.resolve(__dirname, "src/live2d.html"),
       },
     },
   },

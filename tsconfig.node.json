@@ -3,6 +3,8 @@
     "composite": true,
     "skipLibCheck": true,
     "module": "ESNext",
+    "target": "ESNext",
+    "lib": ["ESNext"],
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true
   },
