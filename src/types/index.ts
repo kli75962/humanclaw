@@ -79,6 +79,8 @@ export interface InputBarHandle {
   attachFilePath: (path: string) => void;
   /** Attach an image by its OS path string (from Tauri drag-drop). */
   attachImagePath: (path: string) => void;
+  /** Show an alert message above the input bar. If autoDismiss is false, it stays until closed. */
+  showAlert: (msg: string, autoDismiss?: boolean) => void;
 }
 
 export interface ModalProps {

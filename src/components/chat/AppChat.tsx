@@ -1,4 +1,5 @@
 import { useRef, useMemo, useEffect, useCallback } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { ExplainPopup } from '../ui/ExplainPopup';
 import { WelcomeScreen } from './WelcomeScreen';
 import { ChatMessage } from './ChatMessage';
@@ -54,7 +55,7 @@ export function AppChat(props: AppChatProps) {
   } = props;
 
   const { explainText, showExplain, setShowExplain, floatBtn, handleExplainClick } = useExplainPopup();
-  const { isOpen: live2DOpen, toggle: toggleLive2D, isMobileDevice } = useLive2D();
+  const { isOpen: live2DOpen, toggle: toggleLive2D, close: closeLive2D, isMobileDevice } = useLive2D();
   const { models: live2dModels, activeModel: activeLive2DModel, setActive: setLive2DActive } = useLive2DModels();
 
   const handleMeetingToggle = useCallback(() => {
@@ -73,6 +74,16 @@ export function AppChat(props: AppChatProps) {
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isThinking, agentStatus]);
+
+  useEffect(() => {
+    const unlisten = listen<{ error: string }>('live2d-load-error', (e) => {
+      closeLive2D();
+      inputBarRef.current?.showAlert(`Failed to load Live2D model:\n${e.payload.error}`, false);
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, [closeLive2D]);
 
   const messageList = useMemo(() => {
     const lastUserMsgIdx = messages.reduce(

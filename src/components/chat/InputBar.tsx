@@ -106,10 +106,12 @@ export const InputBar = memo(forwardRef<InputBarHandle, InputBarProps>(function 
   const alertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef  = useRef<HTMLInputElement>(null);
 
-  function showAlert(msg: string) {
+  function showAlert(msg: string, autoDismiss = true) {
     if (alertTimerRef.current) clearTimeout(alertTimerRef.current);
     setAlertMsg(msg);
-    alertTimerRef.current = setTimeout(() => setAlertMsg(null), 4000);
+    if (autoDismiss) {
+      alertTimerRef.current = setTimeout(() => setAlertMsg(null), 4000);
+    }
   }
 
   function addWithRead(name: string, readFn: () => Promise<string | null>) {
@@ -174,6 +176,7 @@ export const InputBar = memo(forwardRef<InputBarHandle, InputBarProps>(function 
         if (img) setAttachedImages((prev) => [...prev, img]);
       });
     },
+    showAlert:       (msg: string, autoDismiss?: boolean)  => showAlert(msg, autoDismiss),
   }), []);
 
   useEffect(() => {

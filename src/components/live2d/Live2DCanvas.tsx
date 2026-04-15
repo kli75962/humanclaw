@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { emit } from '@tauri-apps/api/event';
 
 const GAP = 5;
 
@@ -307,6 +308,7 @@ export function Live2DCanvas({ modelUrl, controlsRef, onReady, onFrame }: Props)
         const msg = err instanceof Error ? (err.stack ?? String(err)) : String(err);
         console.error('[Live2DCanvas]', err);
         setError(msg);
+        emit('live2d-load-error', { error: msg }).catch(() => {});
         onReady?.();
       }
     });

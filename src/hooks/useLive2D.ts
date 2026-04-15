@@ -76,5 +76,17 @@ export function useLive2D() {
     [isOpen],
   );
 
-  return { isOpen, toggle, isMobileDevice } as const;
+  const close = useCallback(async () => {
+    if (isMobileDevice) {
+      setIsOpen(false);
+      return;
+    }
+    if (winRef.current) {
+      await winRef.current.destroy().catch(() => {});
+      winRef.current = null;
+    }
+    setIsOpen(false);
+  }, []);
+
+  return { isOpen, toggle, close, isMobileDevice } as const;
 }
