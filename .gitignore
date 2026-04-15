@@ -32,3 +32,4 @@ dist-ssr
 src-tauri/live2d-src/
 src-tauri/live2d-encrypted/
 src-tauri/src/live2d_key.rs
+scripts/
