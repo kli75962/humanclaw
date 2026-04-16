@@ -119,8 +119,8 @@ export interface SideMenuProps {
   onSelectCharacter: (id: string) => void;
   onCreateCharacter: (data: Omit<Character, 'id' | 'createdAt'>) => void;
   onDeleteCharacter: (id: string) => void;
-  igMode: boolean;
-  onIgModeChange: (v: boolean) => void;
+  socialMode: boolean;
+  onSocialModeChange: (v: boolean) => void;
   personaNotice?: { status: 'creating' | 'done' | 'interrupted'; displayName: string } | null;
   onPersonaNoticeClose?: () => void;
 }

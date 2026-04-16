@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 
 use crate::chat::memory_dir;
 
@@ -62,7 +62,9 @@ pub fn save_post(app: &AppHandle, post: &PostMeta) -> Result<(), String> {
     }
 
     let json = serde_json::to_string(&posts).map_err(|e| e.to_string())?;
-    std::fs::write(posts_index_path(app), json).map_err(|e| e.to_string())
+    std::fs::write(posts_index_path(app), json).map_err(|e| e.to_string())?;
+    let _ = app.emit("phoneclaw:social-update", ());
+    Ok(())
 }
 
 /// Delete a post by id.
@@ -75,7 +77,9 @@ pub fn delete_post(app: &AppHandle, id: &str) -> Result<(), String> {
     let dir = posts_dir(app);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let json = serde_json::to_string(&posts).map_err(|e| e.to_string())?;
-    std::fs::write(posts_index_path(app), json).map_err(|e| e.to_string())
+    std::fs::write(posts_index_path(app), json).map_err(|e| e.to_string())?;
+    let _ = app.emit("phoneclaw:social-update", ());
+    Ok(())
 }
 
 // ── Comments ────────────────────────────────────────────────────────────────
@@ -93,7 +97,9 @@ fn write_comments(app: &AppHandle, comments: &[PostComment]) -> Result<(), Strin
     let dir = posts_dir(app);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let json = serde_json::to_string(comments).map_err(|e| e.to_string())?;
-    std::fs::write(comments_index_path(app), json).map_err(|e| e.to_string())
+    std::fs::write(comments_index_path(app), json).map_err(|e| e.to_string())?;
+    let _ = app.emit("phoneclaw:social-update", ());
+    Ok(())
 }
 
 /// List all comments for a given post, oldest first.
@@ -140,6 +146,7 @@ fn update_like_count(app: &AppHandle, id: &str, increment: bool) -> Result<u32, 
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let json = serde_json::to_string(&posts).map_err(|e| e.to_string())?;
     std::fs::write(posts_index_path(app), json).map_err(|e| e.to_string())?;
+    let _ = app.emit("phoneclaw:social-update", ());
     Ok(new_count)
 }
 

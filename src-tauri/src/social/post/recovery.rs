@@ -95,19 +95,15 @@ pub struct PostGenEntry {
 }
 
 impl PostGenEntry {
-    /// Create a new post generation entry (initial state: PostGenerating).
-    pub fn new(
-        character_id: String,
-        generated_text: String,
-        generated_timestamp: String,
-    ) -> Self {
+    /// Create a new post generation entry (initial state: PostGenerating) with empty text/timestamp.
+    pub fn new_draft(character_id: String) -> Self {
         let now = current_timestamp();
         Self {
             id: Uuid::new_v4().to_string(),
             character_id,
             post_id: None,
-            generated_text,
-            generated_timestamp,
+            generated_text: String::new(),
+            generated_timestamp: String::new(),
             state: PostGenState::PostGenerating,
             comments: Vec::new(),
             likes: Vec::new(),
@@ -115,6 +111,13 @@ impl PostGenEntry {
             created_at: now,
             updated_at: now,
         }
+    }
+
+    /// Update the entry with generated post text / timestamp when Ollama finishes.
+    pub fn set_generated_text(&mut self, text: String, timestamp: String) {
+        self.generated_text = text;
+        self.generated_timestamp = timestamp;
+        self.updated_at = current_timestamp();
     }
 
     /// Mark post as created with an ID.
@@ -238,7 +241,7 @@ pub fn load_all(app: &AppHandle) -> Vec<PostGenEntry> {
 pub fn load_pending(app: &AppHandle) -> Vec<PostGenEntry> {
     load_all(app)
         .into_iter()
-        .filter(|e| e.state != PostGenState::Completed && e.state != PostGenState::Failed)
+        .filter(|e| e.state != PostGenState::Completed)
         .collect()
 }
 
@@ -264,15 +267,13 @@ fn save_all(app: &AppHandle, entries: &[PostGenEntry]) -> Result<(), String> {
 
 // ── Mutations ────────────────────────────────────────────────────────────────
 
-/// Enqueue a new post generation task.
+/// Enqueue a new drafting task.
 #[allow(dead_code)]
-pub fn enqueue(
+pub fn enqueue_draft(
     app: &AppHandle,
     character_id: String,
-    generated_text: String,
-    generated_timestamp: String,
 ) -> Result<PostGenEntry, String> {
-    let entry = PostGenEntry::new(character_id, generated_text, generated_timestamp);
+    let entry = PostGenEntry::new_draft(character_id);
 
     // Append to JSONL.
     let path = queue_path(app);

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type { Post, PostComment } from '../types';
 
 const LIKED_POSTS_KEY = 'phoneclaw_liked_posts';
@@ -22,6 +23,10 @@ export function usePosts() {
 
   useEffect(() => {
     refresh();
+    const unlisten = listen('phoneclaw:social-update', () => refresh());
+    return () => {
+      unlisten.then((f) => f());
+    };
   }, [refresh]);
 
   const addPost = useCallback(async (data: Omit<Post, 'id' | 'createdAt' | 'likeCount'>): Promise<Post> => {
@@ -55,12 +60,16 @@ export function usePosts() {
     }
   }, [likedPostIds]);
 
-  /** Generate an AI post for a character and add it to the feed. */
+  /** Generate an AI post for a character and add it to the queue. */
   const generatePost = useCallback(async (characterId: string, context?: string): Promise<Post | null> => {
     try {
-      const post = await invoke<Post>('generate_character_post', { characterId, context });
-      setPosts((prev) => [post, ...prev]);
-      return post;
+      // Backend queues the generation which can take ~2 minutes.
+      // We pass the required targetTime, which is roughly now.
+      const targetTime = new Date().toISOString();
+      await invoke('generate_character_post', { characterId, context, targetTime });
+      // We return null since it's processed asynchronously. 
+      // The phoneclaw:social-update event will refresh the feed when it finishes.
+      return null;
     } catch {
       return null;
     }
@@ -78,6 +87,10 @@ export function usePostComments(postId: string) {
 
   useEffect(() => {
     refresh();
+    const unlisten = listen('phoneclaw:social-update', () => refresh());
+    return () => {
+      unlisten.then((f) => f());
+    };
   }, [refresh]);
 
   const addComment = useCallback(async (authorId: string, text: string) => {

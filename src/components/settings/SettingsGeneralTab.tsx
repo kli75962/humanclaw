@@ -327,8 +327,8 @@ interface GeneralTabProps {
   onOllamaEndpointChanged: () => void;
   chatMode: boolean;
   onChatModeChange: (v: boolean) => void;
-  igMode: boolean;
-  onIgModeChange: (v: boolean) => void;
+  socialMode: boolean;
+  onSocialModeChange: (v: boolean) => void;
   setPcPermissions: (p: PcPermissions) => Promise<SessionConfig>;
 }
 
@@ -343,8 +343,8 @@ export function GeneralTab({
   onOllamaEndpointChanged,
   chatMode,
   onChatModeChange: _onChatModeChange,
-  igMode,
-  onIgModeChange,
+  socialMode,
+  onSocialModeChange,
   setPcPermissions,
 }: GeneralTabProps) {
   const [pcPerms, setPcPermsLocal] = useState<PcPermissions>(
@@ -539,8 +539,8 @@ export function GeneralTab({
                   { value: 'off' as const, label: 'Off' },
                   { value: 'on' as const, label: 'On' },
                 ]}
-                value={igMode ? 'on' : 'off'}
-                onChange={(v) => onIgModeChange(v === 'on')}
+                value={socialMode ? 'on' : 'off'}
+                onChange={(v) => onSocialModeChange(v === 'on')}
               />
             </div>
           </Card>

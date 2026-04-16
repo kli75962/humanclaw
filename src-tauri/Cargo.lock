@@ -4087,6 +4087,7 @@ dependencies = [
  "gtk",
  "image 0.25.10",
  "keyring",
+ "lazy_static",
  "local-ip-address",
  "qrcode",
  "reqwest 0.12.28",

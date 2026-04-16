@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { PostFeed } from '../social/PostFeed';
 import type { Character, Post, Message } from '../../types';
@@ -19,6 +19,11 @@ export function AppSocial(props: AppSocialProps) {
   const {
     posts, characters, likedPostIds, toggleLike, deletePost, addPost, refreshPosts, activeChatId, setInitMessages
   } = props;
+
+  // Sync with backend every time the Social tab is opened
+  useEffect(() => {
+    refreshPosts();
+  }, [refreshPosts]);
 
   const handleCreateUserPost = useCallback(async (text: string) => {
     const post = await addPost({ characterId: 'user', text });

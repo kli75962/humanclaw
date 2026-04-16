@@ -1,20 +1,20 @@
-import { useState } from 'react';
+import { useState } from "react";
 
-const MODELS_KEY = 'phoneclaw_live2d_models';
-const ACTIVE_KEY  = 'phoneclaw_live2d_active_model';
+const MODELS_KEY = "phoneclaw_live2d_models";
+const ACTIVE_KEY = "phoneclaw_live2d_active_model";
 
 export interface Live2DModelEntry {
   id: string;
   name: string;
-  icon: string | null;   // base64 data URL (PNG/JPG), null = no custom icon
-  isDefault: boolean;    // true = encrypted live2d:// bundle, false = user filesystem path
-  modelUrl: string;      // 'live2d://localhost/...' or absolute filesystem path
-  sizeKb: number;        // approximate file size (for default models)
+  icon: string | null; // base64 data URL (PNG/JPG), null = no custom icon
+  isDefault: boolean; // true = encrypted live2d:// bundle, false = user filesystem path
+  modelUrl: string; // 'live2d://localhost/...' or absolute filesystem path
+  sizeKb: number; // approximate file size (for default models)
 }
 
 function loadModels(): Live2DModelEntry[] {
   try {
-    return JSON.parse(localStorage.getItem(MODELS_KEY) ?? '[]');
+    return JSON.parse(localStorage.getItem(MODELS_KEY) ?? "[]");
   } catch {
     return [];
   }
@@ -22,8 +22,8 @@ function loadModels(): Live2DModelEntry[] {
 
 export function useLive2DModels() {
   const [models, setModels] = useState<Live2DModelEntry[]>(loadModels);
-  const [activeId, setActiveIdState] = useState<string | null>(
-    () => localStorage.getItem(ACTIVE_KEY),
+  const [activeId, setActiveIdState] = useState<string | null>(() =>
+    localStorage.getItem(ACTIVE_KEY),
   );
 
   function save(next: Live2DModelEntry[]) {
@@ -54,13 +54,19 @@ export function useLive2DModels() {
   function setActive(id: string | null) {
     setActiveIdState(id);
     if (id) localStorage.setItem(ACTIVE_KEY, id);
-    else     localStorage.removeItem(ACTIVE_KEY);
+    else localStorage.removeItem(ACTIVE_KEY);
   }
 
   const activeModel =
-    models.find((m) => m.id === activeId) ??
-    models[0] ??
-    null;
+    models.find((m) => m.id === activeId) ?? models[0] ?? null;
 
-  return { models, activeId, activeModel, addModel, removeModel, updateModel, setActive } as const;
+  return {
+    models,
+    activeId,
+    activeModel,
+    addModel,
+    removeModel,
+    updateModel,
+    setActive,
+  } as const;
 }

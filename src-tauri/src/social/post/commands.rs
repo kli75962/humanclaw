@@ -12,6 +12,12 @@ pub use super::reactions::*;
 
 use serde::Serialize;
 use crate::social::character::list_characters_fs;
+use std::sync::Mutex;
+use std::collections::HashSet;
+
+lazy_static::lazy_static! {
+    static ref IN_PROGRESS_DRAFTS: Mutex<HashSet<String>> = Default::default();
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,38 +34,72 @@ pub async fn generate_character_post(
     character_id: String,
     target_time: String,
 ) -> Result<String, String> {
-    let characters = list_characters_fs(&app);
-    let character = characters
-        .iter()
-        .find(|c| c.id == character_id)
-        .ok_or_else(|| format!("Character {character_id} not found"))?;
+    // 1. Immediately enqueue as drafted status
+    let entry = pg::enqueue_draft(&app, character_id.clone())?;
+    let entry_id = entry.id.clone();
+    println!("[PhoneClaw/Queue] Added post draft for {} (Queue ID: {})", character_id, entry_id);
 
-    let post_result = generate::generate_post_text_with_memory(&app, character, None, Some(&target_time)).await?;
-
-    let entry = pg::enqueue(
-        &app,
-        character_id,
-        post_result.text.clone(),
-        target_time,
-    )?;
-
-    // Add memory entry for the initial post text
-    let mem_entry = character_memory::MemoryEntry {
-        id: uuid_v4(),
-        character_id: character.id.clone(),
-        entry_type: character_memory::MemoryEntryType::Post,
-        brief: post_result.brief,
-        importance: post_result.importance,
-        created_at: character_memory::current_ts(),
-    };
-    let _ = character_memory::add_entry(&app, mem_entry);
+    {
+        let mut lock = IN_PROGRESS_DRAFTS.lock().unwrap();
+        lock.insert(entry_id.clone());
+    }
 
     let app_clone = app.clone();
+    let thread_entry_id = entry_id.clone();
+    
+    // 2. Spawn Ollama generation in background
     tauri::async_runtime::spawn(async move {
-        let _ = resume_post_gen_queue(app_clone).await;
+        println!("[PhoneClaw/Ollama] Started generating post text for {}...", character_id);
+
+        let characters = list_characters_fs(&app_clone);
+        if let Some(character) = characters.into_iter().find(|c| c.id == character_id) {
+            match generate::generate_post_text_with_memory(&app_clone, &character, None, Some(&target_time)).await {
+                Ok(post_result) => {
+                    println!("[PhoneClaw/Ollama] Successfully generated post text for {}!", character_id);
+                    
+                    // Update entry with text
+                    let mut all_entries = pg::load_all(&app_clone);
+                    if let Some(e) = all_entries.iter_mut().find(|x| x.id == thread_entry_id) {
+                        e.set_generated_text(post_result.text.clone(), post_result.timestamp.clone());
+                        let _ = pg::update_entry(&app_clone, e.clone());
+                    }
+
+                    // Add memory for the initial text
+                    let mem_entry = character_memory::MemoryEntry {
+                        id: uuid_v4(),
+                        character_id: character_id.clone(),
+                        entry_type: character_memory::MemoryEntryType::Post,
+                        brief: post_result.brief,
+                        importance: post_result.importance,
+                        created_at: character_memory::current_ts(),
+                    };
+                    let _ = character_memory::add_entry(&app_clone, mem_entry);
+
+                    // Proceed with standard queue resume (which handles post saving & reactions)
+                    {
+                        let mut lock = IN_PROGRESS_DRAFTS.lock().unwrap();
+                        lock.remove(&thread_entry_id);
+                    }
+                    let _ = resume_post_gen_queue(app_clone).await;
+                }
+                Err(err) => {
+                    println!("[PhoneClaw/Ollama] Failed generating post text for {}: {}", character_id, err);
+                    // Mark failed so it cleans up or just let it be empty?
+                    let mut all_entries = pg::load_all(&app_clone);
+                    if let Some(e) = all_entries.iter_mut().find(|x| x.id == thread_entry_id) {
+                        e.mark_failed(err.to_string());
+                        let _ = pg::update_entry(&app_clone, e.clone());
+                    }
+                    {
+                        let mut lock = IN_PROGRESS_DRAFTS.lock().unwrap();
+                        lock.remove(&thread_entry_id);
+                    }
+                }
+            }
+        }
     });
 
-    Ok(entry.id)
+    Ok(entry_id)
 }
 #[tauri::command]
 pub fn list_posts(app: tauri::AppHandle) -> Vec<PostMeta> {
@@ -170,13 +210,55 @@ pub async fn resume_post_gen_queue(app: tauri::AppHandle) -> Result<u32, String>
     let mut completed = 0;
 
     for entry in &mut pending {
-        // Skip if it's already in a terminal failure state
+        // Reset failed entries to their respective progress states to retry
         if entry.state == pg::PostGenState::Failed {
-            continue;
+            if entry.post_id.is_none() {
+                entry.state = pg::PostGenState::PostGenerating;
+            } else {
+                entry.state = pg::PostGenState::ReactionsInProgress;
+            }
+            entry.error = None;
         }
 
         // If post text was generated but not yet saved, save it now
         if entry.state == pg::PostGenState::PostGenerating {
+            // Re-entrant safety
+            {
+                let lock = IN_PROGRESS_DRAFTS.lock().unwrap();
+                if lock.contains(&entry.id) {
+                    continue; // Skip if currently being generated by background thread
+                }
+            }
+
+            if entry.generated_text.is_empty() {
+                // Was interrupted while drafting text! Let's resume the LLM generation inline here.
+                println!("[PhoneClaw/Queue] Resuming LLM generation for interrupted draft {}", entry.id);
+                let characters = list_characters_fs(&app);
+                if let Some(character) = characters.into_iter().find(|c| c.id == entry.character_id) {
+                    match generate::generate_post_text_with_memory(&app, &character, None, None).await {
+                        Ok(post_result) => {
+                            entry.set_generated_text(post_result.text.clone(), post_result.timestamp.clone());
+                            let mem_entry = character_memory::MemoryEntry {
+                                id: uuid_v4(),
+                                character_id: entry.character_id.clone(),
+                                entry_type: character_memory::MemoryEntryType::Post,
+                                brief: post_result.brief,
+                                importance: post_result.importance,
+                                created_at: character_memory::current_ts(),
+                            };
+                            let _ = character_memory::add_entry(&app, mem_entry);
+                        }
+                        Err(e) => {
+                            entry.mark_failed(format!("Failed to resume LLM draft: {e}"));
+                            continue;
+                        }
+                    }
+                } else {
+                    entry.mark_failed("Character deleted".to_string());
+                    continue;
+                }
+            }
+
             if entry.post_id.is_some() {
                 // Post was already created, move to reactions
                 entry.start_reactions();

@@ -9,7 +9,7 @@ import type { PersonaBuildNoticeStatus } from '../persona/PersonaBuildNotice';
 
 interface AppLayoutProps {
   chatMode: boolean;
-  igMode: boolean;
+  socialMode: boolean;
   mainTab: 'chat' | 'posts';
   setMainTab: (tab: 'chat' | 'posts') => void;
   handleChatModeChange: (enabled: boolean) => void;
@@ -31,7 +31,7 @@ interface AppLayoutProps {
   selectCharacter: (id: string) => void;
   addCharacter: (c: Omit<Character, 'id' | 'createdAt'>) => Promise<Character>;
   deleteCharacter: (id: string) => void;
-  handleIgModeChange: (enabled: boolean) => void;
+  handleSocialModeChange: (enabled: boolean) => void;
   activeMemoId: string | null;
   handleSelectMemo: (id: string) => void;
   personaNotice: { status: PersonaBuildNoticeStatus; displayName: string } | null;
@@ -44,11 +44,11 @@ export function AppLayout(props: AppLayoutProps) {
   const { sideWidth, handleDividerPointerDown, handleDividerPointerMove, handleDividerPointerUp } = useDragSidebar();
 
   const {
-    chatMode, igMode, mainTab, setMainTab, handleChatModeChange, sideOpen, setSideOpen, children,
+    chatMode, socialMode, mainTab, setMainTab, handleChatModeChange, sideOpen, setSideOpen, children,
     // SideMenu specifics
     sideView, handleSwitchView, startNewChat, visibleChatMetas, activeChatId, switchChat, deleteChat,
     model, handleModelChange, handleOllamaEndpointChanged, characters, activeCharacterId, selectCharacter,
-    addCharacter, deleteCharacter, handleIgModeChange, activeMemoId, handleSelectMemo, personaNotice, onPersonaNoticeClose
+    addCharacter, deleteCharacter, handleSocialModeChange, activeMemoId, handleSelectMemo, personaNotice, onPersonaNoticeClose
   } = props;
 
   return (
@@ -123,8 +123,8 @@ export function AppLayout(props: AppLayoutProps) {
           onSelectCharacter={selectCharacter}
           onCreateCharacter={addCharacter}
           onDeleteCharacter={deleteCharacter}
-          igMode={igMode}
-          onIgModeChange={handleIgModeChange}
+          socialMode={socialMode}
+          onSocialModeChange={handleSocialModeChange}
           activeMemoId={activeMemoId}
           onSelectMemo={handleSelectMemo}
           personaNotice={personaNotice}
@@ -143,8 +143,8 @@ export function AppLayout(props: AppLayoutProps) {
 
       {/* ── Right: main content ── */}
       <div className="app-right">
-        {/* Content tabs — only when both chatMode and igMode are active */}
-        {chatMode && igMode && (
+        {/* Content tabs — only when both chatMode and socialMode are active */}
+        {chatMode && socialMode && (
           <div className="app-content-tabs">
             <button
               className={`content-tab-btn${mainTab === 'chat' ? ' content-tab-btn--active' : ''}`}

@@ -17,16 +17,16 @@ function SettingsPanel({
   onOllamaEndpointChanged,
   chatMode,
   onChatModeChange,
-  igMode,
-  onIgModeChange,
+  socialMode,
+  onSocialModeChange,
 }: {
   model: string;
   onModelChange: (m: string) => void;
   onOllamaEndpointChanged: () => void;
   chatMode: boolean;
   onChatModeChange: (v: boolean) => void;
-  igMode: boolean;
-  onIgModeChange: (v: boolean) => void;
+  socialMode: boolean;
+  onSocialModeChange: (v: boolean) => void;
 }) {
   const { session, setOllamaEndpoint, listPersonas, setPersona, setPcPermissions } = useSession();
 
@@ -45,8 +45,8 @@ function SettingsPanel({
             onOllamaEndpointChanged={onOllamaEndpointChanged}
             chatMode={chatMode}
             onChatModeChange={onChatModeChange}
-            igMode={igMode}
-            onIgModeChange={onIgModeChange}
+            socialMode={socialMode}
+            onSocialModeChange={onSocialModeChange}
             setPcPermissions={setPcPermissions}
           />
         </div>
@@ -158,7 +158,7 @@ export const SideMenu = memo(function SideMenu({
   isMobileOpen, onCloseSide,
   chatMode, onChatModeChange,
   characters, activeCharacterId, onSelectCharacter, onCreateCharacter, onDeleteCharacter,
-  igMode, onIgModeChange,
+  socialMode, onSocialModeChange,
   activeMemoId, onSelectMemo,
   personaNotice, onPersonaNoticeClose,
 }: SideMenuProps) {
@@ -313,8 +313,8 @@ export const SideMenu = memo(function SideMenu({
             onOllamaEndpointChanged={onOllamaEndpointChanged}
             chatMode={chatMode}
             onChatModeChange={onChatModeChange}
-            igMode={igMode}
-            onIgModeChange={onIgModeChange}
+            socialMode={socialMode}
+            onSocialModeChange={onSocialModeChange}
           />
         )}
 

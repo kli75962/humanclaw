@@ -20,12 +20,12 @@ import './style/App.css';
 const DEFAULT_MODEL = 'kimi-k2.5:cloud';
 const MODEL_STORAGE_KEY = 'phoneclaw_model';
 const CHAT_MODE_KEY = 'phoneclaw_chat_mode';
-const IG_MODE_KEY = 'phoneclaw_ig_mode';
+const SOCIAL_MODE_KEY = 'phoneclaw_social_mode';
 
 function App() {
   const [model, setModel] = useState<string>(() => localStorage.getItem(MODEL_STORAGE_KEY) ?? DEFAULT_MODEL);
   const [chatMode, setChatMode] = useState(() => localStorage.getItem(CHAT_MODE_KEY) === 'true');
-  const [igMode, setIgMode] = useState(() => localStorage.getItem(IG_MODE_KEY) === 'true');
+  const [socialMode, setSocialMode] = useState(() => localStorage.getItem(SOCIAL_MODE_KEY) === 'true');
   const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);
   
   const { characters, addCharacter, deleteCharacter } = useCharacters();
@@ -87,7 +87,7 @@ function App() {
     };
   }, []);
 
-  usePostGeneration({ characters, igMode, chatMode, onPostGenerated: refreshPosts });
+  usePostGeneration({ characters, socialMode, chatMode, onPostGenerated: refreshPosts });
 
   const activeCharacter = useMemo(
     () => characters.find((c) => c.id === activeCharacterId) ?? null,
@@ -100,9 +100,9 @@ function App() {
     setSideOpen(true);
   }, []);
 
-  const handleIgModeChange = useCallback((enabled: boolean) => {
-    setIgMode(enabled);
-    localStorage.setItem(IG_MODE_KEY, String(enabled));
+  const handleSocialModeChange = useCallback((enabled: boolean) => {
+    setSocialMode(enabled);
+    localStorage.setItem(SOCIAL_MODE_KEY, String(enabled));
     if (!enabled) setMainTab('chat');
   }, []);
 
@@ -229,10 +229,10 @@ function App() {
 
   return (
     <AppLayout
-      chatMode={chatMode} igMode={igMode} mainTab={mainTab} setMainTab={setMainTab} handleChatModeChange={handleChatModeChange} sideOpen={sideOpen} setSideOpen={setSideOpen}
+      chatMode={chatMode} socialMode={socialMode} mainTab={mainTab} setMainTab={setMainTab} handleChatModeChange={handleChatModeChange} sideOpen={sideOpen} setSideOpen={setSideOpen}
       sideView={sideView} handleSwitchView={handleSwitchView} startNewChat={startNewChat} visibleChatMetas={visibleChatMetas} activeChatId={activeChatId} switchChat={switchChat}
       deleteChat={deleteChat} model={model} handleModelChange={handleModelChange} handleOllamaEndpointChanged={() => {}} characters={characters} activeCharacterId={activeCharacterId}
-      selectCharacter={selectCharacter} addCharacter={addCharacter} deleteCharacter={deleteCharacter} handleIgModeChange={handleIgModeChange} activeMemoId={activeMemoId}
+      selectCharacter={selectCharacter} addCharacter={addCharacter} deleteCharacter={deleteCharacter} handleSocialModeChange={handleSocialModeChange} activeMemoId={activeMemoId}
       handleSelectMemo={handleSelectMemo} personaNotice={personaNotice} onPersonaNoticeClose={() => { setPersonaNotice(null); invoke('clear_persona_build_status').catch(() => {}); }}
     >
       {mainTab === 'posts' ? (

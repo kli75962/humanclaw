@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
 use crate::chat::memory_dir;
+use crate::social::post::recovery as pg;
 
 /// Full character definition — stored in the characters index.
 #[derive(Serialize, Deserialize, Clone)]
@@ -71,7 +72,6 @@ pub fn save_character(app: &AppHandle, character: &CharacterMeta) -> Result<(), 
     std::fs::write(characters_index_path(app), json).map_err(|e| e.to_string())
 }
 
-/// Remove a character from the index.
 pub fn delete_character(app: &AppHandle, id: &str) -> Result<(), String> {
     if !is_safe_id(id) {
         return Err("Invalid character id".to_string());
@@ -81,7 +81,20 @@ pub fn delete_character(app: &AppHandle, id: &str) -> Result<(), String> {
     let json = serde_json::to_string(&chars).map_err(|e| e.to_string())?;
     let dir = characters_dir(app);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    std::fs::write(characters_index_path(app), json).map_err(|e| e.to_string())
+    std::fs::write(characters_index_path(app), json).map_err(|e| e.to_string())?;
+
+    // 1. Delete Chat History
+    let chat_path = memory_dir(app).join("chats").join(format!("char_{id}.json"));
+    let _ = std::fs::remove_file(chat_path);
+
+    // 2. Delete Post Schedule
+    let sched_path = memory_dir(app).join("post_schedule").join(format!("{id}.json"));
+    let _ = std::fs::remove_file(sched_path);
+
+    // 3. Delete from Post Generation Queue
+    let _ = pg::remove_character_entries(app, id);
+
+    Ok(())
 }
 
 /// Build a full snapshot for cross-device synchronization.
