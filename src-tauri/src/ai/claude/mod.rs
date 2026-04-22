@@ -2,6 +2,7 @@ pub mod chat;
 pub mod types;
 
 pub use chat::chat_claude;
+pub use chat::load_api_key;
 
 use std::sync::OnceLock;
 

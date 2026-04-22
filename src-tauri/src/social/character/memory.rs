@@ -121,20 +121,22 @@ pub fn build_memory_context(app: &AppHandle, character_id: &str) -> String {
         b_perm.cmp(&a_perm).then(b.created_at.cmp(&a.created_at))
     });
 
-    let mut lines = String::from("[YOUR PAST ACTIVITY]\nBrief summaries of your recent posts, comments, and conversations. Stay consistent with your past self:\n");
+    let mut lines = String::from("[YOUR PAST CONVERSATIONS WITH USER]\nBrief summaries of your recent exchanges with the user. Stay consistent with your past self:\n");
     let mut total_chars = 0usize;
     const MAX_CHARS: usize = 3000;
 
     for e in &sorted {
-        let kind = match e.entry_type {
-            MemoryEntryType::Post => "Posted",
-            MemoryEntryType::Comment => "Commented",
-            MemoryEntryType::Conversation => "Said to user",
-        };
-        let line = format!("- {kind}: {}\n", e.brief);
+        if e.entry_type != MemoryEntryType::Conversation {
+            continue;
+        }
+        let line = format!("- Said to user: {}\n", e.brief);
         if total_chars + line.len() > MAX_CHARS { break; }
         total_chars += line.len();
         lines.push_str(&line);
+    }
+
+    if total_chars == 0 {
+        return String::new();
     }
     lines
 }

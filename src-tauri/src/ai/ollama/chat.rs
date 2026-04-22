@@ -154,7 +154,28 @@ pub async fn chat_ollama(
         })
         .collect();
     let compressed = compress_text_history(&compress_entries);
-    let base_messages = msgs_no_sys[compressed.keep_from..].to_vec();
+    let mut base_messages = msgs_no_sys[compressed.keep_from..].to_vec();
+
+    // ── RAG injection (character chats only) ─────────────────────────────────
+    if let Some(ref char) = character {
+        if let Some(ref char_id) = char.id {
+            if let Some(last_user) = base_messages.iter_mut().rev().find(|m| m.role == "user") {
+                let cfg = crate::social::config::load_config(&app);
+                let keywords = crate::social::post::generate::extract_rag_keywords(
+                    &app, &model, &last_user.content,
+                ).await;
+                if !keywords.is_empty() {
+                    let rag_block = crate::social::post::rag::search(
+                        &app, &keywords, cfg.rag_max_results as usize,
+                    );
+                    if !rag_block.is_empty() {
+                        last_user.content = format!("{rag_block}\n\n{}", last_user.content);
+                    }
+                }
+                let _ = char_id; // suppress unused warning if rag skipped
+            }
+        }
+    }
 
     // ── Round-0 prompt ───────────────────────────────────────────────────────
     let base_prompt_round0 = {

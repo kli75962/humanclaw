@@ -26,6 +26,7 @@ use network::{check_peer_online, discover_and_pair, get_all_local_addresses, get
 use network::delivery::flush_all_pending;
 use social::queue::commands::{flush_queue, get_pending_queue, get_queue, queue_command};
 use social::queue::commands::{get_post_gen_queue, get_post_gen_pending, cleanup_post_gen_stale};
+use social::config::{get_social_config, save_social_config};
 
 // ── Live2D native GTK overlay commands (Linux only) ──────────────────────────
 
@@ -296,6 +297,9 @@ pub fn run() {
             get_post_gen_queue,
             get_post_gen_pending,
             cleanup_post_gen_stale,
+            // social config
+            get_social_config,
+            save_social_config,
             // stt
             stt_android_cancel,
             stt_android_once,

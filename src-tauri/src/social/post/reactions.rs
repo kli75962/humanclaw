@@ -2,25 +2,26 @@ use super::fs::{self, PostComment};
 use super::generate;
 use crate::social::character::{list_characters_fs, memory as character_memory};
 use super::commands::{DmResult, uuid_v4, str_hash, pseudo_rand};
+use crate::social::config::load_config;
 
 // ── Sociability helpers ────────────────────────────────────────────────────────
 
 /// Probability (0–100) that a character follows through on a comment decision.
-/// s=0 → 15%, s=50 → 55%, s=100 → 95%
-pub(crate) fn comment_follow_through(sociability: u8) -> u8 {
-    15u8.saturating_add((sociability as u32 * 80 / 100) as u8)
+/// base_pct at s=0, base_pct+scale_pct at s=100.
+pub(crate) fn comment_follow_through(sociability: u8, base_pct: u8, scale_pct: u8) -> u8 {
+    base_pct.saturating_add((sociability as u32 * scale_pct as u32 / 100) as u8)
 }
 
 /// Probability (0–100) that a character replies to a thread they've already joined.
-/// s=0 → 35%, s=50 → 62%, s=100 → 90%
-pub(crate) fn thread_reply_pct(sociability: u8) -> u8 {
-    35u8.saturating_add((sociability as u32 * 55 / 100) as u8)
+/// base_pct at s=0, base_pct+scale_pct at s=100.
+pub(crate) fn thread_reply_pct(sociability: u8, base_pct: u8, scale_pct: u8) -> u8 {
+    base_pct.saturating_add((sociability as u32 * scale_pct as u32 / 100) as u8)
 }
 
 /// Probability (0–100) that a character sends a DM instead of a comment.
-/// Only non-zero above sociability 55; s=100 → 5%
-pub(crate) fn dm_pct(sociability: u8) -> u8 {
-    sociability.saturating_sub(55) / 9
+/// Only non-zero above `threshold`; rises by 1 per `divisor` points above threshold.
+pub(crate) fn dm_pct(sociability: u8, threshold: u8, divisor: u8) -> u8 {
+    sociability.saturating_sub(threshold) / divisor.max(1)
 }
 
 /// Resolve a character's display name for comment context.
@@ -59,6 +60,7 @@ pub async fn trigger_character_reactions(
         .to_string();
 
     let prior = load_comment_context(&app, &post_id, &all_characters);
+    let cfg = load_config(&app);
 
     for character in all_characters.iter().filter(|c| c.id != post.character_id) {
         let (will_like, will_comment) = generate::generate_reaction_decision(&app, character, &post.text).await;
@@ -68,7 +70,7 @@ pub async fn trigger_character_reactions(
         // Follow-through probability scales with sociability
         let sociability = crate::skills::get_sociability_for_persona(&app, &character.persona);
         let actually_comment = will_comment
-            && pseudo_rand(&character.id, &format!("fthr{post_id}")) < comment_follow_through(sociability);
+            && pseudo_rand(&character.id, &format!("fthr{post_id}")) < comment_follow_through(sociability, cfg.comment_follow_through_base_pct, cfg.comment_follow_through_scale_pct);
         if actually_comment {
             if let Ok(result) = generate::generate_comment_text_with_memory(
                 &app, character, &author_name, &post.text, &prior,
@@ -128,12 +130,14 @@ pub async fn react_to_user_comment(
         .unwrap_or("them")
         .to_string();
 
+    let cfg = load_config(&app);
+
     for character in &all_characters {
         if !already_commented.contains(character.id.as_str()) {
             continue;
         }
         let sociability = crate::skills::get_sociability_for_persona(&app, &character.persona);
-        if pseudo_rand(&character.id, &format!("ucreply{post_id}")) < thread_reply_pct(sociability) {
+        if pseudo_rand(&character.id, &format!("ucreply{post_id}")) < thread_reply_pct(sociability, cfg.thread_reply_base_pct, cfg.thread_reply_scale_pct) {
             if let Ok(result) = generate::generate_comment_text_with_memory(
                 &app, character, &author_name, &post.text, &prior,
             ).await {
@@ -176,6 +180,7 @@ pub async fn react_to_user_post(
 
     let characters = list_characters_fs(&app);
     let mut dms = Vec::new();
+    let cfg = load_config(&app);
 
     for character in &characters {
         let (will_like, will_comment) = generate::generate_reaction_decision(&app, character, &post.text).await;
@@ -184,10 +189,10 @@ pub async fn react_to_user_post(
         }
         let sociability = crate::skills::get_sociability_for_persona(&app, &character.persona);
         let actually_comment = will_comment
-            && pseudo_rand(&character.id, &format!("fthr{post_id}")) < comment_follow_through(sociability);
+            && pseudo_rand(&character.id, &format!("fthr{post_id}")) < comment_follow_through(sociability, cfg.comment_follow_through_base_pct, cfg.comment_follow_through_scale_pct);
         if !actually_comment { continue; }
 
-        let dmp = dm_pct(sociability);
+        let dmp = dm_pct(sociability, cfg.dm_sociability_threshold, cfg.dm_scale_divisor);
         if dmp > 0 && pseudo_rand(&character.id, &format!("dm{post_id}")) < dmp {
             let trigger = format!(
                 "The user posted: \"{}\". React naturally and start a conversation.",

@@ -64,6 +64,7 @@ pub fn save_post(app: &AppHandle, post: &PostMeta) -> Result<(), String> {
     let json = serde_json::to_string(&posts).map_err(|e| e.to_string())?;
     std::fs::write(posts_index_path(app), json).map_err(|e| e.to_string())?;
     let _ = app.emit("phoneclaw:social-update", ());
+    super::rag::upsert_post(app, post);
     Ok(())
 }
 
@@ -79,6 +80,7 @@ pub fn delete_post(app: &AppHandle, id: &str) -> Result<(), String> {
     let json = serde_json::to_string(&posts).map_err(|e| e.to_string())?;
     std::fs::write(posts_index_path(app), json).map_err(|e| e.to_string())?;
     let _ = app.emit("phoneclaw:social-update", ());
+    super::rag::remove_by_post_id(app, id);
     Ok(())
 }
 
@@ -114,7 +116,9 @@ pub fn add_comment(app: &AppHandle, comment: &PostComment) -> Result<(), String>
     }
     let mut comments = all_comments(app);
     comments.push(comment.clone());
-    write_comments(app, &comments)
+    write_comments(app, &comments)?;
+    super::rag::upsert_comment(app, comment);
+    Ok(())
 }
 
 // ── Likes ────────────────────────────────────────────────────────────────────

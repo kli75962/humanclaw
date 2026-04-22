@@ -1,19 +1,15 @@
-
-
-
-
-
 pub use super::fs::{self, PostComment, PostMeta};
 pub use super::generate;
-pub use crate::social::character::memory as character_memory;
-pub use super::schedule;
-pub use super::recovery as pg;
 pub use super::reactions::*;
+pub use super::recovery as pg;
+pub use super::schedule;
+pub use crate::social::character::memory as character_memory;
+use crate::social::config::load_config;
 
-use serde::Serialize;
 use crate::social::character::list_characters_fs;
-use std::sync::Mutex;
+use serde::Serialize;
 use std::collections::HashSet;
+use std::sync::Mutex;
 
 lazy_static::lazy_static! {
     static ref IN_PROGRESS_DRAFTS: Mutex<HashSet<String>> = Default::default();
@@ -37,7 +33,10 @@ pub async fn generate_character_post(
     // 1. Immediately enqueue as drafted status
     let entry = pg::enqueue_draft(&app, character_id.clone())?;
     let entry_id = entry.id.clone();
-    println!("[PhoneClaw/Queue] Added post draft for {} (Queue ID: {})", character_id, entry_id);
+    println!(
+        "[PhoneClaw/Queue] Added post draft for {} (Queue ID: {})",
+        character_id, entry_id
+    );
 
     {
         let mut lock = IN_PROGRESS_DRAFTS.lock().unwrap();
@@ -46,21 +45,37 @@ pub async fn generate_character_post(
 
     let app_clone = app.clone();
     let thread_entry_id = entry_id.clone();
-    
+
     // 2. Spawn Ollama generation in background
     tauri::async_runtime::spawn(async move {
-        println!("[PhoneClaw/Ollama] Started generating post text for {}...", character_id);
+        println!(
+            "[PhoneClaw/Ollama] Started generating post text for {}...",
+            character_id
+        );
 
         let characters = list_characters_fs(&app_clone);
         if let Some(character) = characters.into_iter().find(|c| c.id == character_id) {
-            match generate::generate_post_text_with_memory(&app_clone, &character, None, Some(&target_time)).await {
+            match generate::generate_post_text_with_memory(
+                &app_clone,
+                &character,
+                None,
+                Some(&target_time),
+            )
+            .await
+            {
                 Ok(post_result) => {
-                    println!("[PhoneClaw/Ollama] Successfully generated post text for {}!", character_id);
-                    
+                    println!(
+                        "[PhoneClaw/Ollama] Successfully generated post text for {}!",
+                        character_id
+                    );
+
                     // Update entry with text
                     let mut all_entries = pg::load_all(&app_clone);
                     if let Some(e) = all_entries.iter_mut().find(|x| x.id == thread_entry_id) {
-                        e.set_generated_text(post_result.text.clone(), post_result.timestamp.clone());
+                        e.set_generated_text(
+                            post_result.text.clone(),
+                            post_result.timestamp.clone(),
+                        );
                         let _ = pg::update_entry(&app_clone, e.clone());
                     }
 
@@ -83,7 +98,10 @@ pub async fn generate_character_post(
                     let _ = resume_post_gen_queue(app_clone).await;
                 }
                 Err(err) => {
-                    println!("[PhoneClaw/Ollama] Failed generating post text for {}: {}", character_id, err);
+                    println!(
+                        "[PhoneClaw/Ollama] Failed generating post text for {}: {}",
+                        character_id, err
+                    );
                     // Mark failed so it cleans up or just let it be empty?
                     let mut all_entries = pg::load_all(&app_clone);
                     if let Some(e) = all_entries.iter_mut().find(|x| x.id == thread_entry_id) {
@@ -148,7 +166,14 @@ pub fn record_post_preference(
     post_image: Option<String>,
     user_reason: String,
 ) -> Result<(), String> {
-    fs::record_post_preference(&app, &post_id, &character_id, &post_text, post_image.as_deref(), &user_reason)
+    fs::record_post_preference(
+        &app,
+        &post_id,
+        &character_id,
+        &post_text,
+        post_image.as_deref(),
+        &user_reason,
+    )
 }
 
 // ── Comments ─────────────────────────────────────────────────────────────────
@@ -164,15 +189,6 @@ pub fn add_comment(app: tauri::AppHandle, comment: PostComment) -> Result<(), St
 }
 
 // ── Sociability helpers ────────────────────────────────────────────────────────
-
-
-
-
-
-
-
-
-
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -200,7 +216,6 @@ pub(crate) fn pseudo_rand(seed1: &str, seed2: &str) -> u8 {
 }
 
 // ── Queue Integration ────────────────────────────────────────────────────────
-
 
 /// Resume any pending post generation queue entries (called on app startup).
 /// Processes posts that were interrupted due to app crash/network issues.
@@ -232,12 +247,21 @@ pub async fn resume_post_gen_queue(app: tauri::AppHandle) -> Result<u32, String>
 
             if entry.generated_text.is_empty() {
                 // Was interrupted while drafting text! Let's resume the LLM generation inline here.
-                println!("[PhoneClaw/Queue] Resuming LLM generation for interrupted draft {}", entry.id);
+                println!(
+                    "[PhoneClaw/Queue] Resuming LLM generation for interrupted draft {}",
+                    entry.id
+                );
                 let characters = list_characters_fs(&app);
-                if let Some(character) = characters.into_iter().find(|c| c.id == entry.character_id) {
-                    match generate::generate_post_text_with_memory(&app, &character, None, None).await {
+                if let Some(character) = characters.into_iter().find(|c| c.id == entry.character_id)
+                {
+                    match generate::generate_post_text_with_memory(&app, &character, None, None)
+                        .await
+                    {
                         Ok(post_result) => {
-                            entry.set_generated_text(post_result.text.clone(), post_result.timestamp.clone());
+                            entry.set_generated_text(
+                                post_result.text.clone(),
+                                post_result.timestamp.clone(),
+                            );
                             let mem_entry = character_memory::MemoryEntry {
                                 id: uuid_v4(),
                                 character_id: entry.character_id.clone(),
@@ -304,38 +328,71 @@ pub async fn resume_post_gen_queue(app: tauri::AppHandle) -> Result<u32, String>
 
                     let prior = load_comment_context(&app, &post_id, &all_characters);
 
+                    let cfg = load_config(&app);
                     for character in all_characters.iter().filter(|c| c.id != post.character_id) {
                         // Generate reaction decision (if not already tracked)
-                        let (did_like, will_comment_r) = if let Some(like_entry) = entry.likes.iter().find(|l| l.character_id == character.id) {
+                        let (did_like, will_comment_r) = if let Some(like_entry) =
+                            entry.likes.iter().find(|l| l.character_id == character.id)
+                        {
                             // Already decided like; re-ask for comment decision since it wasn't stored
-                            (like_entry.did_like, generate::generate_reaction_decision(&app, character, &post.text).await.1)
+                            (
+                                like_entry.did_like,
+                                generate::generate_reaction_decision(&app, character, &post.text)
+                                    .await
+                                    .1,
+                            )
                         } else {
-                            let (wl, wc) = generate::generate_reaction_decision(&app, character, &post.text).await;
+                            let (wl, wc) =
+                                generate::generate_reaction_decision(&app, character, &post.text)
+                                    .await;
                             entry.add_like(character.id.clone(), if wl { 80 } else { 20 }, wl);
-                            if wl { let _ = fs::like_post(&app, &post_id); }
+                            if wl {
+                                let _ = fs::like_post(&app, &post_id);
+                            }
                             (wl, wc)
                         };
 
                         // Skip if comment already generated for this character
-                        if entry.comments.iter().any(|c| c.character_id == character.id) {
+                        if entry
+                            .comments
+                            .iter()
+                            .any(|c| c.character_id == character.id)
+                        {
                             continue;
                         }
 
-                        let sociability = crate::skills::get_sociability_for_persona(&app, &character.persona);
+                        let sociability =
+                            crate::skills::get_sociability_for_persona(&app, &character.persona);
                         let actually_comment = will_comment_r
-                            && pseudo_rand(&character.id, &format!("fthr{}", &post_id)) < comment_follow_through(sociability);
+                            && pseudo_rand(&character.id, &format!("fthr{}", &post_id))
+                                < comment_follow_through(
+                                    sociability,
+                                    cfg.comment_follow_through_base_pct,
+                                    cfg.comment_follow_through_scale_pct,
+                                );
                         if did_like && actually_comment {
                             if let Ok(comment_result) = generate::generate_comment_text_with_memory(
-                                &app, character, &author_name, &post.text, &prior,
-                            ).await {
-                                entry.add_comment(character.id.clone(), comment_result.text.clone());
-                                let seed = str_hash(&format!("reaction{}{}", character.id, &post_id));
+                                &app,
+                                character,
+                                &author_name,
+                                &post.text,
+                                &prior,
+                            )
+                            .await
+                            {
+                                entry
+                                    .add_comment(character.id.clone(), comment_result.text.clone());
+                                let seed =
+                                    str_hash(&format!("reaction{}{}", character.id, &post_id));
                                 let comment = PostComment {
                                     id: uuid_v4(),
                                     post_id: post_id.clone(),
                                     author_id: character.id.clone(),
                                     text: comment_result.text.clone(),
-                                    created_at: generate::pick_comment_timestamp(&post.created_at, seed),
+                                    created_at: generate::pick_comment_timestamp(
+                                        &post.created_at,
+                                        seed,
+                                    ),
                                 };
                                 if let Err(e) = fs::add_comment(&app, &comment) {
                                     entry.mark_comment_failed(&character.id, e);
@@ -395,11 +452,13 @@ pub async fn get_due_posts(app: tauri::AppHandle) -> Vec<DuePost> {
         let sched = match schedule::load(&app, &character.id) {
             Some(s) if s.date == today => s,
             _ => {
-                let sociability = crate::skills::get_sociability_for_persona(&app, &character.persona);
+                let sociability =
+                    crate::skills::get_sociability_for_persona(&app, &character.persona);
+                let cfg = load_config(&app);
                 let max_posts: u8 = match sociability {
-                    71..=100 => 3,
-                    41..=70  => 2,
-                    _        => 1,
+                    71..=100 => cfg.max_posts_high_sociability,
+                    41..=70 => cfg.max_posts_medium_sociability,
+                    _ => cfg.max_posts_low_sociability,
                 };
                 let mut times = generate::decide_posting_times(&app, character, max_posts).await;
                 if times.is_empty() {

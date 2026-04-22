@@ -25,7 +25,7 @@ const CLAUDE_API_URL: &str = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 const MAX_TOKENS: u32 = 8096;
 
-fn load_api_key() -> Result<String, String> {
+pub fn load_api_key() -> Result<String, String> {
     #[cfg(not(target_os = "android"))]
     {
         let entry = keyring::Entry::new("phoneclaw", "claude_api_key")
@@ -237,13 +237,42 @@ pub async fn chat_claude(
     let compressed = compress_text_history(&compress_entries);
 
     // Convert kept messages to Claude format
-    let base_messages: Vec<ClaudeMessage> = msgs_no_sys[compressed.keep_from..]
+    let mut base_messages: Vec<ClaudeMessage> = msgs_no_sys[compressed.keep_from..]
         .iter()
         .map(|m| ClaudeMessage {
             role: m.role.clone(),
             content: ClaudeContent::Text(m.content.clone()),
         })
         .collect();
+
+    // ── RAG injection (character chats only) ─────────────────────────────────
+    if let Some(ref char) = character {
+        if let Some(ref char_id) = char.id {
+            // Resolve character model for keyword extraction
+            let char_model = crate::social::character::list_characters_fs(&app)
+                .into_iter()
+                .find(|c| c.id.as_str() == char_id.as_str())
+                .map(|c| c.model);
+            if let Some(ref char_model) = char_model {
+                if let Some(last_user) = base_messages.iter_mut().rev().find(|m| m.role == "user") {
+                    if let ClaudeContent::Text(ref mut text) = last_user.content {
+                        let cfg = crate::social::config::load_config(&app);
+                        let keywords = crate::social::post::generate::extract_rag_keywords(
+                            &app, char_model, text,
+                        ).await;
+                        if !keywords.is_empty() {
+                            let rag_block = crate::social::post::rag::search(
+                                &app, &keywords, cfg.rag_max_results as usize,
+                            );
+                            if !rag_block.is_empty() {
+                                *text = format!("{rag_block}\n\n{text}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // ── Round-0 prompt ───────────────────────────────────────────────────────
     let base_prompt_round0 = {

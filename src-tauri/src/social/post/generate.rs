@@ -244,6 +244,65 @@ async fn complete_once(
     Ok(content.trim().to_string())
 }
 
+/// Non-streaming single-shot Claude API call (for utility purposes like RAG keyword extraction).
+async fn complete_once_claude(model: &str, user_prompt: &str) -> Result<String, String> {
+    let api_key = crate::ai::claude::load_api_key()?;
+    let body = serde_json::json!({
+        "model": model,
+        "max_tokens": 256,
+        "messages": [{"role": "user", "content": user_prompt}]
+    });
+    let response = crate::ai::claude::claude_client()
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", &api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Claude unreachable: {e}"))?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!("Claude {status}: {text}"));
+    }
+    let json: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
+    let text = json["content"][0]["text"].as_str().unwrap_or("").trim().to_string();
+    Ok(text)
+}
+
+/// Extract 3-5 RAG keywords from a user message using the character's own model.
+/// Returns empty Vec on any failure (silent fallback).
+pub async fn extract_rag_keywords(app: &AppHandle, model: &str, user_message: &str) -> Vec<String> {
+    let prompt = format!(
+        "Extract 3-5 keywords from this message useful for finding related posts and comments.\n\
+        Reply with JSON only: {{\"keywords\":[\"word1\",\"word2\",...]}}\n\n\
+        Message: {user_message}"
+    );
+    let raw = if model.starts_with("claude") {
+        match complete_once_claude(model, &prompt).await {
+            Ok(r) => r,
+            Err(_) => return vec![],
+        }
+    } else {
+        match complete_once(app, model, "", &prompt).await {
+            Ok(r) => r,
+            Err(_) => return vec![],
+        }
+    };
+    let json_str = match (raw.find('{'), raw.rfind('}')) {
+        (Some(s), Some(e)) => raw[s..=e].to_string(),
+        _ => return vec![],
+    };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&json_str) else {
+        return vec![];
+    };
+    v.get("keywords")
+        .and_then(|x| x.as_array())
+        .map(|arr| arr.iter().filter_map(|k| k.as_str().map(|s| s.to_string())).collect())
+        .unwrap_or_default()
+}
+
 /// Ask the character whether they would like and/or comment on a post.
 /// Returns `(will_like, will_comment)` — a single LLM call, no probability gymnastics.
 /// The LLM reasons from its persona about whether it would genuinely react.
