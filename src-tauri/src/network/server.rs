@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::{Json, Router, extract::{Query, State}, http::StatusCode, routing::{get, post}};
+use axum::{Json, Router, body::Body, extract::{ConnectInfo, Query, State}, http::{Method, StatusCode}, response::IntoResponse, routing::{any, get, post}};
 use tauri::AppHandle;
 
 use crate::session::store;
@@ -60,6 +60,7 @@ async fn ping_handler(
 /// Body must include the shared hash key for authentication.
 async fn register_handler(
     State(app): State<BridgeState>,
+    ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
     Json(body): Json<RegisterRequest>,
 ) -> StatusCode {
     let cfg = store::bootstrap(&app);
@@ -69,19 +70,25 @@ async fn register_handler(
     if body.device_id == cfg.device.device_id {
         return StatusCode::OK; // self-registration is a no-op
     }
+    // Use the actual connection IP (not the self-reported one) combined with
+    // the peer's bridge port so Android mobile-data IPs don't cause misdirection.
+    let actual_address = body.address
+        .rsplit_once(':')
+        .map(|(_, port)| format!("{}:{}", peer_addr.ip(), port))
+        .unwrap_or(body.address.clone());
     let label: String = body.label.chars().take(64).collect();
     let _ = store::upsert_peer(
         &app,
         crate::session::types::PairedDevice {
             device_id: body.device_id.clone(),
-            address: body.address.clone(),
+            address: actual_address.clone(),
             label,
         },
     );
 
     let peer = crate::session::types::PairedDevice {
         device_id: body.device_id,
-        address: body.address,
+        address: actual_address,
         label: body.label,
     };
     let app_for_sync = (*app).clone();
@@ -93,11 +100,12 @@ async fn register_handler(
         super::sync::skills::sync_after_pair(&app_for_sync, &peer_for_persona).await;
     });
 
-    // A device just came online — emit updated status to the frontend immediately.
+    // Notify frontend immediately: new device added + it's now online.
+    use tauri::Emitter;
+    app.emit("session-changed", serde_json::json!({})).ok();
     let app_clone = (*app).clone();
     tauri::async_runtime::spawn(async move {
         let statuses = crate::network::health::check_all_peers(&app_clone).await;
-        use tauri::Emitter;
         app_clone.emit("peer-status-changed", statuses).ok();
     });
     StatusCode::OK
@@ -231,6 +239,58 @@ async fn tool_handler(
     }))
 }
 
+// ── Ollama proxy ─────────────────────────────────────────────────────────────
+
+/// Proxy any request to the local Ollama instance, forwarding method/headers/body.
+/// Allows paired Android phones to reach PC's Ollama through the already-open bridge port.
+async fn ollama_proxy_handler(
+    State(app): State<BridgeState>,
+    axum::extract::Path(path): axum::extract::Path<String>,
+    method: Method,
+    headers: axum::http::HeaderMap,
+    body: axum::body::Bytes,
+) -> impl IntoResponse {
+    let cfg = store::bootstrap(&app);
+    let port = if cfg.ollama_port == 0 { 11434 } else { cfg.ollama_port };
+    let url = format!("http://127.0.0.1:{port}/{path}");
+
+    let client = crate::network::bridge_client();
+    let mut req = client.request(
+        reqwest::Method::from_bytes(method.as_str().as_bytes()).unwrap_or(reqwest::Method::GET),
+        &url,
+    );
+    for (name, value) in &headers {
+        let n = name.as_str();
+        if n == "host" || n == "content-length" { continue; }
+        if let Ok(v) = value.to_str() {
+            req = req.header(n, v);
+        }
+    }
+    req = req.body(body.to_vec());
+
+    match req.send().await {
+        Ok(resp) => {
+            let status = axum::http::StatusCode::from_u16(resp.status().as_u16())
+                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            let mut builder = axum::http::Response::builder().status(status);
+            for (k, v) in resp.headers() {
+                builder = builder.header(k, v);
+            }
+            let bytes = resp.bytes().await.unwrap_or_default();
+            builder.body(Body::from(bytes)).unwrap_or_else(|_| {
+                axum::http::Response::builder()
+                    .status(500)
+                    .body(Body::empty())
+                    .unwrap()
+            })
+        }
+        Err(e) => axum::http::Response::builder()
+            .status(502)
+            .body(Body::from(format!("Ollama proxy error: {e}")))
+            .unwrap(),
+    }
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 /// Start the bridge HTTP server in the background.
@@ -257,11 +317,15 @@ pub fn start_bridge_server(app: AppHandle) {
             .route("/personas/export", get(persona_export_handler))
             .route("/personas/import", post(persona_import_handler))
             .route("/exec", post(exec_handler))
+            .route("/proxy/ollama/*path", any(ollama_proxy_handler))
             .with_state(state);
 
-        // Try the configured port first, then fall back to the next few ports.
+        // Try to bind to all interfaces. On systems with virtual interfaces (Tailscale),
+        // we need to ensure proper binding. Try IPv4 first (0.0.0.0), then IPv6 (::).
         let listener = {
             let mut found = None;
+
+            // Try IPv4 0.0.0.0 first
             for try_port in port..=port + 10 {
                 let try_addr = SocketAddr::from(([0, 0, 0, 0], try_port));
                 match tokio::net::TcpListener::bind(try_addr).await {
@@ -269,22 +333,46 @@ pub fn start_bridge_server(app: AppHandle) {
                         if try_port != port {
                             eprintln!("[bridge] port {port} busy, using {try_port} instead");
                         }
+                        eprintln!("[bridge] listening on 0.0.0.0:{try_port}");
                         found = Some(l);
                         break;
                     }
                     Err(_) if try_port < port + 10 => continue,
-                    Err(e) => {
-                        eprintln!("[bridge] failed to bind any port {port}–{}: {e}", port + 10);
-                        return;
+                    Err(_) => break,
+                }
+            }
+
+            // If IPv4 failed, try IPv6 ::
+            if found.is_none() {
+                for try_port in port..=port + 10 {
+                    let try_addr = SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, try_port));
+                    match tokio::net::TcpListener::bind(try_addr).await {
+                        Ok(l) => {
+                            if try_port != port {
+                                eprintln!("[bridge] port {port} busy, using {try_port} instead");
+                            }
+                            eprintln!("[bridge] listening on [::]:{try_port}");
+                            found = Some(l);
+                            break;
+                        }
+                        Err(_) if try_port < port + 10 => continue,
+                        Err(e) => {
+                            eprintln!("[bridge] failed to bind any port {port}–{}: {e}", port + 10);
+                            return;
+                        }
                     }
                 }
             }
+
             found.unwrap()
         };
 
         eprintln!("[bridge] listening on {}", listener.local_addr().unwrap());
 
-        if let Err(e) = axum::serve(listener, router).await {
+        if let Err(e) = axum::serve(
+            listener,
+            router.into_make_service_with_connect_info::<SocketAddr>(),
+        ).await {
             eprintln!("[bridge] server error: {e}");
         }
     });

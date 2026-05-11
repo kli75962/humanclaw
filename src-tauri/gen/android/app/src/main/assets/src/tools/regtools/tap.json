@@ -1,0 +1,24 @@
+{
+  "type": "function",
+  "function": {
+    "name": "tap",
+    "description": "Tap on a UI element on the screen. Use description to tap by label. When multiple elements share the same label (e.g. two 'Install' buttons), use the x/y coordinates shown in the get_screen output (@(x,y)) to tap the correct one.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "The accessibility content description or visible text of the element to tap, e.g. 'Search', 'OK', 'Send'. Skip when using x/y coordinates."
+        },
+        "x": {
+          "type": "number",
+          "description": "Screen X coordinate from the @(x,y) shown next to the element in get_screen output. Use when multiple elements share the same label."
+        },
+        "y": {
+          "type": "number",
+          "description": "Screen Y coordinate from the @(x,y) shown next to the element in get_screen output. Use when multiple elements share the same label."
+        }
+      }
+    }
+  }
+}

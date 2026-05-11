@@ -38,87 +38,21 @@ pub async fn generate_character_post(
         character_id, entry_id
     );
 
+    // 2. Lock the entry before spawning so resume_post_gen_queue won't race us.
     {
         let mut lock = IN_PROGRESS_DRAFTS.lock().unwrap();
         lock.insert(entry_id.clone());
     }
 
+    // 3. Spawn the entire generation + reaction pipeline in the background.
     let app_clone = app.clone();
-    let thread_entry_id = entry_id.clone();
-
-    // 2. Spawn Ollama generation in background
     tauri::async_runtime::spawn(async move {
-        println!(
-            "[PhoneClaw/Ollama] Started generating post text for {}...",
-            character_id
-        );
-
-        let characters = list_characters_fs(&app_clone);
-        if let Some(character) = characters.into_iter().find(|c| c.id == character_id) {
-            match generate::generate_post_text_with_memory(
-                &app_clone,
-                &character,
-                None,
-                Some(&target_time),
-            )
-            .await
-            {
-                Ok(post_result) => {
-                    println!(
-                        "[PhoneClaw/Ollama] Successfully generated post text for {}!",
-                        character_id
-                    );
-
-                    // Update entry with text
-                    let mut all_entries = pg::load_all(&app_clone);
-                    if let Some(e) = all_entries.iter_mut().find(|x| x.id == thread_entry_id) {
-                        e.set_generated_text(
-                            post_result.text.clone(),
-                            post_result.timestamp.clone(),
-                        );
-                        let _ = pg::update_entry(&app_clone, e.clone());
-                    }
-
-                    // Add memory for the initial text
-                    let mem_entry = character_memory::MemoryEntry {
-                        id: uuid_v4(),
-                        character_id: character_id.clone(),
-                        entry_type: character_memory::MemoryEntryType::Post,
-                        brief: post_result.brief,
-                        importance: post_result.importance,
-                        created_at: character_memory::current_ts(),
-                    };
-                    let _ = character_memory::add_entry(&app_clone, mem_entry);
-
-                    // Proceed with standard queue resume (which handles post saving & reactions)
-                    {
-                        let mut lock = IN_PROGRESS_DRAFTS.lock().unwrap();
-                        lock.remove(&thread_entry_id);
-                    }
-                    let _ = resume_post_gen_queue(app_clone).await;
-                }
-                Err(err) => {
-                    println!(
-                        "[PhoneClaw/Ollama] Failed generating post text for {}: {}",
-                        character_id, err
-                    );
-                    // Mark failed so it cleans up or just let it be empty?
-                    let mut all_entries = pg::load_all(&app_clone);
-                    if let Some(e) = all_entries.iter_mut().find(|x| x.id == thread_entry_id) {
-                        e.mark_failed(err.to_string());
-                        let _ = pg::update_entry(&app_clone, e.clone());
-                    }
-                    {
-                        let mut lock = IN_PROGRESS_DRAFTS.lock().unwrap();
-                        lock.remove(&thread_entry_id);
-                    }
-                }
-            }
-        }
+        process_entry_in_background(app_clone, entry_id, Some(target_time)).await;
     });
 
-    Ok(entry_id)
+    Ok(entry.id)
 }
+
 #[tauri::command]
 pub fn list_posts(app: tauri::AppHandle) -> Vec<PostMeta> {
     fs::list_posts(&app)
@@ -188,8 +122,6 @@ pub fn add_comment(app: tauri::AppHandle, comment: PostComment) -> Result<(), St
     fs::add_comment(&app, &comment)
 }
 
-// ── Sociability helpers ────────────────────────────────────────────────────────
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 pub(crate) fn uuid_v4() -> String {
@@ -215,17 +147,42 @@ pub(crate) fn pseudo_rand(seed1: &str, seed2: &str) -> u8 {
     (str_hash(&format!("{seed1}{seed2}")) % 100) as u8
 }
 
-// ── Queue Integration ────────────────────────────────────────────────────────
+// ── Core background pipeline ─────────────────────────────────────────────────
 
-/// Resume any pending post generation queue entries (called on app startup).
-/// Processes posts that were interrupted due to app crash/network issues.
-#[tauri::command]
-pub async fn resume_post_gen_queue(app: tauri::AppHandle) -> Result<u32, String> {
-    let mut pending = pg::load_pending(&app);
-    let mut completed = 0;
+/// The single authoritative function that drives a post generation entry from
+/// `PostGenerating` all the way through to `Completed`.
+///
+/// **Lock contract**: the caller MUST insert `entry_id` into `IN_PROGRESS_DRAFTS`
+/// before spawning this function, and this function WILL remove it when it exits
+/// (success or failure).
+///
+/// **Incremental persistence**: every mutation is immediately flushed to disk
+/// via `pg::update_entry` so that concurrent calls to `resume_post_gen_queue`
+/// always read the latest state and never duplicate work.
+async fn process_entry_in_background(
+    app: tauri::AppHandle,
+    entry_id: String,
+    target_time: Option<String>,
+) {
+    // Helper macro to release the lock and return early.
+    macro_rules! release_and_return {
+        () => {{
+            let mut lock = IN_PROGRESS_DRAFTS.lock().unwrap();
+            lock.remove(&entry_id);
+            return;
+        }};
+    }
 
-    for entry in &mut pending {
-        // Reset failed entries to their respective progress states to retry
+    // ── Step 1: Load the queue entry ────────────────────────────────────────
+    let mut all_entries = pg::load_all(&app);
+    let Some(pos) = all_entries.iter().position(|e| e.id == entry_id) else {
+        println!("[PhoneClaw/Queue] Entry {entry_id} not found in queue, aborting.");
+        release_and_return!();
+    };
+
+    // Reset failed entries back to their resumable states.
+    {
+        let entry = &mut all_entries[pos];
         if entry.state == pg::PostGenState::Failed {
             if entry.post_id.is_none() {
                 entry.state = pg::PostGenState::PostGenerating;
@@ -233,198 +190,266 @@ pub async fn resume_post_gen_queue(app: tauri::AppHandle) -> Result<u32, String>
                 entry.state = pg::PostGenState::ReactionsInProgress;
             }
             entry.error = None;
+            let _ = pg::update_entry(&app, entry.clone());
         }
+    }
 
-        // If post text was generated but not yet saved, save it now
-        if entry.state == pg::PostGenState::PostGenerating {
-            // Re-entrant safety
-            {
-                let lock = IN_PROGRESS_DRAFTS.lock().unwrap();
-                if lock.contains(&entry.id) {
-                    continue; // Skip if currently being generated by background thread
-                }
-            }
+    let character_id = all_entries[pos].character_id.clone();
 
-            if entry.generated_text.is_empty() {
-                // Was interrupted while drafting text! Let's resume the LLM generation inline here.
-                println!(
-                    "[PhoneClaw/Queue] Resuming LLM generation for interrupted draft {}",
-                    entry.id
-                );
-                let characters = list_characters_fs(&app);
-                if let Some(character) = characters.into_iter().find(|c| c.id == entry.character_id)
-                {
-                    match generate::generate_post_text_with_memory(&app, &character, None, None)
-                        .await
-                    {
-                        Ok(post_result) => {
-                            entry.set_generated_text(
-                                post_result.text.clone(),
-                                post_result.timestamp.clone(),
-                            );
-                            let mem_entry = character_memory::MemoryEntry {
-                                id: uuid_v4(),
-                                character_id: entry.character_id.clone(),
-                                entry_type: character_memory::MemoryEntryType::Post,
-                                brief: post_result.brief,
-                                importance: post_result.importance,
-                                created_at: character_memory::current_ts(),
-                            };
-                            let _ = character_memory::add_entry(&app, mem_entry);
-                        }
-                        Err(e) => {
-                            entry.mark_failed(format!("Failed to resume LLM draft: {e}"));
-                            continue;
-                        }
-                    }
-                } else {
-                    entry.mark_failed("Character deleted".to_string());
-                    continue;
-                }
-            }
+    // ── Step 2: Generate post text (if not already done) ────────────────────
+    if all_entries[pos].state == pg::PostGenState::PostGenerating
+        && all_entries[pos].generated_text.is_empty()
+    {
+        println!("[PhoneClaw/Ollama] Generating post text for {}…", character_id);
 
-            if entry.post_id.is_some() {
-                // Post was already created, move to reactions
-                entry.start_reactions();
-            } else {
-                // Create the post from generated text
-                let post = PostMeta {
+        let characters = list_characters_fs(&app);
+        let Some(character) = characters.into_iter().find(|c| c.id == character_id) else {
+            let entry = &mut all_entries[pos];
+            entry.mark_failed("Character deleted".to_string());
+            let _ = pg::update_entry(&app, entry.clone());
+            release_and_return!();
+        };
+
+        match generate::generate_post_text_with_memory(
+            &app,
+            &character,
+            None,
+            target_time.as_deref(),
+        )
+        .await
+        {
+            Ok(post_result) => {
+                println!("[PhoneClaw/Ollama] Post text ready for {}.", character_id);
+                let entry = &mut all_entries[pos];
+                entry.set_generated_text(post_result.text.clone(), post_result.timestamp.clone());
+                let _ = pg::update_entry(&app, entry.clone()); // Persist immediately
+
+                let mem_entry = character_memory::MemoryEntry {
                     id: uuid_v4(),
-                    character_id: entry.character_id.clone(),
-                    text: entry.generated_text.clone(),
-                    image: None,
-                    created_at: entry.generated_timestamp.clone(),
-                    like_count: 0,
+                    character_id: character_id.clone(),
+                    entry_type: character_memory::MemoryEntryType::Post,
+                    brief: post_result.brief,
+                    importance: post_result.importance,
+                    created_at: character_memory::current_ts(),
+                };
+                let _ = character_memory::add_entry(&app, mem_entry);
+            }
+            Err(err) => {
+                println!("[PhoneClaw/Ollama] Failed generating post for {}: {}", character_id, err);
+                let entry = &mut all_entries[pos];
+                entry.mark_failed(err);
+                let _ = pg::update_entry(&app, entry.clone());
+                release_and_return!();
+            }
+        }
+    }
+
+    // ── Step 3: Save the post to disk ────────────────────────────────────────
+    if all_entries[pos].state == pg::PostGenState::PostGenerating
+        && all_entries[pos].post_id.is_none()
+    {
+        let entry = &all_entries[pos];
+        let post = PostMeta {
+            id: uuid_v4(),
+            character_id: character_id.clone(),
+            text: entry.generated_text.clone(),
+            image: None,
+            created_at: entry.generated_timestamp.clone(),
+            like_count: 0,
+        };
+        if let Err(e) = fs::save_post(&app, &post) {
+            let entry = &mut all_entries[pos];
+            entry.mark_failed(format!("Failed to save post: {e}"));
+            let _ = pg::update_entry(&app, entry.clone());
+            release_and_return!();
+        }
+        let entry = &mut all_entries[pos];
+        entry.mark_post_created(post.id.clone());
+        let _ = pg::update_entry(&app, entry.clone()); // Persist post_id + PostCreated state
+    }
+
+    // ── Step 4: Transition to reactions phase ────────────────────────────────
+    if all_entries[pos].state == pg::PostGenState::PostCreated {
+        let entry = &mut all_entries[pos];
+        entry.start_reactions();
+        let _ = pg::update_entry(&app, entry.clone());
+    }
+
+    // ── Step 5: Generate per-character reactions ─────────────────────────────
+    if all_entries[pos].state != pg::PostGenState::ReactionsInProgress {
+        // Nothing more to do (already completed or unexpectedly failed).
+        release_and_return!();
+    }
+
+    let post_id = match all_entries[pos].post_id.clone() {
+        Some(id) => id,
+        None => {
+            let entry = &mut all_entries[pos];
+            entry.mark_failed("ReactionsInProgress but post_id is None".to_string());
+            let _ = pg::update_entry(&app, entry.clone());
+            release_and_return!();
+        }
+    };
+
+    let posts = fs::list_posts(&app);
+    if let Some(post) = posts.iter().find(|p| p.id == post_id).cloned() {
+        let all_characters = list_characters_fs(&app);
+        let author_name = all_characters
+            .iter()
+            .find(|c| c.id == post.character_id)
+            .map(|c| c.name.as_str())
+            .unwrap_or("them")
+            .to_string();
+        let prior = load_comment_context(&app, &post_id, &all_characters);
+        let cfg = load_config(&app);
+
+        for character in all_characters.iter().filter(|c| c.id != post.character_id) {
+            // ── Like decision ──────────────────────────────────────────────
+            let entry = &all_entries[pos];
+            let (did_like, will_comment_r) =
+                if let Some(like_entry) = entry.likes.iter().find(|l| l.character_id == character.id) {
+                    (
+                        like_entry.did_like,
+                        generate::generate_reaction_decision(&app, character, &post.text)
+                            .await
+                            .1,
+                    )
+                } else {
+                    let (wl, wc) =
+                        generate::generate_reaction_decision(&app, character, &post.text).await;
+                    let entry = &mut all_entries[pos];
+                    entry.add_like(character.id.clone(), if wl { 80 } else { 20 }, wl);
+                    let _ = pg::update_entry(&app, entry.clone()); // Persist like immediately
+                    if wl {
+                        let _ = fs::like_post(&app, &post_id);
+                    }
+                    (wl, wc)
                 };
 
-                if let Err(e) = fs::save_post(&app, &post) {
-                    entry.mark_failed(format!("Failed to save post: {e}"));
-                    continue;
-                }
-
-                entry.mark_post_created(post.id.clone());
-            }
-        }
-
-        // If post exists but reactions haven't been processed
-        let post_id_clone = entry.post_id.clone();
-        if let Some(post_id) = post_id_clone {
-            if entry.state == pg::PostGenState::PostCreated {
-                entry.start_reactions();
+            // Skip if this character has already generated a comment (idempotency).
+            if all_entries[pos].comments.iter().any(|c| c.character_id == character.id) {
+                continue;
             }
 
-            // Generate reactions if still in progress
-            if entry.state == pg::PostGenState::ReactionsInProgress {
-                // Generate comments from other characters
-                let posts = fs::list_posts(&app);
-                if let Some(post) = posts.iter().find(|p| p.id == post_id) {
-                    let all_characters = list_characters_fs(&app);
-                    let author_name = all_characters
-                        .iter()
-                        .find(|c| c.id == post.character_id)
-                        .map(|c| c.name.as_str())
-                        .unwrap_or("them")
-                        .to_string();
+            // ── Comment decision / generation ──────────────────────────────
+            let sociability = crate::skills::get_sociability_for_persona(&app, &character.persona);
+            let actually_comment = will_comment_r
+                && pseudo_rand(&character.id, &format!("fthr{}", &post_id))
+                    < comment_follow_through(
+                        sociability,
+                        cfg.comment_follow_through_base_pct,
+                        cfg.comment_follow_through_scale_pct,
+                    );
 
-                    let prior = load_comment_context(&app, &post_id, &all_characters);
+            if did_like && actually_comment {
+                if let Ok(comment_result) = generate::generate_comment_text_with_memory(
+                    &app,
+                    character,
+                    &author_name,
+                    &post.text,
+                    &prior,
+                )
+                .await
+                {
+                    let seed = str_hash(&format!("reaction{}{}", character.id, &post_id));
+                    let comment = PostComment {
+                        id: uuid_v4(),
+                        post_id: post_id.clone(),
+                        author_id: character.id.clone(),
+                        text: comment_result.text.clone(),
+                        created_at: generate::pick_comment_timestamp(&post.created_at, seed),
+                    };
 
-                    let cfg = load_config(&app);
-                    for character in all_characters.iter().filter(|c| c.id != post.character_id) {
-                        // Generate reaction decision (if not already tracked)
-                        let (did_like, will_comment_r) = if let Some(like_entry) =
-                            entry.likes.iter().find(|l| l.character_id == character.id)
-                        {
-                            // Already decided like; re-ask for comment decision since it wasn't stored
-                            (
-                                like_entry.did_like,
-                                generate::generate_reaction_decision(&app, character, &post.text)
-                                    .await
-                                    .1,
-                            )
-                        } else {
-                            let (wl, wc) =
-                                generate::generate_reaction_decision(&app, character, &post.text)
-                                    .await;
-                            entry.add_like(character.id.clone(), if wl { 80 } else { 20 }, wl);
-                            if wl {
-                                let _ = fs::like_post(&app, &post_id);
-                            }
-                            (wl, wc)
+                    let entry = &mut all_entries[pos];
+                    entry.add_comment(character.id.clone(), comment_result.text.clone());
+
+                    if let Err(e) = fs::add_comment(&app, &comment) {
+                        entry.mark_comment_failed(&character.id, e);
+                    } else {
+                        entry.mark_comment_created(&character.id, comment.id.clone());
+                        let mem_entry = character_memory::MemoryEntry {
+                            id: uuid_v4(),
+                            character_id: character.id.clone(),
+                            entry_type: character_memory::MemoryEntryType::Comment,
+                            brief: comment_result.brief,
+                            importance: comment_result.importance,
+                            created_at: character_memory::current_ts(),
                         };
-
-                        // Skip if comment already generated for this character
-                        if entry
-                            .comments
-                            .iter()
-                            .any(|c| c.character_id == character.id)
-                        {
-                            continue;
-                        }
-
-                        let sociability =
-                            crate::skills::get_sociability_for_persona(&app, &character.persona);
-                        let actually_comment = will_comment_r
-                            && pseudo_rand(&character.id, &format!("fthr{}", &post_id))
-                                < comment_follow_through(
-                                    sociability,
-                                    cfg.comment_follow_through_base_pct,
-                                    cfg.comment_follow_through_scale_pct,
-                                );
-                        if did_like && actually_comment {
-                            if let Ok(comment_result) = generate::generate_comment_text_with_memory(
-                                &app,
-                                character,
-                                &author_name,
-                                &post.text,
-                                &prior,
-                            )
-                            .await
-                            {
-                                entry
-                                    .add_comment(character.id.clone(), comment_result.text.clone());
-                                let seed =
-                                    str_hash(&format!("reaction{}{}", character.id, &post_id));
-                                let comment = PostComment {
-                                    id: uuid_v4(),
-                                    post_id: post_id.clone(),
-                                    author_id: character.id.clone(),
-                                    text: comment_result.text.clone(),
-                                    created_at: generate::pick_comment_timestamp(
-                                        &post.created_at,
-                                        seed,
-                                    ),
-                                };
-                                if let Err(e) = fs::add_comment(&app, &comment) {
-                                    entry.mark_comment_failed(&character.id, e);
-                                } else {
-                                    entry.mark_comment_created(&character.id, comment.id.clone());
-                                    let mem_entry = character_memory::MemoryEntry {
-                                        id: uuid_v4(),
-                                        character_id: character.id.clone(),
-                                        entry_type: character_memory::MemoryEntryType::Comment,
-                                        brief: comment_result.brief,
-                                        importance: comment_result.importance,
-                                        created_at: character_memory::current_ts(),
-                                    };
-                                    let _ = character_memory::add_entry(&app, mem_entry);
-                                }
-                            }
-                        }
+                        let _ = character_memory::add_entry(&app, mem_entry);
                     }
+                    // Persist immediately after each character — no data loss on early exit.
+                    let _ = pg::update_entry(&app, entry.clone());
                 }
-
-                entry.mark_completed();
-                completed += 1;
             }
         }
     }
 
-    // Save updated entries
-    if !pending.is_empty() {
-        pg::update_entries_batch(&app, &pending)?;
+    // ── Step 6: Mark completed ────────────────────────────────────────────────
+    {
+        let entry = &mut all_entries[pos];
+        entry.mark_completed();
+        let _ = pg::update_entry(&app, entry.clone());
+    }
+    println!("[PhoneClaw/Queue] Entry {} completed successfully.", entry_id);
+
+    // Release the lock on the happy path.
+    let mut lock = IN_PROGRESS_DRAFTS.lock().unwrap();
+    lock.remove(&entry_id);
+}
+
+// ── Queue patrol ─────────────────────────────────────────────────────────────
+
+/// Resume any pending post generation queue entries (called on app startup and
+/// on each 5-minute frontend poll).
+///
+/// This function is intentionally **non-blocking** — it dispatches each pending
+/// entry into a background task and returns immediately.  The actual generation
+/// work happens inside `process_entry_in_background`, which holds the
+/// `IN_PROGRESS_DRAFTS` lock for its entire lifetime, preventing duplicate runs.
+#[tauri::command]
+pub async fn resume_post_gen_queue(app: tauri::AppHandle) -> Result<u32, String> {
+    let pending = pg::load_pending(&app);
+    let mut dispatched: u32 = 0;
+
+    for entry in pending {
+        // Skip if this entry is already being processed by a background task.
+        {
+            let lock = IN_PROGRESS_DRAFTS.lock().unwrap();
+            if lock.contains(&entry.id) {
+                continue;
+            }
+        }
+
+        // Lock the entry NOW, before spawning, to prevent any other concurrent
+        // call from also picking it up.
+        {
+            let mut lock = IN_PROGRESS_DRAFTS.lock().unwrap();
+            lock.insert(entry.id.clone());
+        }
+
+        let app_clone = app.clone();
+        let entry_id = entry.id.clone();
+        println!(
+            "[PhoneClaw/Queue] Dispatching background task for entry {}",
+            entry_id
+        );
+        tauri::async_runtime::spawn(async move {
+            // target_time is None for resumes — the generated text already
+            // has its timestamp (or we'll fall back to the default 2-hr-ago offset).
+            process_entry_in_background(app_clone, entry_id, None).await;
+        });
+
+        dispatched += 1;
     }
 
-    Ok(completed)
+    if dispatched > 0 {
+        println!(
+            "[PhoneClaw/Queue] Patrol: dispatched {} background task(s).",
+            dispatched
+        );
+    }
+
+    Ok(dispatched)
 }
 
 // ── Daily schedule ────────────────────────────────────────────────────────────

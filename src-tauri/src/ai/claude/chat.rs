@@ -183,6 +183,21 @@ async fn stream_once(
         }
     }
 
+    // Flush any tail withheld during streaming (last MEMORY_MARKER.len() chars held back
+    // to avoid splitting the marker across chunks — never emitted when no marker present).
+    for block in blocks.values() {
+        if let InFlightBlock::Text { text: acc, emitted } = block {
+            let visible_end = acc.find("---MEMORY").unwrap_or(acc.len());
+            if visible_end > *emitted {
+                app.emit("ollama-stream", StreamPayload {
+                    content: acc[*emitted..visible_end].to_string(),
+                    done: false,
+                    brief: None,
+                }).ok();
+            }
+        }
+    }
+
     // Assemble final result from completed blocks
     let mut text = String::new();
     let mut tool_calls: Vec<ClaudeToolCall> = Vec::new();
@@ -221,11 +236,12 @@ pub async fn chat_claude(
     let tool_schemas = load_tool_schemas(&app);
     bootstrap_memory(&app);
 
-    let base_prompt = build_base_prompt(&app, character.as_ref()).await;
     let tool_context = local_tool_context(&app);
 
     // ── Tiered text history compression ──────────────────────────────────────
     let msgs_no_sys: Vec<_> = messages.into_iter().filter(|m| m.role != "system").collect();
+
+    let base_prompt = build_base_prompt(&app, character.as_ref()).await;
     let compress_entries: Vec<CompressMsg> = msgs_no_sys
         .iter()
         .map(|m| CompressMsg {

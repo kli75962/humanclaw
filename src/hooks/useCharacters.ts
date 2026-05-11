@@ -28,10 +28,20 @@ export function useCharacters() {
     return newChar;
   }, []);
 
+  const updateCharacter = useCallback((id: string, data: Omit<Character, 'id' | 'createdAt'>) => {
+    setCharacters((prev) => {
+      const old = prev.find((c) => c.id === id);
+      if (!old) return prev;
+      const updated: Character = { ...old, ...data };
+      invoke('save_character', { character: updated }).catch(() => {});
+      return prev.map((c) => (c.id === id ? updated : c));
+    });
+  }, []);
+
   const deleteCharacter = useCallback(async (id: string) => {
     await invoke('delete_character', { id }).catch(() => {});
     setCharacters((prev) => prev.filter((c) => c.id !== id));
   }, []);
 
-  return { characters, addCharacter, deleteCharacter };
+  return { characters, addCharacter, updateCharacter, deleteCharacter };
 }

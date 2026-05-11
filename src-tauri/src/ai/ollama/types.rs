@@ -143,17 +143,30 @@ pub struct OllamaChunk {
 
 // ── URL helpers ───────────────────────────────────────────────────────────────
 
+/// On Android, route Ollama through the paired PC's bridge server proxy so port 11434
+/// never needs to be exposed — the bridge port (9876) is already confirmed reachable.
 #[cfg(target_os = "android")]
-fn default_host(app: &tauri::AppHandle) -> String {
+fn android_ollama_base(app: &tauri::AppHandle) -> String {
     if let Some(cfg) = crate::session::store::load(app) {
+        if let Some(host) = cfg
+            .ollama_host_override
+            .as_deref()
+            .map(str::trim)
+            .filter(|h| !h.is_empty())
+        {
+            let port = if cfg.ollama_port == 0 { 11434 } else { cfg.ollama_port };
+            return format!("http://{host}:{port}");
+        }
         if let Some(peer) = cfg.paired_devices.first() {
-            return peer.address.split(':').next().unwrap_or(&peer.address).to_string();
+            // Use the bridge address (ip:9876) + /proxy/ollama instead of direct port 11434.
+            return format!("http://{}/proxy/ollama", peer.address);
         }
     }
-    "127.0.0.1".to_string()
+    "http://127.0.0.1:11434".to_string()
 }
 
-fn ollama_host_port(app: &tauri::AppHandle) -> (String, u16) {
+#[cfg(not(target_os = "android"))]
+fn desktop_ollama_base(app: &tauri::AppHandle) -> String {
     if let Some(cfg) = crate::session::store::load(app) {
         let port = if cfg.ollama_port == 0 { 11434 } else { cfg.ollama_port };
         if let Some(host) = cfg
@@ -162,25 +175,23 @@ fn ollama_host_port(app: &tauri::AppHandle) -> (String, u16) {
             .map(str::trim)
             .filter(|h| !h.is_empty())
         {
-            return (host.to_string(), port);
+            return format!("http://{host}:{port}");
         }
-        #[cfg(target_os = "android")]
-        return (default_host(app), port);
-        #[cfg(not(target_os = "android"))]
-        return ("127.0.0.1".to_string(), port);
+        return format!("http://127.0.0.1:{port}");
     }
-    #[cfg(target_os = "android")]
-    { (default_host(app), 11434) }
-    #[cfg(not(target_os = "android"))]
-    { ("127.0.0.1".to_string(), 11434) }
+    "http://127.0.0.1:11434".to_string()
 }
 
 pub fn ollama_chat_url(app: &tauri::AppHandle) -> String {
-    let (host, port) = ollama_host_port(app);
-    format!("http://{host}:{port}/api/chat")
+    #[cfg(target_os = "android")]
+    return format!("{}/api/chat", android_ollama_base(app));
+    #[cfg(not(target_os = "android"))]
+    return format!("{}/api/chat", desktop_ollama_base(app));
 }
 
 pub fn ollama_tags_url(app: &tauri::AppHandle) -> String {
-    let (host, port) = ollama_host_port(app);
-    format!("http://{host}:{port}/api/tags")
+    #[cfg(target_os = "android")]
+    return format!("{}/api/tags", android_ollama_base(app));
+    #[cfg(not(target_os = "android"))]
+    return format!("{}/api/tags", desktop_ollama_base(app));
 }

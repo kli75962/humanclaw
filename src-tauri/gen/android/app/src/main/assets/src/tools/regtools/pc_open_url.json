@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "pc_open_url",
+    "description": "Open a URL in the default browser on the PC. Faster and more reliable than navigating through the browser UI manually.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "The URL to open (must be a valid http/https URL)."
+        }
+      },
+      "required": ["url"]
+    }
+  }
+}

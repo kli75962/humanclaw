@@ -89,10 +89,10 @@ pub async fn run_headless(
     let tool_schemas = load_tool_schemas(app);
     bootstrap_memory(app);
 
-    let base_prompt = build_base_prompt(app, None).await;
     let tool_context = ToolExecutionContext { source_device_id, source_device_type };
 
     let msgs_no_sys: Vec<_> = conversation.into_iter().filter(|m| m.role != "system").collect();
+    let base_prompt = build_base_prompt(app, None).await;
     let compress_entries: Vec<CompressMsg> = msgs_no_sys.iter()
         .map(|m| CompressMsg { role: m.role.clone(), content: m.content.clone(), brief: m.brief.clone() })
         .collect();

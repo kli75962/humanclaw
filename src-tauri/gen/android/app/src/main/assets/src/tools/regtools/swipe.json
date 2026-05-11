@@ -1,0 +1,24 @@
+{
+  "type": "function",
+  "function": {
+    "name": "swipe",
+    "description": "Perform a swipe gesture on the screen. Useful for scrolling lists or dismissing notifications.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "type": "string",
+          "description": "Direction to swipe.",
+          "enum": ["up", "down", "left", "right"]
+        },
+        "distance": {
+          "type": "string",
+          "description": "How far to swipe.",
+          "enum": ["short", "medium", "long"],
+          "default": "medium"
+        }
+      },
+      "required": ["direction"]
+    }
+  }
+}

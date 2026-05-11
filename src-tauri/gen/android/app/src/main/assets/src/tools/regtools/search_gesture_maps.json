@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "search_gesture_maps",
+    "description": "Search for recorded gesture maps for an app. Check local first, then the community cloud. Use this when get_screen returns minimal content ([GESTURE_MAP_HINT]) indicating FLAG_SECURE or React Native rendering. If maps are found, use replay_gesture_map to execute one.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "app_package": {
+          "type": "string",
+          "description": "Android package name of the app, e.g. 'com.foodpanda.android'"
+        }
+      },
+      "required": ["app_package"]
+    }
+  }
+}

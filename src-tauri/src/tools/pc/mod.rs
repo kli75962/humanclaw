@@ -8,8 +8,6 @@ mod system_run;
 use serde_json::Value;
 use tauri::AppHandle;
 
-use crate::session::{store, types::PermissionState};
-use crate::tools::permissions::request_permission;
 use crate::tools::types::ToolResult;
 
 pub fn is_pc_control_tool(name: &str) -> bool {
@@ -19,6 +17,16 @@ pub fn is_pc_control_tool(name: &str) -> bool {
     )
 }
 
+fn not_available(tool_name: &str) -> ToolResult {
+    ToolResult::err(tool_name, "NOT_AVAILABLE", "PC control tools are not available on this platform.")
+}
+
+#[cfg(not(target_os = "android"))]
+use crate::session::{store, types::PermissionState};
+#[cfg(not(target_os = "android"))]
+use crate::tools::permissions::request_permission;
+
+#[cfg(not(target_os = "android"))]
 fn permission_denied(tool_name: &str) -> ToolResult {
     ToolResult::err(
         tool_name,
@@ -27,10 +35,7 @@ fn permission_denied(tool_name: &str) -> ToolResult {
     )
 }
 
-fn not_available(tool_name: &str) -> ToolResult {
-    ToolResult::err(tool_name, "NOT_AVAILABLE", "PC control tools are not available on this platform.")
-}
-
+#[cfg(not(target_os = "android"))]
 async fn check_permission(app: &AppHandle, tool_name: &str, field: &str, args: &Value) -> bool {
     let cfg = store::bootstrap(app);
     let p = &cfg.pc_permissions;
@@ -47,6 +52,7 @@ async fn check_permission(app: &AppHandle, tool_name: &str, field: &str, args: &
     }
 }
 
+#[cfg(not(target_os = "android"))]
 fn get_platform_info() -> ToolResult {
     use std::env::consts;
     let info = serde_json::json!({ "os": consts::OS, "arch": consts::ARCH });
@@ -55,7 +61,7 @@ fn get_platform_info() -> ToolResult {
 
 pub async fn execute_pc_tool(app: &AppHandle, name: &str, args: &Value) -> ToolResult {
     #[cfg(target_os = "android")]
-    return not_available(name);
+    { let _ = (app, args); return not_available(name); }
 
     #[cfg(not(target_os = "android"))]
     {

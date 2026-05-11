@@ -13,6 +13,8 @@ import { AppSocial } from './components/social/AppSocial';
 import type { PersonaBuildNoticeStatus } from './components/persona/PersonaBuildNotice';
 import type { PermissionRequest as PermissionRequestData } from './components/ui/PermissionDialog';
 import type { AskQuestion } from './components/ui/AskUserBubble';
+import { GestureMapRecorder } from './components/ui/GestureMapRecorder';
+import { AskUserBubble } from './components/ui/AskUserBubble';
 import type { ChatMeta, Message, Post } from './types';
 import './style/themes.css';
 import './style/App.css';
@@ -28,12 +30,16 @@ function App() {
   const [socialMode, setSocialMode] = useState(() => localStorage.getItem(SOCIAL_MODE_KEY) === 'true');
   const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);
   
-  const { characters, addCharacter, deleteCharacter } = useCharacters();
+  const { characters, addCharacter, updateCharacter, deleteCharacter } = useCharacters();
   const { posts, likedPostIds, toggleLike, deletePost, addPost, refresh: refreshPosts } = usePosts();
   
+  const isAndroid = useMemo(() => document.documentElement.classList.contains('is-android'), []);
+
   const [quotedPost, setQuotedPost] = useState<Post | null>(null);
   const [permRequest, setPermRequest] = useState<PermissionRequestData | null>(null);
   const [askUserRequest, setAskUserRequest] = useState<{ id: string; questions: AskQuestion[] } | null>(null);
+  const [gestureMapPackage, setGestureMapPackage] = useState<string | null>(null);
+  const [gestureMapPhase, setGestureMapPhase] = useState<'list' | 'recording'>('list');
   
   const [personaNotice, setPersonaNotice] = useState<{ status: PersonaBuildNoticeStatus; displayName: string } | null>(null);
   const [mainTab, setMainTab] = useState<'chat' | 'posts'>('chat');
@@ -45,6 +51,13 @@ function App() {
     activeMemoId, memoMessages, memoStreaming, memoStreamContent,
     handleSelectMemo, handleSaveMemo, handleOpenMemo, handleMemoSend, setActiveMemoId
   } = useMemoChat(model, setMainTab, setSideOpen, setSideView);
+
+  // Mark Android so CSS mobile layout applies regardless of CSS pixel width
+  useEffect(() => {
+    if (/android/i.test(navigator.userAgent)) {
+      document.documentElement.classList.add('is-android');
+    }
+  }, []);
 
   // Resume persona build status
   useEffect(() => {
@@ -227,12 +240,29 @@ function App() {
     return () => { unlisten.then(fn => fn()); };
   }, []);
 
+  useEffect(() => {
+    const unlisten = listen<{ app_package: string }>('gesture-record-request', (e) => {
+      setGestureMapPhase('list');
+      setGestureMapPackage(e.payload.app_package);
+    });
+    return () => { unlisten.then(fn => fn()); };
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen('gesture-recording-started', () => {
+      setGestureMapPhase('recording');
+      setGestureMapPackage((pkg) => pkg ?? '');
+    });
+    return () => { unlisten.then(fn => fn()); };
+  }, []);
+
   return (
+    <>
     <AppLayout
       chatMode={chatMode} socialMode={socialMode} mainTab={mainTab} setMainTab={setMainTab} handleChatModeChange={handleChatModeChange} sideOpen={sideOpen} setSideOpen={setSideOpen}
       sideView={sideView} handleSwitchView={handleSwitchView} startNewChat={startNewChat} visibleChatMetas={visibleChatMetas} activeChatId={activeChatId} switchChat={switchChat}
       deleteChat={deleteChat} model={model} handleModelChange={handleModelChange} handleOllamaEndpointChanged={() => {}} characters={characters} activeCharacterId={activeCharacterId}
-      selectCharacter={selectCharacter} addCharacter={addCharacter} deleteCharacter={deleteCharacter} handleSocialModeChange={handleSocialModeChange} activeMemoId={activeMemoId}
+      selectCharacter={selectCharacter} addCharacter={addCharacter} updateCharacter={updateCharacter} deleteCharacter={deleteCharacter} handleSocialModeChange={handleSocialModeChange} activeMemoId={activeMemoId}
       handleSelectMemo={handleSelectMemo} personaNotice={personaNotice} onPersonaNoticeClose={() => { setPersonaNotice(null); invoke('clear_persona_build_status').catch(() => {}); }}
     >
       {mainTab === 'posts' ? (
@@ -244,12 +274,31 @@ function App() {
         <AppChat
           activeMemoId={activeMemoId} memoMessages={memoMessages} memoStreaming={memoStreaming} memoStreamContent={memoStreamContent} handleMemoSend={handleMemoSend}
           messages={messages} activeCharacter={activeCharacter} isThinking={isThinking} agentStatus={agentStatus} permRequest={permRequest} setPermRequest={setPermRequest}
-          askUserRequest={askUserRequest} setAskUserRequest={setAskUserRequest} error={error} handleRetry={handleRetry} onSend={onSendWrapper} isListening={isListening}
+          askUserRequest={isAndroid ? null : askUserRequest} setAskUserRequest={setAskUserRequest} error={error} handleRetry={handleRetry} onSend={onSendWrapper} isListening={isListening}
           sttError={sttError} handleSttToggle={handleSttToggle} handleStop={handleStop} quotedPost={quotedPost} setQuotedPost={setQuotedPost} model={model}
           handleSaveMemo={handleSaveMemo} handleOpenMemo={handleOpenMemo}
         />
       )}
     </AppLayout>
+    {gestureMapPackage != null && (
+      <GestureMapRecorder
+        appPackage={gestureMapPackage}
+        initialPhase={gestureMapPhase}
+        onClose={() => { setGestureMapPackage(null); setGestureMapPhase('list'); }}
+      />
+    )}
+    {isAndroid && askUserRequest && (
+      <div className="ask-user-overlay" onClick={() => {}}>
+        <div className="ask-user-overlay-panel">
+          <AskUserBubble
+            id={askUserRequest.id}
+            questions={askUserRequest.questions}
+            onDone={() => setAskUserRequest(null)}
+          />
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

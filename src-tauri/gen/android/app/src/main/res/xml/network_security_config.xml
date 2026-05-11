@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow cleartext (HTTP) for private IP ranges (LAN + Tailscale) -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Localhost -->
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <!-- Private IP ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 -->
+        <domain includeSubdomains="true">10.0.0.0</domain>
+        <domain includeSubdomains="true">172.16.0.0</domain>
+        <domain includeSubdomains="true">192.168.0.0</domain>
+        <!-- Tailscale IP range: 100.64.0.0/10 -->
+        <domain includeSubdomains="true">100.0.0.0</domain>
+    </domain-config>
+    <!-- Require HTTPS for all other connections -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">.</domain>
+    </domain-config>
+</network-security-config>

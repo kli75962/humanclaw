@@ -1,0 +1,31 @@
+{
+  "type": "function",
+  "function": {
+    "name": "ask_user",
+    "description": "Show an interactive question bubble in the chat to gather structured information from the user. Each question has clickable option buttons; the last option is always rendered as a free-text input field. You can include multiple questions — the user must answer each one before advancing to the next. Use this instead of ask-me-anything plain text when you need a specific, structured answer before proceeding.",
+    "parameters": {
+      "type": "object",
+      "required": ["questions"],
+      "properties": {
+        "questions": {
+          "type": "array",
+          "description": "Ordered list of questions. The user answers them one by one.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question": {
+                "type": "string",
+                "description": "The question text to display to the user."
+              },
+              "options": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Answer choices. All entries except the last are shown as clickable buttons. The last entry label is used as the placeholder hint for a free-text input field, allowing the user to type any custom answer."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

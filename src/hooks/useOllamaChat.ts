@@ -181,6 +181,10 @@ export function useOllamaChat(
     setMessages(withPlaceholder);
     messagesRef.current = withPlaceholder;
 
+    // Persist user message immediately so it survives a failed LLM response.
+    // On success, the done handler overwrites with the full conversation.
+    onSaveRef.current(activeChatId, updatedMessages);
+
     const historyMessages: Message[] = updatedMessages.filter(
       (m) => m.role === 'user' || m.role === 'assistant',
     );

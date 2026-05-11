@@ -1,0 +1,11 @@
+{
+  "type": "function",
+  "function": {
+    "name": "get_installed_apps",
+    "description": "Return a list of all user-installed apps on the Android phone. Call this before launch_app when you do not already know the package name, or when the user asks what apps are installed. On desktop, this forwards to the paired Android device automatically.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+}

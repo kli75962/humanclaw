@@ -24,9 +24,20 @@ import android.widget.FrameLayout
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import android.text.InputType
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * PhoneControlService — Android AccessibilityService that exposes low-level
@@ -59,13 +70,77 @@ class PhoneControlService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        hideOverlay()   // clean up if service stops
+        hideOverlay()
+        hideAccountPicker()
+        hideCredentialAssist()
         instance = null
         super.onDestroy()
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
+    @Volatile private var screenChangeCallback: (() -> Unit)? = null
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        event ?: return
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            screenChangeCallback?.let { cb -> screenChangeCallback = null; cb() }
+        }
+        if (isRecording && event.eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
+            handleTypingDuringRecording(event)
+        }
+    }
+
     override fun onInterrupt() = Unit
+
+    override fun onMotionEvent(event: MotionEvent) {
+        if (!isRecording) return
+        val now = System.currentTimeMillis()
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                val metrics = windowManager.currentWindowMetrics.bounds
+                val fx = event.rawX / metrics.width()
+                val fy = event.rawY / metrics.height()
+                lastMotionX = fx
+                lastMotionY = fy
+                lastMotionTime = now
+                pendingTapFx = fx
+                pendingTapFy = fy
+                motionStartTime = now
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (now - lastMotionTime >= 50) {
+                    val metrics = windowManager.currentWindowMetrics.bounds
+                    val fx = event.rawX / metrics.width()
+                    val fy = event.rawY / metrics.height()
+                    if (abs(fx - lastMotionX) > 0.01f || abs(fy - lastMotionY) > 0.01f) {
+                        rawGestureEvents.add(RawGestureEvent.Move(fx, fy, now))
+                    }
+                    lastMotionX = fx
+                    lastMotionY = fy
+                    lastMotionTime = now
+                }
+            }
+            MotionEvent.ACTION_UP -> {
+                val metrics = windowManager.currentWindowMetrics.bounds
+                val fx = event.rawX / metrics.width()
+                val fy = event.rawY / metrics.height()
+                val duration = now - motionStartTime
+                if (duration < 200 && rawGestureEvents.none { it is RawGestureEvent.Move }) {
+                    // short press with no movement = tap
+                    val tapFx = pendingTapFx
+                    val tapFy = pendingTapFy
+                    val credential = pendingFillCredential
+                    if (credential != null) {
+                        pendingFillCredential = null
+                        rawGestureEvents.add(RawGestureEvent.FillCredential(credential))
+                    } else {
+                        rawGestureEvents.add(RawGestureEvent.Tap(tapFx, tapFy))
+                    }
+                } else {
+                    rawGestureEvents.add(RawGestureEvent.Up(fx, fy, now))
+                }
+            }
+        }
+    }
 
     // ----- Overlay (LLM-running indicator) -----
 
@@ -624,5 +699,397 @@ class PhoneControlService : AccessibilityService() {
             child.recycle()
         }
         return null
+    }
+
+    // ----- Credential tools -----
+
+    fun typeCredential(appPackage: String, fieldType: String): Boolean {
+        val value = CredentialStore.get(applicationContext, appPackage, fieldType)
+            ?: return false
+        return typeText(value, clearFirst = true)
+    }
+
+    @androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.R)
+    fun commitSuggestion(index: Int): Boolean {
+        val ime = ImeServiceBridge.imeInstance ?: return false
+        return ime.commitSuggestion(index)
+    }
+
+    // ----- Account picker overlay -----
+
+    private var accountPickerOverlay: AccountPickerOverlay? = null
+    private var credentialAssistOverlay: CredentialAssistOverlay? = null
+
+    fun showAccountPicker(title: String, options: List<String>, onSelected: (Int, String) -> Unit, onCancelled: () -> Unit) {
+        mainHandler.post {
+            accountPickerOverlay?.hide()
+            accountPickerOverlay = AccountPickerOverlay(applicationContext, windowManager)
+            accountPickerOverlay!!.show(title, options, onSelected, onCancelled)
+        }
+    }
+
+    fun hideAccountPicker() {
+        mainHandler.post { accountPickerOverlay?.hide(); accountPickerOverlay = null }
+    }
+
+    fun showLoginMethodPicker(methods: List<String>, onSelected: (String) -> Unit, onCancelled: () -> Unit) {
+        showAccountPicker(
+            title = "How do you want to login?",
+            options = methods,
+            onSelected = { _, label -> onSelected(label) },
+            onCancelled = onCancelled
+        )
+    }
+
+    fun showCredentialAssist(fieldType: String, onResult: (FillResult) -> Unit) {
+        mainHandler.post {
+            credentialAssistOverlay?.hide()
+            credentialAssistOverlay = CredentialAssistOverlay(applicationContext, windowManager)
+            credentialAssistOverlay!!.show(fieldType, onResult)
+        }
+    }
+
+    fun hideCredentialAssist() {
+        mainHandler.post { credentialAssistOverlay?.hide(); credentialAssistOverlay = null }
+    }
+
+    // ----- Gesture recording -----
+
+    sealed class RawGestureEvent {
+        data class Tap(val fx: Float, val fy: Float) : RawGestureEvent()
+        data class Move(val fx: Float, val fy: Float, val time: Long) : RawGestureEvent()
+        data class Up(val fx: Float, val fy: Float, val time: Long) : RawGestureEvent()
+        data class FillCredential(val fieldType: String) : RawGestureEvent()
+    }
+
+    @Volatile var isRecording = false
+        private set
+    private var isSharingMode = false
+    private val rawGestureEvents = mutableListOf<RawGestureEvent>()
+    private var lastMotionX = 0f
+    private var lastMotionY = 0f
+    private var lastMotionTime = 0L
+    private var pendingTapFx = 0f
+    private var pendingTapFy = 0f
+    private var motionStartTime = 0L
+    @Volatile var pendingFillCredential: String? = null
+    private var sensitiveOverlayShown = false
+    private var recordingOverlayView: View? = null
+
+    fun startRecording(sharing: Boolean) {
+        isSharingMode = sharing
+        rawGestureEvents.clear()
+        pendingFillCredential = null
+        sensitiveOverlayShown = false
+        isRecording = true
+        showRecordingIndicator()
+    }
+
+    fun stopRecording(): String {
+        isRecording = false
+        hideRecordingIndicator()
+        val metrics = windowManager.currentWindowMetrics.bounds
+        val w = metrics.width()
+        val h = metrics.height()
+        val eventsJson = buildEventsJson(w, h)
+        return """{"events":$eventsJson,"screen_width":$w,"screen_height":$h,"has_credential_events":${rawGestureEvents.any { it is RawGestureEvent.FillCredential }}}"""
+    }
+
+    private fun buildEventsJson(screenW: Int, screenH: Int): String {
+        val arr = JSONArray()
+        var moveStartFx = 0f
+        var moveStartFy = 0f
+        var moveStartTime = 0L
+        var inSwipe = false
+
+        for (ev in rawGestureEvents) {
+            when (ev) {
+                is RawGestureEvent.Tap -> {
+                    val obj = JSONObject()
+                    obj.put("type", "tap")
+                    obj.put("fx", ev.fx.toDouble())
+                    obj.put("fy", ev.fy.toDouble())
+                    obj.put("wait_for_screen_change", false)
+                    obj.put("delay_ms", 200)
+                    arr.put(obj)
+                    inSwipe = false
+                }
+                is RawGestureEvent.Move -> {
+                    if (!inSwipe) {
+                        moveStartFx = ev.fx
+                        moveStartFy = ev.fy
+                        moveStartTime = ev.time
+                        inSwipe = true
+                    }
+                }
+                is RawGestureEvent.Up -> {
+                    if (inSwipe) {
+                        val obj = JSONObject()
+                        obj.put("type", "swipe")
+                        obj.put("fx_start", moveStartFx.toDouble())
+                        obj.put("fy_start", moveStartFy.toDouble())
+                        obj.put("fx_end", ev.fx.toDouble())
+                        obj.put("fy_end", ev.fy.toDouble())
+                        obj.put("wait_for_screen_change", false)
+                        obj.put("delay_ms", 200)
+                        arr.put(obj)
+                        inSwipe = false
+                    }
+                }
+                is RawGestureEvent.FillCredential -> {
+                    val obj = JSONObject()
+                    obj.put("type", "fill_credential")
+                    obj.put("field_type", ev.fieldType)
+                    arr.put(obj)
+                    inSwipe = false
+                }
+            }
+        }
+        return arr.toString()
+    }
+
+    private fun handleTypingDuringRecording(event: AccessibilityEvent) {
+        val source = event.source ?: return
+        val isPassword = source.isPassword
+        val isEmail = (source.inputType and InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS != 0)
+            || source.hintText?.contains("email", ignoreCase = true) == true
+        source.recycle()
+        if (!isPassword && !isEmail) return
+        val fieldType = if (isPassword) "password" else "email"
+
+        if (!isSharingMode) {
+            pendingFillCredential = fieldType
+            return
+        }
+        if (sensitiveOverlayShown) return
+        sensitiveOverlayShown = true
+        showSensitiveInputWarning(
+            onStop = { stopRecording(); sensitiveOverlayShown = false },
+            onSkip = { pendingFillCredential = fieldType; sensitiveOverlayShown = false },
+            onContinue = { sensitiveOverlayShown = false }
+        )
+    }
+
+    private fun showRecordingIndicator() {
+        mainHandler.post {
+            if (recordingOverlayView != null) return@post
+            val wm = windowManager
+
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(12.dpToPx(), 6.dpToPx(), 8.dpToPx(), 6.dpToPx())
+                background = GradientDrawable().apply {
+                    setColor(Color.argb(220, 0, 0, 0))
+                    cornerRadius = 8.dpToPx().toFloat()
+                }
+            }
+
+            val recLabel = TextView(this).apply {
+                text = "● REC"
+                setTextColor(Color.RED)
+                textSize = 12f
+            }
+
+            val stopBtn = TextView(this).apply {
+                text = "  ■ Stop"
+                setTextColor(Color.WHITE)
+                textSize = 12f
+                setOnClickListener {
+                    stopRecording()
+                    hideRecordingIndicator()
+                }
+            }
+
+            row.addView(recLabel)
+            row.addView(stopBtn)
+
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT,
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                x = 16.dpToPx()
+                y = 48.dpToPx()
+            }
+            try {
+                wm.addView(row, params)
+                recordingOverlayView = row
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun hideRecordingIndicator() {
+        mainHandler.post {
+            recordingOverlayView?.let {
+                try { windowManager.removeView(it) } catch (_: Exception) {}
+            }
+            recordingOverlayView = null
+        }
+    }
+
+    private fun showSensitiveInputWarning(onStop: () -> Unit, onSkip: () -> Unit, onContinue: () -> Unit) {
+        mainHandler.post {
+            val wm = windowManager
+            val container = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(20.dpToPx(), 16.dpToPx(), 20.dpToPx(), 16.dpToPx())
+                background = GradientDrawable().apply {
+                    setColor(Color.argb(240, 30, 30, 30))
+                    cornerRadius = 12.dpToPx().toFloat()
+                }
+            }
+
+            val msg = TextView(this).apply {
+                text = "Sensitive input detected. This recording may be shared with the community."
+                setTextColor(Color.WHITE)
+                textSize = 14f
+            }
+            container.addView(msg, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = 12.dpToPx() })
+
+            var overlayContainer: View? = null
+            fun dismiss() {
+                overlayContainer?.let { v ->
+                    try { wm.removeView(v) } catch (_: Exception) {}
+                }
+            }
+
+            fun makeBtn(label: String, color: Int, action: () -> Unit): Button {
+                return Button(this).apply {
+                    text = label
+                    setTextColor(Color.WHITE)
+                    setBackgroundColor(color)
+                    setOnClickListener { dismiss(); action() }
+                }
+            }
+
+            container.addView(makeBtn("Stop Recording", Color.rgb(180, 40, 40), onStop))
+            container.addView(makeBtn("Skip Keyboard Input (Recommended)", Color.rgb(40, 120, 40), onSkip),
+                LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    topMargin = 8.dpToPx()
+                })
+            container.addView(makeBtn("Continue Anyway", Color.rgb(80, 80, 80), onContinue),
+                LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    topMargin = 8.dpToPx()
+                })
+
+            val display = wm.currentWindowMetrics.bounds
+            val params = WindowManager.LayoutParams(
+                (display.width() * 0.85).toInt(),
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT,
+            ).apply {
+                gravity = Gravity.CENTER
+            }
+            try {
+                wm.addView(container, params)
+                overlayContainer = container
+            } catch (_: Exception) {
+                onSkip()
+            }
+        }
+    }
+
+    // ----- Gesture replay -----
+
+    fun replayGestureMap(eventsJson: String, screenWidth: Int, screenHeight: Int, onDone: (Boolean, String) -> Unit) {
+        val events = try { JSONArray(eventsJson) } catch (e: Exception) {
+            onDone(false, "Invalid events JSON: ${e.message}")
+            return
+        }
+        val metrics = windowManager.currentWindowMetrics.bounds
+        val w = metrics.width().toFloat()
+        val h = metrics.height().toFloat()
+        replayStep(events, 0, w, h, onDone)
+    }
+
+    private fun replayStep(events: JSONArray, index: Int, screenW: Float, screenH: Float, onDone: (Boolean, String) -> Unit) {
+        if (index >= events.length()) {
+            onDone(true, "Replay complete.")
+            return
+        }
+        val ev = events.optJSONObject(index) ?: run {
+            replayStep(events, index + 1, screenW, screenH, onDone)
+            return
+        }
+        val type = ev.optString("type", "")
+        val delayMs = ev.optLong("delay_ms", 200)
+        val waitForChange = ev.optBoolean("wait_for_screen_change", false)
+
+        fun next() {
+            if (waitForChange) {
+                val timeout = ev.optLong("max_wait_ms", 8000)
+                val timer = Handler(Looper.getMainLooper())
+                val timeoutRunnable = Runnable {
+                    screenChangeCallback = null
+                    replayStep(events, index + 1, screenW, screenH, onDone)
+                }
+                screenChangeCallback = {
+                    timer.removeCallbacks(timeoutRunnable)
+                    mainHandler.postDelayed({ replayStep(events, index + 1, screenW, screenH, onDone) }, 300)
+                }
+                timer.postDelayed(timeoutRunnable, timeout)
+            } else {
+                mainHandler.postDelayed({ replayStep(events, index + 1, screenW, screenH, onDone) }, delayMs)
+            }
+        }
+
+        when (type) {
+            "tap" -> {
+                val x = (ev.optDouble("fx") * screenW).toFloat()
+                val y = (ev.optDouble("fy") * screenH).toFloat()
+                tapByCoordinates(x, y)
+                next()
+            }
+            "swipe" -> {
+                val xStart = (ev.optDouble("fx_start") * screenW).toFloat()
+                val yStart = (ev.optDouble("fy_start") * screenH).toFloat()
+                val xEnd   = (ev.optDouble("fx_end")   * screenW).toFloat()
+                val yEnd   = (ev.optDouble("fy_end")   * screenH).toFloat()
+                val duration = ev.optLong("duration_ms", 300)
+                val path = GestureDescription.StrokeDescription(
+                    android.graphics.Path().apply { moveTo(xStart, yStart); lineTo(xEnd, yEnd) },
+                    0L, duration
+                )
+                dispatchGesture(GestureDescription.Builder().addStroke(path).build(), null, null)
+                next()
+            }
+            "fill_credential" -> {
+                val pkg = ev.optString("app_package", "")
+                val fieldType = ev.optString("field_type", "")
+                val credential = CredentialStore.get(applicationContext, pkg, fieldType)
+                if (credential != null) {
+                    typeText(credential, clearFirst = true)
+                    next()
+                } else {
+                    // No stored credential — trigger the IME/overlay flow and wait
+                    val deferred = CompletableDeferred<FillResult>()
+                    ImeServiceBridge.pendingFill = deferred
+                    MainScope().launch {
+                        try {
+                            val result = withTimeout(60_000) { deferred.await() }
+                            if (result.status == "filled") next()
+                            else onDone(false, "Credential fill cancelled: ${result.status}")
+                        } catch (_: Exception) {
+                            onDone(false, "Credential fill timed out.")
+                        }
+                    }
+                }
+                return
+            }
+            "wait" -> {
+                val ms = ev.optLong("duration_ms", 500)
+                mainHandler.postDelayed({ replayStep(events, index + 1, screenW, screenH, onDone) }, ms)
+                return
+            }
+            else -> replayStep(events, index + 1, screenW, screenH, onDone)
+        }
     }
 }

@@ -1,12 +1,14 @@
 import { memo, useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import { BookMarked, ChevronRight, Link2, Menu, PenSquare, Settings, Trash2, UserPlus, X } from 'lucide-react';
+import { BookMarked, ChevronRight, Link2, Menu, Pencil, PenSquare, Settings, Trash2, TriangleAlert, UserPlus, X } from 'lucide-react';
 import { useSession } from '../../hooks/useSession';
 import { GeneralTab } from '../settings/SettingsGeneralTab';
 import { ConnectTab } from '../settings/SettingsConnectTab';
 import { CreateFriendInline } from '../character/CreateFriendInline';
+import { EditFriendInline } from '../character/EditFriendInline';
 import { PersonaBuildNotice } from '../persona/PersonaBuildNotice';
+import { useAvailableModels } from '../../hooks/useAvailableModels';
 import type { SideMenuProps } from '../../types';
 import '../../style/SideMenu.css';
 import '../../style/SettingsScreen.css';
@@ -157,13 +159,18 @@ export const SideMenu = memo(function SideMenu({
   model, onModelChange, onOllamaEndpointChanged,
   isMobileOpen, onCloseSide,
   chatMode, onChatModeChange,
-  characters, activeCharacterId, onSelectCharacter, onCreateCharacter, onDeleteCharacter,
+  characters, activeCharacterId, onSelectCharacter, onCreateCharacter, onUpdateCharacter, onDeleteCharacter,
   socialMode, onSocialModeChange,
   activeMemoId, onSelectMemo,
   personaNotice, onPersonaNoticeClose,
 }: SideMenuProps) {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const { refresh: refreshModels, isModelMissing } = useAvailableModels();
+
+  // Refresh available models whenever settings is opened or mode switches.
+  useEffect(() => { refreshModels(); }, [view, chatMode, socialMode, refreshModels]);
 
   return (
     <div className="side-menu-panel">
@@ -284,14 +291,33 @@ export const SideMenu = memo(function SideMenu({
                       </span>
                     )}
                     <span className="side-menu-friend-name">{char.name}</span>
+                    {isModelMissing(char.model) && (
+                      <span title="Model does not exist or was modified. Please edit to an available model." style={{ display: 'flex', alignItems: 'center', marginLeft: 4, flexShrink: 0 }}>
+                        <TriangleAlert size={13} style={{ color: 'var(--color-error, #e53e3e)' }} />
+                      </span>
+                    )}
                   </button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); setConfirmId(char.id); }}
+                    onClick={(e) => { e.stopPropagation(); setEditId((prev) => prev === char.id ? null : char.id); setConfirmId(null); }}
+                    className="side-menu-delete-btn"
+                    title="Edit"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setConfirmId(char.id); setEditId(null); }}
                     className="side-menu-delete-btn"
                   >
                     <X size={16} />
                   </button>
                 </div>
+                {editId === char.id && (
+                  <EditFriendInline
+                    character={char}
+                    onSave={(data) => { onUpdateCharacter(char.id, data); setEditId(null); }}
+                    onCancel={() => setEditId(null)}
+                  />
+                )}
                 {confirmId === char.id && (
                   <div className="side-menu-confirm">
                     <span className="side-menu-confirm-text">Remove this friend?</span>

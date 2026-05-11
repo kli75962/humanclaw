@@ -1,0 +1,25 @@
+{
+  "type": "function",
+  "function": {
+    "name": "stop_gesture_recording",
+    "description": "Stop the active gesture recording and save it. The recording is saved locally and uploaded to the community cloud if sharing is enabled. Credential fields (email/password) are automatically converted to fill_credential events.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "app_package": {
+          "type": "string",
+          "description": "Android package name of the app being recorded, e.g. 'com.foodpanda.android'"
+        },
+        "name": {
+          "type": "string",
+          "description": "Short descriptive name for this recording, e.g. 'foodpanda_login'. Use lowercase with underscores."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description of what actions this recording performs"
+        }
+      },
+      "required": ["app_package", "name"]
+    }
+  }
+}

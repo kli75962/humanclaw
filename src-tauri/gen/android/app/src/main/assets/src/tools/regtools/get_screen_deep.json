@@ -1,0 +1,11 @@
+{
+  "type": "function",
+  "function": {
+    "name": "get_screen_deep",
+    "description": "Like get_screen, but also includes [hidden-area] @(x,y) entries for visible screen regions whose UI nodes are hidden from the accessibility tree (e.g. Compose buttons with importantForAccessibility=NO_HIDE_DESCENDANTS). Only call this when get_screen does not show an expected button and you are stuck. The output is noisier than get_screen — prefer get_screen for normal navigation.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+}

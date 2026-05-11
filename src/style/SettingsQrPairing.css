@@ -1,3 +1,6 @@
+/* Camera scan mode: the overlay is portalled to document.body;
+   #root is hidden via JS so nothing bleeds through the transparent WebView. */
+
 .qr-view {
   display: flex;
   flex-direction: column;
@@ -176,6 +179,55 @@
   font-size: 12px;
   color: #6B7280;
   text-align: center;
+}
+
+/* ── Camera scanning overlay ── */
+.scan-view--active {
+  background: transparent !important;
+}
+
+.scan-camera-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.scan-camera-back {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: all;
+  backdrop-filter: blur(4px);
+}
+.scan-camera-back:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.scan-camera-hint {
+  position: absolute;
+  bottom: 80px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.45);
+  padding: 8px 18px;
+  border-radius: 20px;
+  backdrop-filter: blur(4px);
+  pointer-events: none;
 }
 
 /* ── Wallpaper transparency effects for SettingsQrPairing ── */

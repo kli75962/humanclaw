@@ -23,19 +23,54 @@ fn is_phone_control_tool(name: &str) -> bool {
             | "launch_app"
             | "get_screen"
             | "get_screen_deep"
+            | "type_credential"
+            | "commit_suggestion"
+            | "show_login_method_picker"
+            | "fill_credential_field"
     )
 }
 
 async fn execute_phone_control_tool(app: &AppHandle, name: &str, args: &Value) -> ToolResult {
     #[cfg(target_os = "android")]
-    {
-        call_kotlin_tool(app, name, args).await
-    }
+    let mut result = call_kotlin_tool(app, name, args).await;
 
     #[cfg(not(target_os = "android"))]
-    {
-        forward_to_android(app, name, args).await
+    let mut result = forward_to_android(app, name, args).await;
+
+    if matches!(name, "get_screen" | "get_screen_deep") {
+        append_tool_log(app, name, &result.output);
+        if is_screen_unreadable(&result.output) {
+            result.output.push_str(
+                "\n\n[GESTURE_MAP_HINT] Screen content is minimal — app may use FLAG_SECURE or \
+                 React Native rendering. Use search_gesture_maps(app_package=\"<pkg>\") to find \
+                 recorded flows, or start_gesture_recording() to create one."
+            );
+        }
     }
+
+    result
+}
+
+fn is_screen_unreadable(output: &str) -> bool {
+    output == "[screen not accessible]"
+        || output.chars().filter(|c| !c.is_whitespace()).count() < 120
+}
+
+pub fn append_tool_log(app: &AppHandle, tool_name: &str, content: &str) {
+    let Ok(data_dir) = app.path().app_data_dir() else { return };
+    let log_dir = data_dir.join("logs");
+    let _ = std::fs::create_dir_all(&log_dir);
+    let log_path = log_dir.join("screen_log.txt");
+
+    use std::io::Write;
+    let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) else { return };
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    let _ = writeln!(file, "\n[{now}] {tool_name}\n{content}\n---");
 }
 
 #[cfg(not(target_os = "android"))]
@@ -185,8 +220,38 @@ pub async fn execute_tool_with_context(
                 Err(e) => ToolResult::err("create_skill", "EXECUTION_FAILED", format!("Could not resolve app data directory: {e}")),
             }
         }
+        "get_installed_apps" => {
+            #[cfg(target_os = "android")]
+            {
+                let apps = crate::device::phone::get_installed_apps(app).await;
+                let result = if apps.is_empty() {
+                    ToolResult::ok(name, "No user-installed apps found.")
+                } else {
+                    let list = apps.iter()
+                        .filter(|a| !a.is_system)
+                        .map(|a| a.prompt_line())
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    if list.is_empty() {
+                        ToolResult::ok(name, "No user-installed apps found.")
+                    } else {
+                        ToolResult::ok(name, list)
+                    }
+                };
+                append_tool_log(app, name, &result.output);
+                result
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                let result = forward_to_android(app, name, args).await;
+                append_tool_log(app, name, &result.output);
+                result
+            }
+        }
         _ if is_phone_control_tool(name) => execute_phone_control_tool(app, name, args).await,
         _ if super::pc::is_pc_control_tool(name) => super::pc::execute_pc_tool(app, name, args).await,
+        _ if super::gesture_map::is_gesture_map_tool(name) =>
+            super::gesture_map::execute_gesture_map_tool(app, name, args).await,
         _ => ToolResult::err(name, "NOT_FOUND", format!("Unknown tool: {name}")),
     }
 }

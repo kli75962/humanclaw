@@ -1,0 +1,11 @@
+{
+  "type": "function",
+  "function": {
+    "name": "get_screen",
+    "description": "Get the current screen content as a structured text summary from the Android Accessibility Service. Returns visible UI element labels, texts, and descriptions. Interactive elements ([button], [input], [on], [off]) also include screen coordinates as @(x,y) — use these coordinates with tap(x, y) to disambiguate when multiple elements share the same label (e.g. two 'Install' buttons). Call this to observe the current state before or after an action.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+}

@@ -30,6 +30,7 @@ interface AppLayoutProps {
   activeCharacterId: string | null;
   selectCharacter: (id: string) => void;
   addCharacter: (c: Omit<Character, 'id' | 'createdAt'>) => Promise<Character>;
+  updateCharacter: (id: string, data: Omit<Character, 'id' | 'createdAt'>) => void;
   deleteCharacter: (id: string) => void;
   handleSocialModeChange: (enabled: boolean) => void;
   activeMemoId: string | null;
@@ -48,7 +49,7 @@ export function AppLayout(props: AppLayoutProps) {
     // SideMenu specifics
     sideView, handleSwitchView, startNewChat, visibleChatMetas, activeChatId, switchChat, deleteChat,
     model, handleModelChange, handleOllamaEndpointChanged, characters, activeCharacterId, selectCharacter,
-    addCharacter, deleteCharacter, handleSocialModeChange, activeMemoId, handleSelectMemo, personaNotice, onPersonaNoticeClose
+    addCharacter, updateCharacter, deleteCharacter, handleSocialModeChange, activeMemoId, handleSelectMemo, personaNotice, onPersonaNoticeClose
   } = props;
 
   return (
@@ -106,7 +107,7 @@ export function AppLayout(props: AppLayoutProps) {
         <SideMenu
           view={sideView}
           onSwitchView={handleSwitchView}
-          onNewChat={startNewChat}
+          onNewChat={() => { startNewChat(); setSideOpen(false); }}
           chats={visibleChatMetas}
           activeChatId={activeChatId}
           onSelectChat={switchChat}
@@ -122,6 +123,7 @@ export function AppLayout(props: AppLayoutProps) {
           activeCharacterId={activeCharacterId}
           onSelectCharacter={selectCharacter}
           onCreateCharacter={addCharacter}
+          onUpdateCharacter={updateCharacter}
           onDeleteCharacter={deleteCharacter}
           socialMode={socialMode}
           onSocialModeChange={handleSocialModeChange}

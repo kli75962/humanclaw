@@ -1,0 +1,35 @@
+{
+  "type": "function",
+  "function": {
+    "name": "memory",
+    "description": "Read and maintain long-term memory stored in /.memory files.\n\nMemory files:\n- /memories/core.md       — Core facts about the user (language, name, preferences). Injected into every prompt. Keep it short.\n- /memories/conversations.jsonl — Last 50 conversation summaries (auto-saved). Search here for past context.\n\nWhen to save to core.md (long-term):\n- User states a personal preference, name, or recurring goal\n- You learn something stable about the user that should always be remembered\n- User explicitly asks you to remember something\n\nWhen NOT to save to core.md:\n- One-off tasks (install an app, check weather) — these are already in conversations.jsonl\n- Temporary facts that won't matter next session\n\nRules:\n- If the user's request might depend on preferences or history, search conversations.jsonl first.\n- Keep memory operations invisible in user-facing replies.\n- Keep core.md short and focused (stable facts only).",
+    "parameters": {
+      "type": "object",
+      "required": ["command"],
+      "properties": {
+        "command": {
+          "type": "string", 
+          "enum": ["view", "create", "update", "search"],
+          "description": "Memory action: view to read a file, create to write a new file, update to change an existing file, search to find relevant lines across files."
+        },
+        "path": {
+          "type": "string",
+          "description": "Memory file path. Required for view, create, update. One of: /memories/core.md, /memories/conversations.jsonl"
+        },
+        "content": {
+          "type": "string",
+          "description": "Text to write. Required for create and update commands."
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["append", "overwrite"],
+          "description": "Write mode for update: 'append' adds to the end of existing content, 'overwrite' replaces the entire file. Defaults to overwrite."
+        },
+        "query": {
+          "type": "string",
+          "description": "Search keywords for the search command. Use 1-4 focused words."
+        }
+      }
+    }
+  }
+}

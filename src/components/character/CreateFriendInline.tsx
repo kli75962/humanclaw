@@ -8,16 +8,12 @@ import { useLive2DModels } from '../../hooks/useLive2DModels';
 import { Live2DPicker } from './Live2DPicker';
 import '../../style/SettingsScreen.css';
 
+import { CLAUDE_MODELS } from '../../lib/models';
+
 const PROVIDER_KEY = 'phoneclaw_provider';
 const CLAUDE_MODEL_KEY = 'phoneclaw_claude_model';
 
 type Provider = 'claude' | 'ollama';
-
-const CLAUDE_MODELS = [
-  { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
-  { id: 'claude-sonnet-4-6',         label: 'Sonnet 4.6' },
-  { id: 'claude-opus-4-6',           label: 'Opus 4.6' },
-];
 
 const FALLBACK_PERSONAS = [
   'persona_default',

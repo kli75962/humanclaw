@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Check, ChevronDown, ChevronRight, Cpu, Image, LayoutGrid, Mic, Monitor, Palette, Plus, RefreshCw, User } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Cpu, Image, LayoutGrid, Mic, Monitor, Palette, Plus, RefreshCw, TriangleAlert, User } from 'lucide-react';
 import type { PcPermissions, PermissionState, SessionConfig } from '../../types';
 import { Card, CardRow, SectionFooter, SectionHeader, SegmentControl } from '../settings/SettingsUI';
 import { PersonaWizard } from '../persona/PersonaWizard';
@@ -24,11 +24,7 @@ const FALLBACK_PERSONAS = [
   'persona_concise',
 ];
 
-const CLAUDE_MODELS = [
-  { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
-  { id: 'claude-sonnet-4-6',         label: 'Sonnet 4.6' },
-  { id: 'claude-opus-4-6',           label: 'Opus 4.6' },
-];
+import { CLAUDE_MODELS } from '../../lib/models';
 
 const THEMES: { value: Theme; label: string; colors: string[] }[] = [
   { value: 'dark',    label: 'Dark',    colors: ['#131314', '#1e1f20', '#e3e3e3'] },
@@ -115,7 +111,6 @@ function ModelConfigPanel({
     try {
       const models = await invoke<string[]>('list_models_at', { host, port });
       setOllamaModels(models);
-      if (models.length > 0 && !models.includes(ollamaModel)) setOllamaModel(models[0]);
     } catch {
       // silently ignore — UI shows "No model detected"
     } finally {
@@ -265,6 +260,14 @@ function ModelConfigPanel({
                 className={`settings-model-trigger${isModelMenuOpen ? ' settings-model-trigger-open' : ''}`}
               >
                 <span className="settings-model-trigger-label">{ollamaModel}</span>
+                {!ollamaModels.includes(ollamaModel) && (
+                  <span
+                    title="Model does not exist or was modified. Please edit to an available model."
+                    style={{ display: 'flex', alignItems: 'center', flexShrink: 0, marginRight: 4 }}
+                  >
+                    <TriangleAlert size={15} style={{ color: 'var(--color-error, #e53e3e)' }} />
+                  </span>
+                )}
                 <ChevronDown size={16} className={`settings-model-trigger-chevron${isModelMenuOpen ? ' settings-model-trigger-chevron-open' : ''}`} />
               </button>
               {isModelMenuOpen && (

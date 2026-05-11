@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -11,13 +12,21 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
+import android.view.View
+import android.webkit.WebView
 import androidx.core.content.ContextCompat
 import app.tauri.annotation.Command
+import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSArray
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -27,6 +36,44 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 @TauriPlugin
 class PhoneControlPlugin(private val activity: Activity) : Plugin(activity) {
+
+    private var webView: WebView? = null
+
+    override fun load(webView: WebView) {
+        super.load(webView)
+        this.webView = webView
+    }
+
+    // Switch WebView rendering mode for camera scan overlay.
+    // Software layer: allows transparency to show the CameraX SurfaceView behind it.
+    // Hardware layer: default, better performance for normal UI.
+    @Command
+    fun setCameraScanMode(invoke: Invoke) {
+        val enabled = invoke.parseArgs(CameraScanModeArgs::class.java).enabled
+        activity.runOnUiThread {
+            webView?.let { wv ->
+                if (enabled) {
+                    wv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                    wv.setBackgroundColor(Color.TRANSPARENT)
+                } else {
+                    wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                    wv.setBackgroundColor(Color.BLACK)
+                }
+            }
+            // Also clear the Activity window background so the CameraX preview
+            // surface behind the WebView is not blocked by the window's own drawable.
+            if (enabled) {
+                activity.window.setBackgroundDrawable(
+                    android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)
+                )
+            } else {
+                activity.window.setBackgroundDrawable(
+                    android.graphics.drawable.ColorDrawable(Color.BLACK)
+                )
+            }
+            invoke.resolve()
+        }
+    }
 
     companion object {
         /**
@@ -289,11 +336,172 @@ class PhoneControlPlugin(private val activity: Activity) : Plugin(activity) {
                         if (success) "App launched." else "Could not launch $pkg.")
                 }
 
+                "type_credential" -> {
+                    val pkg = args.optString("app_package", "")
+                    val fieldType = args.optString("field_type", "")
+                    if (pkg.isBlank() || fieldType.isBlank()) {
+                        resolveToolResult(invoke, toolName, false, "Missing app_package or field_type")
+                        return
+                    }
+                    val success = service.typeCredential(pkg, fieldType)
+                    resolveToolResult(invoke, toolName, success,
+                        if (success) "Credential typed successfully."
+                        else "No credential stored for $pkg/$fieldType.")
+                }
+
+                "commit_suggestion" -> {
+                    val index = args.optInt("index", -1)
+                    if (index < 0) {
+                        resolveToolResult(invoke, toolName, false, "Missing or invalid index")
+                        return
+                    }
+                    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+                        resolveToolResult(invoke, toolName, false, "Inline suggestions require Android 11+")
+                        return
+                    }
+                    val success = service.commitSuggestion(index)
+                    resolveToolResult(invoke, toolName, success,
+                        if (success) "Suggestion committed." else "No IME instance or suggestion available.")
+                }
+
+                "show_login_method_picker" -> {
+                    val methodsArr = args.optJSONArray("methods")
+                    if (methodsArr == null || methodsArr.length() == 0) {
+                        resolveToolResult(invoke, toolName, false, "Missing or empty methods array")
+                        return
+                    }
+                    val methods = (0 until methodsArr.length()).map { methodsArr.getString(it) }
+                    val deferred = CompletableDeferred<String>()
+                    MainScope().launch {
+                        service.showLoginMethodPicker(
+                            methods = methods,
+                            onSelected = { label -> deferred.complete(label) },
+                            onCancelled = { deferred.cancel() }
+                        )
+                        try {
+                            val selected = withTimeout(60_000) { deferred.await() }
+                            resolveToolResult(invoke, toolName, true,
+                                """{"selected_method":"${selected.replace("\"", "\\\"")}"}""")
+                        } catch (_: TimeoutCancellationException) {
+                            service.hideAccountPicker()
+                            resolveToolResult(invoke, toolName, false, "Timed out waiting for method selection.")
+                        } catch (_: Exception) {
+                            resolveToolResult(invoke, toolName, false, "User cancelled login method selection.")
+                        }
+                    }
+                    return
+                }
+
+                "fill_credential_field" -> {
+                    val pkg = args.optString("app_package", "")
+                    val fieldType = args.optString("field_type", "")
+                    if (pkg.isBlank() || fieldType.isBlank()) {
+                        resolveToolResult(invoke, toolName, false, "Missing app_package or field_type")
+                        return
+                    }
+
+                    // 1. Try stored credential first — no overlay, no round-trip
+                    val stored = CredentialStore.get(activity.applicationContext, pkg, fieldType)
+                    if (stored != null) {
+                        val success = service.typeText(stored, clearFirst = true)
+                        resolveToolResult(invoke, toolName, success,
+                            if (success) "Credential filled from secure storage."
+                            else "Failed to type stored credential into field.")
+                        return
+                    }
+
+                    // 2. No stored credential — set up deferred for IME/overlay flow
+                    val deferred = CompletableDeferred<FillResult>()
+                    ImeServiceBridge.pendingFill = deferred
+
+                    MainScope().launch {
+                        try {
+                            val result = withTimeout(60_000) { deferred.await() }
+                            when (result.status) {
+                                "filled" -> resolveToolResult(invoke, toolName, true, "Field filled.")
+                                "forgot" -> resolveToolResult(invoke, toolName, false,
+                                    "status:forgot — user does not remember credentials. Inform user and stop.")
+                                "register" -> resolveToolResult(invoke, toolName, false,
+                                    "status:register — user wants to create a new account. Navigate to registration.")
+                                "voice" -> resolveToolResult(invoke, toolName, true,
+                                    """{"status":"voice_selection","account_hint":"${result.hint.replace("\"","\\\"")}","available_accounts":${result.accountsJson}}""")
+                                else -> resolveToolResult(invoke, toolName, false, "User cancelled credential selection.")
+                            }
+                        } catch (_: TimeoutCancellationException) {
+                            service.hideAccountPicker()
+                            service.hideCredentialAssist()
+                            ImeServiceBridge.pendingFill = null
+                            resolveToolResult(invoke, toolName, false, "Timed out waiting for credential input.")
+                        } catch (_: Exception) {
+                            resolveToolResult(invoke, toolName, false, "Credential selection cancelled.")
+                        }
+                    }
+                    return
+                }
+
+                "start_gesture_recording" -> {
+                    val sharing = args.optBoolean("is_sharing_mode", true)
+                    service.startRecording(sharing)
+                    resolveToolResult(invoke, toolName, true, "Recording started. REC indicator is now visible on screen.")
+                }
+
+                "stop_gesture_recording" -> {
+                    val json = service.stopRecording()
+                    resolveToolResult(invoke, toolName, true, json)
+                }
+
+                "replay_gesture_map" -> {
+                    val eventsJson = args.optString("events_json", "[]")
+                    val screenWidth = args.optInt("screen_width", 1080)
+                    val screenHeight = args.optInt("screen_height", 2400)
+                    service.replayGestureMap(eventsJson, screenWidth, screenHeight) { success, msg ->
+                        resolveToolResult(invoke, toolName, success, msg)
+                    }
+                    return
+                }
+
+                "get_installed_apps" -> {
+                    val pm = activity.packageManager
+                    val installedApps = pm.getInstalledApplications(0)
+                    val arr = org.json.JSONArray()
+                    for (appInfo in installedApps) {
+                        val isSystem = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+                        arr.put(org.json.JSONObject().apply {
+                            put("name", pm.getApplicationLabel(appInfo).toString())
+                            put("package_name", appInfo.packageName)
+                            put("is_system", isSystem)
+                        })
+                    }
+                    resolveToolResult(invoke, toolName, true, arr.toString())
+                }
+
                 else -> resolveToolResult(invoke, toolName, false, "Unknown tool: $toolName")
             }
         } catch (e: Exception) {
             resolveToolResult(invoke, toolName, false, "Exception: ${e.message}")
         }
+    }
+
+    @Command
+    fun startGestureRecordingCmd(invoke: Invoke) {
+        val service = PhoneControlService.instance
+        if (service == null) {
+            invoke.reject("Accessibility service not running.")
+            return
+        }
+        service.startRecording(sharing = false)
+        invoke.resolve(JSObject().apply { put("success", true) })
+    }
+
+    @Command
+    fun stopGestureRecordingCmd(invoke: Invoke) {
+        val service = PhoneControlService.instance
+        if (service == null) {
+            invoke.reject("Accessibility service not running.")
+            return
+        }
+        val json = service.stopRecording()
+        invoke.resolve(JSObject().apply { put("result", json) })
     }
 
     // ----- Overlay commands — delegate to PhoneControlService -----
@@ -364,4 +572,9 @@ class PhoneControlPlugin(private val activity: Activity) : Plugin(activity) {
         }
         invoke.resolve(obj)
     }
+}
+
+@InvokeArg
+class CameraScanModeArgs {
+    var enabled: Boolean = false
 }

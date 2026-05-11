@@ -1,0 +1,11 @@
+{
+  "type": "function",
+  "function": {
+    "name": "start_gesture_recording",
+    "description": "Start recording user touch actions (taps and swipes) on the phone. A REC indicator appears on the phone screen. Ask the user to perform the actions you want to record. Call stop_gesture_recording when done.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+}

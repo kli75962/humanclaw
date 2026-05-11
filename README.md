@@ -1,11 +1,3 @@
-# Tauri + React + Typescript
-
-This template should help get you started developing with Tauri, React and Typescript in Vite.
-
-## Recommended IDE Setup
-
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
-
 Template created! To get started run:
   cd phoneclaw
   bun install
@@ -26,3 +18,9 @@ build android:
   bun run tauri android build
   
   src-tauri/gen/android/app/build/outputs/apk/release/
+
+find device screen log:
+  cat ~/.local/share/com.xxx.phoneclaw/logs/screen_log.txt
+
+backup1:
+  get installed app, no overlay when pc control phone, memory logic

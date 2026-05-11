@@ -1,0 +1,18 @@
+{
+  "type": "function",
+  "function": {
+    "name": "press_key",
+    "description": "Press a hardware or system key on the device.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "The key to press.",
+          "enum": ["home", "back", "recents", "enter", "volume_up", "volume_down", "power"]
+        }
+      },
+      "required": ["key"]
+    }
+  }
+}

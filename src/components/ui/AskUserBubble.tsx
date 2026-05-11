@@ -24,9 +24,10 @@ export function AskUserBubble({ id, questions, onDone }: AskUserBubbleProps) {
   const current = questions[currentIdx];
   if (!current) return null;
 
-  // Button options = all except last; last becomes the text input hint
-  const buttonOptions = current.options.slice(0, -1);
-  const inputPlaceholder = current.options[current.options.length - 1] ?? 'Type your answer...';
+  // If options are provided, all render as buttons; text input only for free-text questions
+  const hasPredefinedOptions = current.options.length > 0;
+  const buttonOptions = hasPredefinedOptions ? current.options : [];
+  const inputPlaceholder = 'Type your answer...';
 
   const isAnswered = (idx: number) => answers[idx] !== undefined;
   const currentAnswered = isAnswered(currentIdx);
@@ -137,8 +138,8 @@ export function AskUserBubble({ id, questions, onDone }: AskUserBubbleProps) {
         </div>
       )}
 
-      {/* Text input (always shown, last option as placeholder) */}
-      <div className="ask-user-input-row">
+      {/* Text input — only for free-text questions (no predefined options) */}
+      {!hasPredefinedOptions && <div className="ask-user-input-row">
         <input
           ref={inputRef}
           className="ask-user-input"
@@ -156,7 +157,7 @@ export function AskUserBubble({ id, questions, onDone }: AskUserBubbleProps) {
         >
           <Send size={15} />
         </button>
-      </div>
+      </div>}
 
       {/* Current answer preview */}
       {answers[currentIdx] !== undefined && (
@@ -165,8 +166,8 @@ export function AskUserBubble({ id, questions, onDone }: AskUserBubbleProps) {
         </div>
       )}
 
-      {/* Submit button when all answered and last question uses text input flow */}
-      {allAnswered && (
+      {/* Submit button when all answered and multi-question with free-text */}
+      {allAnswered && total > 1 && (
         <button className="ask-user-submit-btn" onClick={() => submitAll(answers)}>
           Submit all answers
         </button>

@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "type_text",
+    "description": "Type text into the currently focused input field. Call tap() on the input field first to focus it.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "The text to type into the focused field"
+        },
+        "clear_first": {
+          "type": "boolean",
+          "description": "If true, clears the field before typing. Defaults to false."
+        }
+      },
+      "required": ["text"]
+    }
+  }
+}

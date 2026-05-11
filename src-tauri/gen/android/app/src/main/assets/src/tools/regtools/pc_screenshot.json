@@ -1,0 +1,13 @@
+{
+  "type": "function",
+  "function": {
+    "name": "pc_screenshot",
+    "description": "Capture a screenshot of a PC display for visual verification only. Do NOT use this as the primary way to control the PC — use system_run or pc_ui_elements + pc_activate instead. Reserve pc_screenshot for: confirming a task completed visually, reading content that has no accessible text, or diagnosing unexpected UI states.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "display": { "type": "number", "description": "Display index to capture (default: 0 = primary monitor)." }
+      }
+    }
+  }
+}

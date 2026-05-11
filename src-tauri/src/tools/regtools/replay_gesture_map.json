@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "replay_gesture_map",
+    "description": "Replay a recorded gesture map by name for an app. Coordinates are resolution-normalized and scaled to the current screen. Steps with wait_for_screen_change will automatically wait for a screen transition event before continuing. fill_credential steps automatically call fill_credential_field.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "app_package": {
+          "type": "string",
+          "description": "Android package name, e.g. 'com.foodpanda.android'"
+        },
+        "name": {
+          "type": "string",
+          "description": "Gesture map name returned by search_gesture_maps, e.g. 'foodpanda_login'"
+        }
+      },
+      "required": ["app_package", "name"]
+    }
+  }
+}

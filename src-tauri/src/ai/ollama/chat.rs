@@ -107,6 +107,16 @@ async fn stream_once(
         }
     } // end loop
 
+    // Flush any tail withheld during streaming (last MEMORY_MARKER.len() chars held back).
+    let visible_end = accumulated_content.find(MEMORY_MARKER).unwrap_or(accumulated_content.len());
+    if visible_end > emitted_up_to {
+        app.emit("ollama-stream", StreamPayload {
+            content: accumulated_content[emitted_up_to..visible_end].to_string(),
+            done: false,
+            brief: None,
+        }).map_err(|e| e.to_string())?;
+    }
+
     Ok(OllamaMessage {
         role: final_role,
         content: accumulated_content,
@@ -140,11 +150,10 @@ pub async fn chat_ollama(
     let tool_schemas = load_tool_schemas(&app);
     bootstrap_memory(&app);
 
-    // Base prompt without memory (reused for rounds after the first).
-    let base_prompt = build_base_prompt(&app, character.as_ref()).await;
-
     // ── Tiered text history compression ──────────────────────────────────────
     let msgs_no_sys: Vec<_> = messages.into_iter().filter(|m| m.role != "system").collect();
+
+    let base_prompt = build_base_prompt(&app, character.as_ref()).await;
     let compress_entries: Vec<CompressMsg> = msgs_no_sys
         .iter()
         .map(|m| CompressMsg {

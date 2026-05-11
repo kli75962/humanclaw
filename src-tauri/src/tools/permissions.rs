@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::oneshot;
+
+#[cfg(not(target_os = "android"))]
+use tauri::{AppHandle, Emitter, Manager};
+#[cfg(not(target_os = "android"))]
 use uuid::Uuid;
 
 /// Holds pending "ask before use" permission requests.
@@ -12,6 +15,7 @@ pub struct PendingPermissions(pub Mutex<HashMap<String, oneshot::Sender<bool>>>)
 
 /// Emit a `pc-permission-request` event and wait for the user's response.
 /// Returns `true` if the user allowed the action, `false` otherwise.
+#[cfg(not(target_os = "android"))]
 pub async fn request_permission(
     app: &AppHandle,
     tool_name: &str,

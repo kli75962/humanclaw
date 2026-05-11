@@ -118,6 +118,7 @@ export interface SideMenuProps {
   activeCharacterId: string | null;
   onSelectCharacter: (id: string) => void;
   onCreateCharacter: (data: Omit<Character, 'id' | 'createdAt'>) => void;
+  onUpdateCharacter: (id: string, data: Omit<Character, 'id' | 'createdAt'>) => void;
   onDeleteCharacter: (id: string) => void;
   socialMode: boolean;
   onSocialModeChange: (v: boolean) => void;

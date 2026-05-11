@@ -21,7 +21,8 @@ use device::secrets::{store_secret, load_secret};
 use session::{add_paired_device, get_session, list_personas, remove_paired_device, set_device_label, set_ollama_endpoint, set_pc_permissions, set_persona, set_session_hash_key};
 use skills::{create_persona_background, get_persona_build_status, clear_persona_build_status};
 use tools::{respond_pc_permission, PendingPermissions, respond_ask_user, PendingAskUserRequests};
-use device::phone::{check_accessibility_enabled, open_accessibility_settings};
+use tools::gesture_map::{list_gesture_maps_cmd, delete_gesture_map_cmd, get_gesture_share_setting, save_gesture_share_setting};
+use device::phone::{check_accessibility_enabled, open_accessibility_settings, set_camera_scan_mode};
 use network::{check_peer_online, discover_and_pair, get_all_local_addresses, get_all_peer_status, get_local_address, get_qr_pair_svg, pair_from_qr, send_to_device, start_bridge_server, start_peer_monitor};
 use network::delivery::flush_all_pending;
 use social::queue::commands::{flush_queue, get_pending_queue, get_queue, queue_command};
@@ -311,6 +312,7 @@ pub fn run() {
             // phone
             check_accessibility_enabled,
             open_accessibility_settings,
+            set_camera_scan_mode,
             // persona creation
             create_persona_background,
             get_persona_build_status,
@@ -334,6 +336,11 @@ pub fn run() {
             send_live2d_frame,
             show_live2d_overlay,
             hide_live2d_overlay,
+            // gesture maps
+            list_gesture_maps_cmd,
+            delete_gesture_map_cmd,
+            get_gesture_share_setting,
+            save_gesture_share_setting,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

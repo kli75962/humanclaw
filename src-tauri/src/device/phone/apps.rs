@@ -18,27 +18,39 @@ impl InstalledApp {
 }
 
 /// Fetch all installed apps.
-/// On Android this calls the Kotlin PhoneControlPlugin; on desktop returns an empty list.
-pub async fn get_installed_apps(_app: &AppHandle) -> Vec<InstalledApp> {
+/// On Android this calls the Kotlin PhoneControlPlugin directly.
+/// On desktop it forwards the request to the paired Android device via the bridge.
+pub async fn get_installed_apps(app: &AppHandle) -> Vec<InstalledApp> {
     #[cfg(target_os = "android")]
     {
-        fetch_from_plugin(_app).await.unwrap_or_default()
+        fetch_from_plugin(app).await.unwrap_or_default()
     }
 
     #[cfg(not(target_os = "android"))]
     {
-        vec![]
+        fetch_from_bridge(app).await.unwrap_or_default()
     }
+}
+
+#[cfg(not(target_os = "android"))]
+async fn fetch_from_bridge(_app: &AppHandle) -> Result<Vec<InstalledApp>, String> {
+    // App list is only available on-device; desktop sessions have no access.
+    Ok(vec![])
 }
 
 #[cfg(target_os = "android")]
 async fn fetch_from_plugin(app: &AppHandle) -> Result<Vec<InstalledApp>, String> {
     use serde_json::json;
     use crate::device::phone::plugin::PhoneControlHandle;
+
+    #[derive(serde::Deserialize)]
+    struct AppsResp { apps: Vec<InstalledApp> }
+
     let handle = app.state::<PhoneControlHandle<tauri::Wry>>();
     handle
         .0
-        .run_mobile_plugin::<Vec<InstalledApp>>("getInstalledApps", json!({}))
+        .run_mobile_plugin::<AppsResp>("getInstalledApps", json!({}))
+        .map(|r| r.apps)
         .map_err(|e| e.to_string())
 }
 
@@ -99,4 +111,21 @@ async fn open_settings_from_plugin(app: &AppHandle) -> Result<(), String> {
         .run_mobile_plugin::<Resp>("openAccessibilitySettings", json!({}))
         .map(|_| ())
         .map_err(|e| e.to_string())
+}
+
+/// Switch the WebView between software (transparent, for camera overlay) and
+/// hardware (default) rendering modes.  Must be called before/after scan().
+#[tauri::command]
+pub async fn set_camera_scan_mode(app: AppHandle, enabled: bool) {
+    #[cfg(target_os = "android")]
+    {
+        use serde_json::json;
+        use crate::device::phone::plugin::PhoneControlHandle;
+        #[derive(serde::Deserialize)]
+        struct Resp {}
+        let handle = app.state::<PhoneControlHandle<tauri::Wry>>();
+        let _ = handle.0.run_mobile_plugin::<Resp>("setCameraScanMode", json!({ "enabled": enabled }));
+    }
+    #[cfg(not(target_os = "android"))]
+    { let _ = (app, enabled); }
 }

@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "send_message",
+    "description": "Send a visible message to the user in the chat interface. Use this to communicate progress updates, questions, results, or any text at any point during your work — not just at the end. You can call this multiple times in one session.",
+    "parameters": {
+      "type": "object",
+      "required": ["content"],
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "The message text to display to the user."
+        }
+      }
+    }
+  }
+}

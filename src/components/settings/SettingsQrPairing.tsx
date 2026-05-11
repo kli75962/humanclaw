@@ -1,7 +1,8 @@
+import { createPortal } from 'react-dom';
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Camera, ImagePlus, QrCode } from 'lucide-react';
-import { scan, Format } from '@tauri-apps/plugin-barcode-scanner';
+import { ArrowLeft, Camera, ImagePlus, QrCode } from 'lucide-react';
+import { scan, Format, checkPermissions, requestPermissions, cancel, openAppSettings, type PermissionState } from '@tauri-apps/plugin-barcode-scanner';
 import jsQR from 'jsqr';
 import '../../style/SettingsQrPairing.css';
 
@@ -90,6 +91,32 @@ export function ScanView({ onPaired }: { onPaired: () => void; isAndroid: boolea
   const [status, setStatus] = useState<'idle' | 'scanning' | 'pairing' | 'done' | 'error'>('idle');
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scanningRef = useRef(false);
+
+  function hideAppRoot() {
+    const root = document.getElementById('root');
+    if (root) root.style.display = 'none';
+    document.body.style.background = 'transparent';
+    document.documentElement.style.background = 'transparent';
+  }
+
+  function showAppRoot() {
+    const root = document.getElementById('root');
+    if (root) root.style.display = '';
+    document.body.style.background = '';
+    document.documentElement.style.background = '';
+  }
+
+  // Clean up camera if component unmounts while scanning
+  useEffect(() => {
+    return () => {
+      if (scanningRef.current) {
+        cancel().catch(() => {});
+      }
+      showAppRoot();
+      invoke('set_camera_scan_mode', { enabled: false }).catch(() => {});
+    };
+  }, []);
 
   async function pairWithPayload(raw: string) {
     let parsed: { addresses?: string[]; address?: string; pairing_token?: string; hash_key?: string };
@@ -130,12 +157,39 @@ export function ScanView({ onPaired }: { onPaired: () => void; isAndroid: boolea
   }
 
   async function handleScan() {
-    setStatus('scanning');
     setError('');
+
+    // 1. Check current permission state
+    const permCheck = await checkPermissions().catch((): PermissionState => 'prompt');
+
+    // 2. If not granted, request it
+    if (permCheck !== 'granted') {
+      const permReq = await requestPermissions().catch((): PermissionState => 'denied');
+      if (permReq !== 'granted') {
+        // Permanently denied — OS won't show dialog, send user to Settings
+        setError('Camera permission denied. Please enable it in app Settings.');
+        setStatus('error');
+        await openAppSettings().catch(() => {});
+        return;
+      }
+    }
+
+    // Hide the entire app root so nothing bleeds through the transparent WebView.
+    // The camera overlay is rendered via portal directly on document.body.
+    hideAppRoot();
+    setStatus('scanning');
+    scanningRef.current = true;
+    await invoke('set_camera_scan_mode', { enabled: true }).catch(() => {});
     try {
       const result = await scan({ formats: [Format.QRCode], windowed: true });
+      scanningRef.current = false;
+      showAppRoot();
+      await invoke('set_camera_scan_mode', { enabled: false }).catch(() => {});
       await pairWithPayload(result.content);
     } catch (e) {
+      scanningRef.current = false;
+      showAppRoot();
+      await invoke('set_camera_scan_mode', { enabled: false }).catch(() => {});
       const msg = e instanceof Error ? e.message : typeof e === 'object' ? JSON.stringify(e) : String(e);
       const normalized = msg.toLowerCase();
       if (normalized.includes('cancel') || normalized.includes('closed') || normalized.includes('dismiss')) {
@@ -148,6 +202,25 @@ export function ScanView({ onPaired }: { onPaired: () => void; isAndroid: boolea
     }
   }
 
+  async function handleCancelScan() {
+    scanningRef.current = false;
+    await cancel().catch(() => {});
+    showAppRoot();
+    await invoke('set_camera_scan_mode', { enabled: false }).catch(() => {});
+    setStatus('idle');
+    setError('');
+  }
+
+  const cameraOverlay = createPortal(
+    <div className="scan-camera-overlay">
+      <button className="scan-camera-back" onClick={handleCancelScan} aria-label="Cancel scan">
+        <ArrowLeft size={22} />
+      </button>
+      <p className="scan-camera-hint">Point at a QR code</p>
+    </div>,
+    document.body
+  );
+
   return (
     <div className="scan-view">
       <input
@@ -157,6 +230,9 @@ export function ScanView({ onPaired }: { onPaired: () => void; isAndroid: boolea
         style={{ display: 'none' }}
         onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageFile(f); e.target.value = ''; }}
       />
+
+      {/* Camera overlay rendered outside #root so display:none on root doesn't hide it */}
+      {status === 'scanning' && cameraOverlay}
 
       {status === 'idle' && (
         <div className="scan-idle">
@@ -171,7 +247,6 @@ export function ScanView({ onPaired }: { onPaired: () => void; isAndroid: boolea
         </div>
       )}
 
-      {status === 'scanning' && <p className="scan-status">Opening camera…</p>}
       {status === 'pairing' && <p className="scan-status">Linking device…</p>}
 
       {status === 'error' && (
@@ -190,7 +265,9 @@ export function ScanView({ onPaired }: { onPaired: () => void; isAndroid: boolea
         </div>
       )}
 
-      <p className="scan-hint">Scan live or import a screenshot of the QR code.</p>
+      {status !== 'scanning' && (
+        <p className="scan-hint">Scan live or import a screenshot of the QR code.</p>
+      )}
     </div>
   );
 }

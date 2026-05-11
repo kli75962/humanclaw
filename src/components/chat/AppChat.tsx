@@ -143,7 +143,7 @@ export function AppChat(props: AppChatProps) {
         />
       ) : (
         <>
-          <div className="app-content custom-scrollbar">
+          <div className={`app-content custom-scrollbar${messages.length === 0 ? ' app-content--welcome' : ''}`}>
             {messages.length === 0 ? (
               activeCharacter ? (
                 <div className="app-friend-empty">Start to chat with your new friend</div>

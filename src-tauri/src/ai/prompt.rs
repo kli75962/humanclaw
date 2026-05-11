@@ -1,17 +1,15 @@
 use chrono::Local;
 use tauri::AppHandle;
 
-use crate::device::phone::get_installed_apps;
 use crate::skills::{build_persona_prompt_with_runtime, build_skills_prompt};
 use crate::tools::{build_core_prompt, read_core};
 
 use super::types::CharacterOverride;
 
-/// Build the static part of the system prompt (persona + skills + installed apps + paired devices).
+/// Build the static part of the system prompt (persona + skills + paired devices).
 /// Core memory is injected separately each round via `prepare_system`.
 /// If `character` is provided, the character's persona + identity replaces the session persona.
 pub async fn build_base_prompt(app: &AppHandle, character: Option<&CharacterOverride>) -> String {
-    let apps = get_installed_apps(app).await;
     let cfg = crate::session::store::bootstrap(app);
     let persona = if let Some(char) = character {
         let persona_content = build_persona_prompt_with_runtime(app, Some(char.persona.as_str()));
@@ -21,18 +19,10 @@ pub async fn build_base_prompt(app: &AppHandle, character: Option<&CharacterOver
     };
     let skills = build_skills_prompt(app);
 
-    let mut buf = String::with_capacity(persona.len() + skills.len() + apps.len() * 60 + 256);
+    let mut buf = String::with_capacity(persona.len() + skills.len() + 256);
     buf.push_str(&persona);
     buf.push_str("\n\n");
     buf.push_str(&skills);
-
-    if !apps.is_empty() {
-        buf.push_str("\n\n[INSTALLED APPS]\n");
-        for (i, a) in apps.iter().enumerate() {
-            if i > 0 { buf.push('\n'); }
-            buf.push_str(&a.prompt_line());
-        }
-    }
 
     use crate::session::types::DeviceType;
     match cfg.device.device_type {
