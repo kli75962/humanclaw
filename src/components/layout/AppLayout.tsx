@@ -110,7 +110,7 @@ export function AppLayout(props: AppLayoutProps) {
           onNewChat={() => { startNewChat(); setSideOpen(false); }}
           chats={visibleChatMetas}
           activeChatId={activeChatId}
-          onSelectChat={switchChat}
+          onSelectChat={(id) => { switchChat(id); setSideOpen(false); }}
           onDeleteChat={deleteChat}
           model={model}
           onModelChange={handleModelChange}

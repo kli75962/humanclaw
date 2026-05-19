@@ -19,13 +19,14 @@ import type { ChatMeta, Message, Post } from './types';
 import './style/themes.css';
 import './style/App.css';
 
-const DEFAULT_MODEL = 'kimi-k2.5:cloud';
 const MODEL_STORAGE_KEY = 'phoneclaw_model';
 const CHAT_MODE_KEY = 'phoneclaw_chat_mode';
 const SOCIAL_MODE_KEY = 'phoneclaw_social_mode';
 
 function App() {
-  const [model, setModel] = useState<string>(() => localStorage.getItem(MODEL_STORAGE_KEY) ?? DEFAULT_MODEL);
+  // Cached last-known model for instant render. The authoritative source is
+  // session.ollama_model (synced across devices); the effect below resolves it.
+  const [model, setModel] = useState<string>(() => localStorage.getItem(MODEL_STORAGE_KEY) ?? '');
   const [chatMode, setChatMode] = useState(() => localStorage.getItem(CHAT_MODE_KEY) === 'true');
   const [socialMode, setSocialMode] = useState(() => localStorage.getItem(SOCIAL_MODE_KEY) === 'true');
   const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);
@@ -57,6 +58,35 @@ function App() {
     if (/android/i.test(navigator.userAgent)) {
       document.documentElement.classList.add('is-android');
     }
+  }, []);
+
+  // Resolve the active Ollama model:
+  //   1. Use session.ollama_model if set (synced across paired devices).
+  //   2. Otherwise pick the first model returned by `list_models`.
+  // Re-runs when `session-changed` fires (e.g. a peer pushed a new model post-pair).
+  useEffect(() => {
+    let cancelled = false;
+    async function resolve() {
+      try {
+        const session = await invoke<{ ollama_model?: string | null }>('get_session');
+        if (cancelled) return;
+        const saved = session?.ollama_model?.trim();
+        if (saved) {
+          setModel(saved);
+          localStorage.setItem(MODEL_STORAGE_KEY, saved);
+          return;
+        }
+      } catch {/* fall through to list_models */}
+
+      try {
+        const models = await invoke<string[]>('list_models');
+        if (cancelled || !models?.length) return;
+        setModel((prev) => prev || models[0]);
+      } catch {/* no models reachable yet */}
+    }
+    resolve();
+    const unlisten = listen('session-changed', resolve);
+    return () => { cancelled = true; unlisten.then((fn) => fn()); };
   }, []);
 
   // Resume persona build status
@@ -181,6 +211,7 @@ function App() {
   const handleModelChange = useCallback((m: string) => {
     setModel(m);
     localStorage.setItem(MODEL_STORAGE_KEY, m);
+    invoke('set_ollama_model', { model: m }).catch(() => {});
   }, []);
 
   const handleChatModeChange = useCallback((enabled: boolean) => {

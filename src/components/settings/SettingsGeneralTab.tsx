@@ -101,15 +101,11 @@ function ModelConfigPanel({
     return () => window.removeEventListener('pointerdown', onPointerDown);
   }, []);
 
-  async function fetchOllamaModels(hostPort: string) {
-    const colonIdx = hostPort.lastIndexOf(':');
-    const host = colonIdx > 0 ? hostPort.slice(0, colonIdx).trim() : hostPort.trim();
-    const port = colonIdx > 0 ? parseInt(hostPort.slice(colonIdx + 1), 10) : 11434;
-    if (!host || !Number.isFinite(port)) return;
+  async function refreshOllamaModels() {
     setOllamaModelsLoading(true);
     setOllamaModels([]);
     try {
-      const models = await invoke<string[]>('list_models_at', { host, port });
+      const models = await invoke<string[]>('list_models');
       setOllamaModels(models);
     } catch {
       // silently ignore — UI shows "No model detected"
@@ -118,8 +114,8 @@ function ModelConfigPanel({
     }
   }
 
-  useEffect(() => {
-    if (provider === 'ollama') fetchOllamaModels(ollamaHostPort);
+useEffect(() => {
+    if (provider === 'ollama') refreshOllamaModels();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider]);
 
@@ -243,7 +239,7 @@ function ModelConfigPanel({
             />
             <button
               type="button"
-              onClick={() => fetchOllamaModels(ollamaHostPort)}
+              onClick={refreshOllamaModels}
               disabled={ollamaModelsLoading}
               className="settings-refresh-btn"
               title="Refresh model list"

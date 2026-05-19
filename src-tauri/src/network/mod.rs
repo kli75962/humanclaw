@@ -14,7 +14,7 @@ pub use commands::*;
 use std::sync::OnceLock;
 use reqwest::Client;
 
-/// Shared bridge HTTP client.
+/// Shared bridge HTTP client — short timeout, used for health checks and small requests.
 pub(crate) fn bridge_client() -> &'static Client {
     static BRIDGE_CLIENT: OnceLock<Client> = OnceLock::new();
     BRIDGE_CLIENT.get_or_init(|| {
@@ -22,5 +22,17 @@ pub(crate) fn bridge_client() -> &'static Client {
             .timeout(std::time::Duration::from_secs(5))
             .build()
             .expect("failed to build bridge HTTP client")
+    })
+}
+
+/// Long-lived streaming client for the Ollama proxy — no overall timeout so LLM
+/// responses can stream freely; only a connect timeout to catch dead hosts quickly.
+pub(crate) fn ollama_proxy_client() -> &'static Client {
+    static PROXY_CLIENT: OnceLock<Client> = OnceLock::new();
+    PROXY_CLIENT.get_or_init(|| {
+        Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .build()
+            .expect("failed to build ollama proxy HTTP client")
     })
 }

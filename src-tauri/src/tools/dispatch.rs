@@ -130,7 +130,8 @@ async fn call_kotlin_tool(app: &AppHandle, name: &str, args: &Value) -> ToolResu
 
     match handle
         .0
-        .run_mobile_plugin::<ToolResult>("executeTool", payload)
+        .run_mobile_plugin_async::<ToolResult>("executeTool", payload)
+        .await
     {
         Ok(result) => result,
         Err(e) => ToolResult::err(name, "PLUGIN_ERROR", format!("Plugin error: {e}")),

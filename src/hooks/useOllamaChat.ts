@@ -91,11 +91,14 @@ export function useOllamaChat(
         }
 
         if (done) {
-          // Remove trailing empty assistant placeholder if LLM ended via send_message only
+          // Replace trailing empty assistant placeholder with a hint so the user
+          // sees that the round finished even when the model produced no text.
+          // (Previously this pop'd the bubble; that hid silent failures completely.)
           setMessages((prev) => {
             const copy = [...prev];
-            if (copy[copy.length - 1]?.role === 'assistant' && copy[copy.length - 1].content === '') {
-              copy.pop();
+            const last = copy[copy.length - 1];
+            if (last?.role === 'assistant' && last.content === '') {
+              copy[copy.length - 1] = { ...last, content: '(無回應)' };
             }
             // Attach brief to the last assistant message for history compression
             if (brief) {

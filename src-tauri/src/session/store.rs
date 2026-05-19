@@ -91,6 +91,7 @@ pub fn bootstrap(app: &AppHandle) -> SessionConfig {
         bridge_port: 9876,
         ollama_host_override: None,
         ollama_port: default_ollama_port(),
+        ollama_model: None,
         persona: default_persona(),
         pc_permissions: PcPermissions::default(),
     };
@@ -166,6 +167,18 @@ pub fn set_ollama_endpoint(app: &AppHandle, host: &str, port: u16) -> Result<Ses
     let mut cfg = load(app).ok_or("Session not initialised")?;
     cfg.ollama_host_override = Some(host.to_string());
     cfg.ollama_port = port;
+    save(app, &cfg)?;
+    Ok(cfg)
+}
+
+/// Set the selected Ollama model name (synced across paired devices).
+pub fn set_ollama_model(app: &AppHandle, model: &str) -> Result<SessionConfig, String> {
+    let model = model.trim();
+    if model.is_empty() {
+        return Err("Model is required".to_string());
+    }
+    let mut cfg = load(app).ok_or("Session not initialised")?;
+    cfg.ollama_model = Some(model.to_string());
     save(app, &cfg)?;
     Ok(cfg)
 }

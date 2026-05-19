@@ -121,6 +121,29 @@ pub fn add_comment(app: &AppHandle, comment: &PostComment) -> Result<(), String>
     Ok(())
 }
 
+/// Delete all posts authored by the given character, including their RAG entries.
+pub fn delete_character_posts(app: &AppHandle, character_id: &str) {
+    let post_ids: Vec<String> = list_posts(app)
+        .into_iter()
+        .filter(|p| p.character_id == character_id)
+        .map(|p| p.id)
+        .collect();
+    for id in post_ids {
+        let _ = delete_post(app, &id);
+    }
+}
+
+/// Remove all comments authored by the given character and clean up their RAG entries.
+pub fn remove_author_comments(app: &AppHandle, author_id: &str) -> Result<(), String> {
+    let comments = all_comments(app);
+    let remaining: Vec<PostComment> = comments.into_iter()
+        .filter(|c| c.author_id != author_id)
+        .collect();
+    write_comments(app, &remaining)?;
+    super::rag::remove_by_author_id(app, author_id);
+    Ok(())
+}
+
 // ── Likes ────────────────────────────────────────────────────────────────────
 
 /// Increment the like count of a post. Returns the new count.

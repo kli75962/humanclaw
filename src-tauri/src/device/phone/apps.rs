@@ -49,7 +49,8 @@ async fn fetch_from_plugin(app: &AppHandle) -> Result<Vec<InstalledApp>, String>
     let handle = app.state::<PhoneControlHandle<tauri::Wry>>();
     handle
         .0
-        .run_mobile_plugin::<AppsResp>("getInstalledApps", json!({}))
+        .run_mobile_plugin_async::<AppsResp>("getInstalledApps", json!({}))
+        .await
         .map(|r| r.apps)
         .map_err(|e| e.to_string())
 }
@@ -94,7 +95,8 @@ async fn check_accessibility_from_plugin(app: &AppHandle) -> Result<bool, String
     let handle = app.state::<PhoneControlHandle<tauri::Wry>>();
     handle
         .0
-        .run_mobile_plugin::<Resp>("checkAccessibility", json!({}))
+        .run_mobile_plugin_async::<Resp>("checkAccessibility", json!({}))
+        .await
         .map(|r| r.enabled)
         .map_err(|e| e.to_string())
 }
@@ -108,7 +110,8 @@ async fn open_settings_from_plugin(app: &AppHandle) -> Result<(), String> {
     let handle = app.state::<PhoneControlHandle<tauri::Wry>>();
     handle
         .0
-        .run_mobile_plugin::<Resp>("openAccessibilitySettings", json!({}))
+        .run_mobile_plugin_async::<Resp>("openAccessibilitySettings", json!({}))
+        .await
         .map(|_| ())
         .map_err(|e| e.to_string())
 }
@@ -124,7 +127,7 @@ pub async fn set_camera_scan_mode(app: AppHandle, enabled: bool) {
         #[derive(serde::Deserialize)]
         struct Resp {}
         let handle = app.state::<PhoneControlHandle<tauri::Wry>>();
-        let _ = handle.0.run_mobile_plugin::<Resp>("setCameraScanMode", json!({ "enabled": enabled }));
+        let _ = handle.0.run_mobile_plugin_async::<Resp>("setCameraScanMode", json!({ "enabled": enabled })).await;
     }
     #[cfg(not(target_os = "android"))]
     { let _ = (app, enabled); }

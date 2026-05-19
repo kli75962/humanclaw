@@ -88,3 +88,16 @@ pub struct PersonaImportRequest {
     pub payload: PersonaSyncPayload,
     pub replace: bool,
 }
+
+/// Response body for `GET /settings/ollama_model` — the peer's currently selected model.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct OllamaModelPayload {
+    pub model: Option<String>,
+}
+
+/// Request body for `POST /settings/ollama_model` — push a model selection to a peer.
+#[derive(Deserialize)]
+pub struct OllamaModelImportRequest {
+    pub key: String,
+    pub model: String,
+}

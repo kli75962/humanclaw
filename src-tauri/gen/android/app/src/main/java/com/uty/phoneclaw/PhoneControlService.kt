@@ -177,103 +177,106 @@ class PhoneControlService : AccessibilityService() {
      * Drag to reposition; tap to cancel the LLM agent loop.
      */
     fun showOverlay(onCancel: (() -> Unit)?) {
-        if (overlayView != null) return
+        mainHandler.post {
+            if (overlayView != null) return@post
 
-        val wm = windowManager
-        val sizePx   = 56.dpToPx()
-        val innerPx  = 30.dpToPx()
-        val strokePx =  3.dpToPx()
+            val wm = windowManager
+            val sizePx   = 56.dpToPx()
+            val innerPx  = 30.dpToPx()
+            val strokePx =  3.dpToPx()
 
-        val container = FrameLayout(this)
+            val container = FrameLayout(this)
 
-        // Outer white ring
-        val outerRing = View(this).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.TRANSPARENT)
-                setStroke(strokePx, Color.WHITE)
-            }
-        }
-
-        // Inner red dot
-        val innerDot = View(this).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.RED)
-            }
-        }
-
-        container.addView(outerRing, FrameLayout.LayoutParams(sizePx, sizePx))
-        container.addView(innerDot,  FrameLayout.LayoutParams(innerPx, innerPx, Gravity.CENTER))
-
-        // Initial position: vertically centred, right edge
-        val display = wm.currentWindowMetrics.bounds
-        val params = WindowManager.LayoutParams(
-            sizePx,
-            sizePx,
-            // TYPE_ACCESSIBILITY_OVERLAY: shows above ALL apps, no SYSTEM_ALERT_WINDOW needed.
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = display.width() - sizePx - 16.dpToPx()
-            y = (display.height() - sizePx) / 2
-        }
-
-        // Touch handler — distinguishes drag from tap
-        var downRawX = 0f
-        var downRawY = 0f
-        var startParamX = 0
-        var startParamY = 0
-        val TAP_SLOP = 10.dpToPx()   // max movement to still count as a tap
-
-        container.setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    downRawX   = event.rawX
-                    downRawY   = event.rawY
-                    startParamX = params.x
-                    startParamY = params.y
-                    true
+            // Outer white ring
+            val outerRing = View(this).apply {
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(Color.TRANSPARENT)
+                    setStroke(strokePx, Color.WHITE)
                 }
-                MotionEvent.ACTION_MOVE -> {
-                    params.x = (startParamX + (event.rawX - downRawX)).toInt()
-                    params.y = (startParamY + (event.rawY - downRawY)).toInt()
-                    try { wm.updateViewLayout(container, params) } catch (_: Exception) {}
-                    true
+            }
+
+            // Inner red dot
+            val innerDot = View(this).apply {
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(Color.RED)
                 }
-                MotionEvent.ACTION_UP -> {
-                    val dx = event.rawX - downRawX
-                    val dy = event.rawY - downRawY
-                    // Treat as tap only if finger barely moved
-                    if (dx * dx + dy * dy < TAP_SLOP * TAP_SLOP) {
-                        onCancel?.invoke()
+            }
+
+            container.addView(outerRing, FrameLayout.LayoutParams(sizePx, sizePx))
+            container.addView(innerDot,  FrameLayout.LayoutParams(innerPx, innerPx, Gravity.CENTER))
+
+            // Initial position: vertically centred, right edge
+            val display = wm.currentWindowMetrics.bounds
+            val params = WindowManager.LayoutParams(
+                sizePx,
+                sizePx,
+                // TYPE_ACCESSIBILITY_OVERLAY: shows above ALL apps, no SYSTEM_ALERT_WINDOW needed.
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT,
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                x = display.width() - sizePx - 16.dpToPx()
+                y = (display.height() - sizePx) / 2
+            }
+
+            // Touch handler — distinguishes drag from tap
+            var downRawX = 0f
+            var downRawY = 0f
+            var startParamX = 0
+            var startParamY = 0
+            val TAP_SLOP = 10.dpToPx()   // max movement to still count as a tap
+
+            container.setOnTouchListener { _, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        downRawX    = event.rawX
+                        downRawY    = event.rawY
+                        startParamX = params.x
+                        startParamY = params.y
+                        true
                     }
-                    true
+                    MotionEvent.ACTION_MOVE -> {
+                        params.x = (startParamX + (event.rawX - downRawX)).toInt()
+                        params.y = (startParamY + (event.rawY - downRawY)).toInt()
+                        try { wm.updateViewLayout(container, params) } catch (_: Exception) {}
+                        true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        val dx = event.rawX - downRawX
+                        val dy = event.rawY - downRawY
+                        if (dx * dx + dy * dy < TAP_SLOP * TAP_SLOP) {
+                            onCancel?.invoke()
+                        }
+                        true
+                    }
+                    else -> false
                 }
-                else -> false
             }
-        }
 
-        try {
-            wm.addView(container, params)
-            overlayView   = container
-            overlayParams = params
-        } catch (_: Exception) {
-            // Silently ignore if overlay permission not granted
+            try {
+                wm.addView(container, params)
+                overlayView   = container
+                overlayParams = params
+            } catch (_: Exception) {
+                // Silently ignore if overlay permission not granted
+            }
         }
     }
 
     fun hideOverlay() {
-        overlayView?.let {
-            try {
-                windowManager.removeView(it)
-            } catch (_: Exception) {}
+        mainHandler.post {
+            overlayView?.let {
+                try {
+                    windowManager.removeView(it)
+                } catch (_: Exception) {}
+            }
+            overlayView   = null
+            overlayParams = null
         }
-        overlayView   = null
-        overlayParams = null
     }
 
     // ----- Gesture visual feedback -----

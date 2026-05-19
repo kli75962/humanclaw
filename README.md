@@ -23,4 +23,13 @@ find device screen log:
   cat ~/.local/share/com.xxx.phoneclaw/logs/screen_log.txt
 
 backup1:
-  get installed app, no overlay when pc control phone, memory logic
+  no overlay when pc control phone, memory logic, replay_gesture_map, recording gestures
+
+implemented features:
+  custom wallpaper, theme
+  bidirectional control pc, phones
+  live 2d for each character
+  social post
+  ollama, claude support
+  save memo for explain more
+  custom persona

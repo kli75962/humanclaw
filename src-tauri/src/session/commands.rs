@@ -70,6 +70,18 @@ pub fn set_ollama_endpoint(app: AppHandle, host: String, port: u16) -> Result<Se
     store::set_ollama_endpoint(&app, &host, port)
 }
 
+/// Set the selected Ollama model. Pushed to paired peers in the background.
+#[tauri::command]
+pub fn set_ollama_model(app: AppHandle, model: String) -> Result<SessionConfig, String> {
+    let cfg = store::set_ollama_model(&app, &model)?;
+    let app_for_push = app.clone();
+    let model_for_push = model.clone();
+    tauri::async_runtime::spawn(async move {
+        crate::network::sync::settings::push_ollama_model_to_all_peers(&app_for_push, &model_for_push).await;
+    });
+    Ok(cfg)
+}
+
 /// Return available persona skill names (compiled + runtime user-created).
 #[tauri::command]
 pub fn list_personas(app: AppHandle) -> Vec<String> {

@@ -5,6 +5,7 @@ use serde_json::Value;
 use tauri::AppHandle;
 
 use crate::chat::bootstrap_memory;
+use crate::device::phone::{hide_overlay, show_overlay};
 use crate::skills::load_tool_schemas;
 use crate::tools::{execute_tool_with_context, ToolExecutionContext};
 use crate::ai::ollama::types::tool_message;
@@ -40,12 +41,23 @@ async fn stream_once_headless(
     let mut content = String::new();
     let mut tool_calls: Vec<OllamaToolCall> = Vec::new();
     let mut role = "assistant".to_string();
+    // Cross-chunk line buffer — TCP can split an NDJSON line at any byte.
+    let mut line_buf = String::new();
 
     while let Some(chunk_result) = byte_stream.next().await {
         let bytes = chunk_result.map_err(|e| format!("Stream error: {e}"))?;
-        let text = String::from_utf8_lossy(&bytes);
+        line_buf.push_str(&String::from_utf8_lossy(&bytes));
 
-        for line in text.lines() {
+        let mut start = 0;
+        let mut complete_lines: Vec<String> = Vec::new();
+        while let Some(nl) = line_buf[start..].find('\n') {
+            let end = start + nl;
+            complete_lines.push(line_buf[start..end].to_string());
+            start = end + 1;
+        }
+        if start > 0 { line_buf.drain(..start); }
+
+        for line in &complete_lines {
             let line = line.trim();
             if line.is_empty() { continue; }
             let Ok(parsed) = serde_json::from_str::<OllamaChunk>(line) else { continue };
@@ -57,6 +69,20 @@ async fn stream_once_headless(
                 }
             }
             if parsed.done { break; }
+        }
+    }
+
+    // Flush trailing partial line if it happens to be a complete JSON without newline.
+    let tail = line_buf.trim();
+    if !tail.is_empty() {
+        if let Ok(parsed) = serde_json::from_str::<OllamaChunk>(tail) {
+            if let Some(ref msg) = parsed.message {
+                role = msg.role.clone();
+                content.push_str(&msg.content);
+                if let Some(calls) = &msg.tool_calls {
+                    tool_calls.extend(calls.iter().cloned());
+                }
+            }
         }
     }
 
@@ -103,6 +129,8 @@ pub async fn run_headless(
     let mut final_result: Result<String, String> =
         Err(format!("Agent exceeded maximum tool rounds ({MAX_AGENT_LOOPS})"));
 
+    show_overlay(app);
+
     'agent: for _ in 0..MAX_AGENT_LOOPS {
         let system_content = prepare_system(app, &base_prompt);
         let system_msg = OllamaMessage {
@@ -126,6 +154,7 @@ pub async fn run_headless(
         let mut final_msg = match stream_once_headless(app, &system_msg, &history, &tool_schemas, model).await {
             Ok(msg) => msg,
             Err(e) => {
+                hide_overlay(app);
                 final_result = Err(e);
                 break 'agent;
             }
@@ -134,6 +163,7 @@ pub async fn run_headless(
         let tool_calls = final_msg.tool_calls.take().unwrap_or_default();
 
         if tool_calls.is_empty() {
+            hide_overlay(app);
             final_result = Ok(final_msg.content);
             break 'agent;
         }
@@ -152,5 +182,6 @@ pub async fn run_headless(
         }
     }
 
+    hide_overlay(app);
     final_result
 }

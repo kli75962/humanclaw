@@ -18,7 +18,7 @@ use social::post::{list_posts, save_post, delete_post, like_post, unlike_post, l
 use ai::{cancel_chat, chat_claude, chat_ollama, list_models, list_models_at, explain_text};
 use device::stt::{stt_android_cancel, stt_android_once, stt_start, stt_stop};
 use device::secrets::{store_secret, load_secret};
-use session::{add_paired_device, get_session, list_personas, remove_paired_device, set_device_label, set_ollama_endpoint, set_pc_permissions, set_persona, set_session_hash_key};
+use session::{add_paired_device, get_session, list_personas, remove_paired_device, set_device_label, set_ollama_endpoint, set_ollama_model, set_pc_permissions, set_persona, set_session_hash_key};
 use skills::{create_persona_background, get_persona_build_status, clear_persona_build_status};
 use tools::{respond_pc_permission, PendingPermissions, respond_ask_user, PendingAskUserRequests};
 use tools::gesture_map::{list_gesture_maps_cmd, delete_gesture_map_cmd, get_gesture_share_setting, save_gesture_share_setting};
@@ -271,6 +271,7 @@ pub fn run() {
             set_device_label,
             set_session_hash_key,
             set_ollama_endpoint,
+            set_ollama_model,
             list_personas,
             set_persona,
             set_pc_permissions,

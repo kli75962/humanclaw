@@ -331,7 +331,7 @@ export function CreateFriendInline({ defaultModel = '', onSave, onCancel }: Prop
       )}
 
       {/* Background */}
-      <p className="settings-modal-field-label">Background</p>
+      <p className="settings-modal-field-label">Background <span style={{ fontWeight: 'normal', color: 'var(--color-text-3)', fontSize: '0.9em' }}>(optional)</span></p>
       <textarea
         className="settings-popup-input"
         value={background}

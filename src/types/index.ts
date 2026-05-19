@@ -194,6 +194,7 @@ export interface SessionConfig {
   bridge_port: number;
   ollama_host_override: string | null;
   ollama_port: number;
+  ollama_model: string | null;
   persona: string;
   pc_permissions: PcPermissions;
 }

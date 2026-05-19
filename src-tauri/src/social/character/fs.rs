@@ -94,6 +94,12 @@ pub fn delete_character(app: &AppHandle, id: &str) -> Result<(), String> {
     // 3. Delete from Post Generation Queue
     let _ = pg::remove_character_entries(app, id);
 
+    // 4. Delete all posts authored by this character (includes RAG cleanup)
+    crate::social::post::fs::delete_character_posts(app, id);
+
+    // 5. Remove all comments authored by this character (includes RAG cleanup)
+    let _ = crate::social::post::fs::remove_author_comments(app, id);
+
     Ok(())
 }
 

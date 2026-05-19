@@ -85,6 +85,13 @@ pub fn remove_by_post_id(app: &AppHandle, post_id: &str) {
     save_index(app, &entries);
 }
 
+/// Remove all posts and comments authored by the given character from the index.
+pub fn remove_by_author_id(app: &AppHandle, author_id: &str) {
+    let mut entries = load_index(app);
+    entries.retain(|e| e.author_id != author_id);
+    save_index(app, &entries);
+}
+
 /// Search the index for entries matching any of the given keywords (case-insensitive substring).
 /// Returns a formatted `[RELEVANT POSTS & COMMENTS]` block, or empty string if no matches.
 pub fn search(app: &AppHandle, keywords: &[String], max: usize) -> String {

@@ -96,6 +96,10 @@ pub struct SessionConfig {
     /// Ollama API port (default 11434).
     #[serde(default = "default_ollama_port")]
     pub ollama_port: u16,
+    /// Selected Ollama model name. Synced between paired devices.
+    /// `None` means no explicit choice yet — frontend picks the first available.
+    #[serde(default)]
+    pub ollama_model: Option<String>,
     /// Selected LLM persona skill name.
     #[serde(default = "default_persona")]
     pub persona: String,

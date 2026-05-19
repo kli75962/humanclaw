@@ -145,9 +145,14 @@ pub struct OllamaChunk {
 
 /// On Android, route Ollama through the paired PC's bridge server proxy so port 11434
 /// never needs to be exposed — the bridge port (9876) is already confirmed reachable.
+/// `ollama_host_override` is ignored on Android: PC's Ollama binds 127.0.0.1 only,
+/// so a direct host:port from the phone can never reach it — the proxy is the only path.
 #[cfg(target_os = "android")]
 fn android_ollama_base(app: &tauri::AppHandle) -> String {
     if let Some(cfg) = crate::session::store::load(app) {
+        if let Some(peer) = cfg.paired_devices.first() {
+            return format!("http://{}/proxy/ollama", peer.address);
+        }
         if let Some(host) = cfg
             .ollama_host_override
             .as_deref()
@@ -156,10 +161,6 @@ fn android_ollama_base(app: &tauri::AppHandle) -> String {
         {
             let port = if cfg.ollama_port == 0 { 11434 } else { cfg.ollama_port };
             return format!("http://{host}:{port}");
-        }
-        if let Some(peer) = cfg.paired_devices.first() {
-            // Use the bridge address (ip:9876) + /proxy/ollama instead of direct port 11434.
-            return format!("http://{}/proxy/ollama", peer.address);
         }
     }
     "http://127.0.0.1:11434".to_string()

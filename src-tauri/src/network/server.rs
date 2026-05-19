@@ -6,7 +6,7 @@ use tauri::AppHandle;
 
 use crate::session::store;
 use super::exec::exec_handler;
-use super::types::{CharacterImportRequest, ChatImportRequest, PersonaImportRequest, PingQuery, PingResponse, RegisterRequest, ToolRequest, ToolResponse, UnpairRequest};
+use super::types::{CharacterImportRequest, ChatImportRequest, OllamaModelImportRequest, OllamaModelPayload, PersonaImportRequest, PingQuery, PingResponse, RegisterRequest, ToolRequest, ToolResponse, UnpairRequest};
 
 // ── Server state ─────────────────────────────────────────────────────────────
 
@@ -94,10 +94,12 @@ async fn register_handler(
     let app_for_sync = (*app).clone();
     let peer_for_char = peer.clone();
     let peer_for_persona = peer.clone();
+    let peer_for_settings = peer.clone();
     tauri::async_runtime::spawn(async move {
         super::sync::chat::sync_after_pair(&app_for_sync, &peer).await;
         super::sync::character::sync_after_pair(&app_for_sync, &peer_for_char).await;
         super::sync::skills::sync_after_pair(&app_for_sync, &peer_for_persona).await;
+        super::sync::settings::sync_after_pair(&app_for_sync, &peer_for_settings).await;
     });
 
     // Notify frontend immediately: new device added + it's now online.
@@ -239,6 +241,37 @@ async fn tool_handler(
     }))
 }
 
+/// GET /settings/ollama_model?key=<hash_key> — return this device's selected model.
+async fn ollama_model_export_handler(
+    State(app): State<BridgeState>,
+    Query(query): Query<PingQuery>,
+) -> Result<Json<OllamaModelPayload>, StatusCode> {
+    let cfg = store::bootstrap(&app);
+    if query.key != cfg.hash_key {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    Ok(Json(OllamaModelPayload { model: cfg.ollama_model }))
+}
+
+/// POST /settings/ollama_model — peer pushes its selected model to us.
+async fn ollama_model_import_handler(
+    State(app): State<BridgeState>,
+    Json(body): Json<OllamaModelImportRequest>,
+) -> StatusCode {
+    let cfg = store::bootstrap(&app);
+    if body.key != cfg.hash_key {
+        return StatusCode::UNAUTHORIZED;
+    }
+    match store::set_ollama_model(&app, &body.model) {
+        Ok(_) => {
+            use tauri::Emitter;
+            let _ = app.emit("session-changed", serde_json::json!({}));
+            StatusCode::OK
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
 // ── Ollama proxy ─────────────────────────────────────────────────────────────
 
 /// Proxy any request to the local Ollama instance, forwarding method/headers/body.
@@ -254,7 +287,7 @@ async fn ollama_proxy_handler(
     let port = if cfg.ollama_port == 0 { 11434 } else { cfg.ollama_port };
     let url = format!("http://127.0.0.1:{port}/{path}");
 
-    let client = crate::network::bridge_client();
+    let client = crate::network::ollama_proxy_client();
     let mut req = client.request(
         reqwest::Method::from_bytes(method.as_str().as_bytes()).unwrap_or(reqwest::Method::GET),
         &url,
@@ -276,8 +309,7 @@ async fn ollama_proxy_handler(
             for (k, v) in resp.headers() {
                 builder = builder.header(k, v);
             }
-            let bytes = resp.bytes().await.unwrap_or_default();
-            builder.body(Body::from(bytes)).unwrap_or_else(|_| {
+            builder.body(Body::from_stream(resp.bytes_stream())).unwrap_or_else(|_| {
                 axum::http::Response::builder()
                     .status(500)
                     .body(Body::empty())
@@ -316,6 +348,7 @@ pub fn start_bridge_server(app: AppHandle) {
             .route("/characters/import", post(character_import_handler))
             .route("/personas/export", get(persona_export_handler))
             .route("/personas/import", post(persona_import_handler))
+            .route("/settings/ollama_model", get(ollama_model_export_handler).post(ollama_model_import_handler))
             .route("/exec", post(exec_handler))
             .route("/proxy/ollama/*path", any(ollama_proxy_handler))
             .with_state(state);

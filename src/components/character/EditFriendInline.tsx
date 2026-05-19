@@ -157,7 +157,6 @@ export function EditFriendInline({ character, onSave, onCancel }: Props) {
   function handleSave() {
     if (!name.trim()) { setError('Name is required.'); return; }
     if (!currentModel().trim()) { setError('Model is required.'); return; }
-    if (!background.trim()) { setError('Background is required.'); return; }
 
     onSave({
       name: name.trim(),
@@ -331,7 +330,7 @@ export function EditFriendInline({ character, onSave, onCancel }: Props) {
         )}
 
         {/* Background */}
-        <p className="settings-modal-field-label">Background</p>
+        <p className="settings-modal-field-label">Background <span style={{ fontWeight: 'normal', color: 'var(--color-text-3)', fontSize: '0.9em' }}>(optional)</span></p>
         <textarea
           className="settings-popup-input"
           value={background}

@@ -36,8 +36,11 @@ async fn stream_once(
 ) -> Result<OllamaMessage, String> {
     let body = OllamaRoundRequest::new(model, system_msg, conversation, true, tool_schemas);
 
+    let url = super::types::ollama_chat_url(app);
+    eprintln!("[chat] POST {url} model={model} msgs={} tools={}", conversation.len(), tool_schemas.len());
+
     let response = super::ollama_client()
-        .post(super::types::ollama_chat_url(app))
+        .post(&url)
         .json(&body)
         .send()
         .await
@@ -46,6 +49,7 @@ async fn stream_once(
     if !response.status().is_success() {
         let status = response.status();
         let text = response.text().await.unwrap_or_default();
+        eprintln!("[chat] HTTP {status}: {text}");
         return Err(format!("Ollama returned {status}: {text}"));
     }
 
@@ -54,6 +58,9 @@ async fn stream_once(
     let mut accumulated_tool_calls: Vec<OllamaToolCall> = Vec::new();
     let mut final_role = "assistant".to_string();
     let mut emitted_up_to: usize = 0;
+    // Cross-chunk line buffer — TCP chunks can split an NDJSON line at any byte.
+    // Without this, partial lines fail JSON parse and the chunk is silently dropped.
+    let mut line_buf = String::new();
     const MEMORY_MARKER: &str = "---MEMORY";
 
     // 120 s idle timeout per chunk — prevents indefinite hang when a model stalls mid-stream.
@@ -71,9 +78,19 @@ async fn stream_once(
             return Err("CANCELLED".to_string());
         }
         let bytes = chunk_result.map_err(|e| format!("Stream error: {e}"))?;
-        let text = String::from_utf8_lossy(&bytes);
+        line_buf.push_str(&String::from_utf8_lossy(&bytes));
 
-        for line in text.lines() {
+        // Drain only complete lines; keep any trailing partial line in the buffer.
+        let mut start = 0;
+        let mut complete_lines: Vec<String> = Vec::new();
+        while let Some(nl) = line_buf[start..].find('\n') {
+            let end = start + nl;
+            complete_lines.push(line_buf[start..end].to_string());
+            start = end + 1;
+        }
+        if start > 0 { line_buf.drain(..start); }
+
+        for line in &complete_lines {
             let line = line.trim();
             if line.is_empty() { continue; }
 
@@ -106,6 +123,28 @@ async fn stream_once(
             if parsed.done { break; }
         }
     } // end loop
+
+    eprintln!("[chat] stream end content_len={} tool_calls={} buf_tail={}",
+        accumulated_content.len(), accumulated_tool_calls.len(), line_buf.len());
+
+    // Flush any trailing partial line that wasn't newline-terminated.
+    // Some servers omit the final '\n'; without this, the last chunk is lost.
+    {
+        let tail = line_buf.trim();
+        if !tail.is_empty() {
+            if let Ok(parsed) = serde_json::from_str::<OllamaChunk>(tail) {
+                if let Some(ref msg) = parsed.message {
+                    final_role = msg.role.clone();
+                    if !msg.content.is_empty() {
+                        accumulated_content.push_str(&msg.content);
+                    }
+                    if let Some(calls) = &msg.tool_calls {
+                        accumulated_tool_calls.extend(calls.iter().cloned());
+                    }
+                }
+            }
+        }
+    }
 
     // Flush any tail withheld during streaming (last MEMORY_MARKER.len() chars held back).
     let visible_end = accumulated_content.find(MEMORY_MARKER).unwrap_or(accumulated_content.len());
@@ -268,6 +307,11 @@ pub async fn chat_ollama(
             }
             Err(e) => {
                 hide_overlay(&app);
+                app.emit("ollama-stream", StreamPayload {
+                    content: format!("\n\n[Error: {e}]"),
+                    done: true,
+                    brief: None,
+                }).ok();
                 return Err(e);
             }
         };
@@ -331,14 +375,22 @@ pub async fn chat_ollama(
                 message: format!("Running tool: {tool_name}"),
             }).ok();
 
+            eprintln!("[chat] tool start: {tool_name}");
             let output = execute_tool_with_context(&app, tool_name, tool_args, &tool_context)
                 .await
                 .output;
+            eprintln!("[chat] tool end:   {tool_name} output_len={}", output.len());
 
             tool_history.push(tool_message(truncate_tool_output(tool_name, output)));
         }
     }
 
     hide_overlay(&app);
-    Err(format!("Agent exceeded maximum tool rounds ({MAX_AGENT_LOOPS})"))
+    let msg = format!("Agent exceeded maximum tool rounds ({MAX_AGENT_LOOPS})");
+    app.emit("ollama-stream", StreamPayload {
+        content: format!("\n\n[Error: {msg}]"),
+        done: true,
+        brief: None,
+    }).ok();
+    Err(msg)
 }
