@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use crate::chat::ChatSyncPayload;
 use crate::social::character::CharacterSyncPayload;
 use crate::skills::PersonaSyncPayload;
+use crate::session::types::PcPermissions;
 
 /// Response body for `GET /ping` — returned only when the caller's key matches.
 /// `hash_key` is present ONLY when a one-time pairing token was used;
@@ -100,4 +101,38 @@ pub struct OllamaModelPayload {
 pub struct OllamaModelImportRequest {
     pub key: String,
     pub model: String,
+}
+
+/// Response body for `GET /settings/persona` — the peer's currently selected persona skill.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PersonaPayload {
+    pub persona: String,
+}
+
+/// Request body for `POST /settings/persona` — push a persona selection to a peer.
+#[derive(Deserialize)]
+pub struct PersonaSettingImportRequest {
+    pub key: String,
+    pub persona: String,
+}
+
+/// Response body for `GET /settings/pc_permissions` — the peer's PC permission flags.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PcPermissionsPayload {
+    pub permissions: PcPermissions,
+}
+
+/// Request body for `POST /settings/pc_permissions` — push a permissions update to a peer.
+#[derive(Deserialize)]
+pub struct PcPermissionsImportRequest {
+    pub key: String,
+    pub permissions: PcPermissions,
+}
+
+/// Request body for `POST /overlay` — toggle the recording-dot overlay on a paired phone.
+/// `action` is `"show"` or `"hide"`.
+#[derive(Deserialize)]
+pub struct OverlayRequest {
+    pub key: String,
+    pub action: String,
 }

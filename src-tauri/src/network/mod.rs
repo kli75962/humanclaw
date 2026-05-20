@@ -5,6 +5,8 @@ pub mod exec;
 pub mod health;
 pub mod server;
 pub mod pairing_token;
+pub mod sse;
+pub mod sse_subscriber;
 pub mod types;
 
 pub use health::*;

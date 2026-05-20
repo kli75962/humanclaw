@@ -168,8 +168,10 @@ pub async fn discover_and_pair(app: AppHandle, address: String) -> Result<(), St
         label: resp.label,
     };
     let app_for_sync = app.clone();
+    let peer_for_sse = peer.clone();
     tauri::async_runtime::spawn(async move {
         super::sync::chat::sync_after_pair(&app_for_sync, &peer).await;
+        super::sse_subscriber::ensure_subscriber(&app_for_sync, peer_for_sse);
     });
 
     Ok(())
@@ -225,8 +227,10 @@ pub async fn pair_from_qr(
         label: resp.label,
     };
     let app_for_sync = app.clone();
+    let peer_for_sse = peer.clone();
     tauri::async_runtime::spawn(async move {
         super::sync::chat::sync_after_pair(&app_for_sync, &peer).await;
+        super::sse_subscriber::ensure_subscriber(&app_for_sync, peer_for_sse);
     });
 
     // Best-effort: tell the peer about us so it can save our address too.

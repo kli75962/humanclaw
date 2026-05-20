@@ -1,15 +1,16 @@
 use futures_util::StreamExt;
 use tokio::time::{timeout, Duration};
 use serde_json::Value;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
+use crate::ai::emit::{emit_status, emit_stream, emit_stream_quiet};
 use crate::chat::bootstrap_memory;
 use crate::device::phone::{hide_overlay, show_overlay};
 use crate::skills::load_tool_schemas;
 use crate::tools::{execute_tool_with_context, ToolExecutionContext};
 use crate::ai::ollama::types::tool_message;
 use crate::ai::prompt::{build_base_prompt, prepare_system, should_cancel};
-use crate::ai::types::{AgentStatusPayload, StreamPayload, MAX_AGENT_LOOPS};
+use crate::ai::types::MAX_AGENT_LOOPS;
 use crate::ai::history::{
     compress_text_history, extract_brief, memory_instruction,
     trim_tool_start_index, CompressMsg,
@@ -29,6 +30,7 @@ fn local_tool_context(app: &AppHandle) -> ToolExecutionContext {
 /// Emits content tokens to the frontend and returns the fully assembled message.
 async fn stream_once(
     app: &AppHandle,
+    chat_id: &str,
     system_msg: &OllamaMessage,
     conversation: &[OllamaMessage],
     tool_schemas: &[Value],
@@ -107,11 +109,7 @@ async fn stream_once(
                     }
                     if safe_end > emitted_up_to {
                         let to_emit = accumulated_content[emitted_up_to..safe_end].to_string();
-                        app.emit("ollama-stream", StreamPayload {
-                            content: to_emit,
-                            done: false,
-                            brief: None,
-                        }).map_err(|e| e.to_string())?;
+                        emit_stream(app, chat_id, to_emit, false, None)?;
                         emitted_up_to = safe_end;
                     }
                 }
@@ -149,11 +147,13 @@ async fn stream_once(
     // Flush any tail withheld during streaming (last MEMORY_MARKER.len() chars held back).
     let visible_end = accumulated_content.find(MEMORY_MARKER).unwrap_or(accumulated_content.len());
     if visible_end > emitted_up_to {
-        app.emit("ollama-stream", StreamPayload {
-            content: accumulated_content[emitted_up_to..visible_end].to_string(),
-            done: false,
-            brief: None,
-        }).map_err(|e| e.to_string())?;
+        emit_stream(
+            app,
+            chat_id,
+            accumulated_content[emitted_up_to..visible_end].to_string(),
+            false,
+            None,
+        )?;
     }
 
     Ok(OllamaMessage {
@@ -177,9 +177,13 @@ fn truncate_tool_output(_tool_name: &str, output: String) -> String {
 
 /// Tauri command — streams a chat completion from the local Ollama server with
 /// full agentic tool-calling support.
+///
+/// `chat_id` is the active chat's ID — broadcast with every stream chunk so peer
+/// devices can route the chunk into the matching conversation in their UI.
 #[tauri::command]
 pub async fn chat_ollama(
     app: AppHandle,
+    chat_id: String,
     messages: Vec<OllamaMessage>,
     model: String,
     character: Option<crate::ai::types::CharacterOverride>,
@@ -264,11 +268,7 @@ pub async fn chat_ollama(
     for round in 0..MAX_AGENT_LOOPS {
         if should_cancel(&app) {
             hide_overlay(&app);
-            app.emit("ollama-stream", StreamPayload {
-                content: "\n\n[Cancelled by user]".to_string(),
-                done: true,
-                brief: None,
-            }).ok();
+            emit_stream_quiet(&app, &chat_id, "\n\n[Cancelled by user]".to_string(), true, None);
             return Ok(());
         }
 
@@ -294,32 +294,26 @@ pub async fn chat_ollama(
             .cloned()
             .collect();
 
-        let final_msg = match stream_once(&app, &system_msg, &conversation, &tool_schemas, &model).await {
+        let final_msg = match stream_once(&app, &chat_id, &system_msg, &conversation, &tool_schemas, &model).await {
             Ok(msg) => msg,
             Err(e) if e == "CANCELLED" => {
                 hide_overlay(&app);
-                app.emit("ollama-stream", StreamPayload {
-                    content: "\n\n[Cancelled by user]".to_string(),
-                    done: true,
-                    brief: None,
-                }).ok();
+                emit_stream_quiet(&app, &chat_id, "\n\n[Cancelled by user]".to_string(), true, None);
                 return Ok(());
             }
             Err(e) => {
                 hide_overlay(&app);
-                app.emit("ollama-stream", StreamPayload {
-                    content: format!("\n\n[Error: {e}]"),
-                    done: true,
-                    brief: None,
-                }).ok();
+                emit_stream_quiet(&app, &chat_id, format!("\n\n[Error: {e}]"), true, None);
                 return Err(e);
             }
         };
 
         let tool_count = final_msg.tool_calls.as_ref().map_or(0, |v| v.len());
-        app.emit("agent-status", AgentStatusPayload {
-            message: format!("[round {round}] tool_calls={tool_count} content_len={}", final_msg.content.len()),
-        }).ok();
+        emit_status(
+            &app,
+            &chat_id,
+            format!("[round {round}] tool_calls={tool_count} content_len={}", final_msg.content.len()),
+        );
 
         let mut final_msg = final_msg;
         let tool_calls = final_msg.tool_calls.take().unwrap_or_default();
@@ -349,8 +343,7 @@ pub async fn chat_ollama(
                 }
             }
 
-            app.emit("ollama-stream", StreamPayload { content: String::new(), done: true, brief })
-                .map_err(|e| e.to_string())?;
+            emit_stream(&app, &chat_id, String::new(), true, brief)?;
             return Ok(());
         }
 
@@ -360,20 +353,14 @@ pub async fn chat_ollama(
         for call in &tool_calls {
             if should_cancel(&app) {
                 hide_overlay(&app);
-                app.emit("ollama-stream", StreamPayload {
-                    content: "\n\n[Cancelled by user]".to_string(),
-                    done: true,
-                    brief: None,
-                }).ok();
+                emit_stream_quiet(&app, &chat_id, "\n\n[Cancelled by user]".to_string(), true, None);
                 return Ok(());
             }
 
             let tool_name = &call.function.name;
             let tool_args = &call.function.arguments;
 
-            app.emit("agent-status", AgentStatusPayload {
-                message: format!("Running tool: {tool_name}"),
-            }).ok();
+            emit_status(&app, &chat_id, format!("Running tool: {tool_name}"));
 
             eprintln!("[chat] tool start: {tool_name}");
             let output = execute_tool_with_context(&app, tool_name, tool_args, &tool_context)
@@ -387,10 +374,6 @@ pub async fn chat_ollama(
 
     hide_overlay(&app);
     let msg = format!("Agent exceeded maximum tool rounds ({MAX_AGENT_LOOPS})");
-    app.emit("ollama-stream", StreamPayload {
-        content: format!("\n\n[Error: {msg}]"),
-        done: true,
-        brief: None,
-    }).ok();
+    emit_stream_quiet(&app, &chat_id, format!("\n\n[Error: {msg}]"), true, None);
     Err(msg)
 }

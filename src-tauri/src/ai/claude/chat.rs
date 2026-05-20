@@ -1,14 +1,15 @@
 use std::collections::HashMap;
 use futures_util::StreamExt;
 use serde_json::Value;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
+use crate::ai::emit::{emit_status, emit_stream, emit_stream_quiet};
 use crate::chat::bootstrap_memory;
 use crate::device::phone::{hide_overlay, show_overlay};
 use crate::skills::load_tool_schemas;
 use crate::tools::{execute_tool_with_context, ToolExecutionContext};
 use crate::ai::prompt::{build_base_prompt, prepare_system, should_cancel};
-use crate::ai::types::{AgentStatusPayload, StreamPayload, MAX_AGENT_LOOPS};
+use crate::ai::types::MAX_AGENT_LOOPS;
 use crate::ai::history::{
     compress_text_history, extract_brief, memory_instruction,
     trim_tool_start_index, CompressMsg,
@@ -57,6 +58,7 @@ fn local_tool_context(app: &AppHandle) -> ToolExecutionContext {
 /// Emits content tokens to the frontend and returns the assembled result.
 async fn stream_once(
     app: &AppHandle,
+    chat_id: &str,
     api_key: &str,
     system: &str,
     history: &[ClaudeMessage],
@@ -151,11 +153,7 @@ async fn stream_once(
                                 }
                                 if safe_end > *emitted {
                                     let to_emit = acc[*emitted..safe_end].to_string();
-                                    app.emit("ollama-stream", StreamPayload {
-                                        content: to_emit,
-                                        done: false,
-                                        brief: None,
-                                    }).map_err(|e| e.to_string())?;
+                                    emit_stream(app, chat_id, to_emit, false, None)?;
                                     *emitted = safe_end;
                                 }
                             }
@@ -189,11 +187,13 @@ async fn stream_once(
         if let InFlightBlock::Text { text: acc, emitted } = block {
             let visible_end = acc.find("---MEMORY").unwrap_or(acc.len());
             if visible_end > *emitted {
-                app.emit("ollama-stream", StreamPayload {
-                    content: acc[*emitted..visible_end].to_string(),
-                    done: false,
-                    brief: None,
-                }).ok();
+                emit_stream_quiet(
+                    app,
+                    chat_id,
+                    acc[*emitted..visible_end].to_string(),
+                    false,
+                    None,
+                );
             }
         }
     }
@@ -223,9 +223,13 @@ async fn stream_once(
 
 /// Tauri command — streams a chat completion from the Claude API with
 /// full agentic tool-calling support.
+///
+/// `chat_id` is the active chat's ID — broadcast with every stream chunk so peer
+/// devices can route the chunk into the matching conversation in their UI.
 #[tauri::command]
 pub async fn chat_claude(
     app: AppHandle,
+    chat_id: String,
     messages: Vec<InputMessage>,
     model: String,
     character: Option<crate::ai::types::CharacterOverride>,
@@ -325,11 +329,7 @@ pub async fn chat_claude(
     for round in 0..MAX_AGENT_LOOPS {
         if should_cancel(&app) {
             hide_overlay(&app);
-            app.emit("ollama-stream", StreamPayload {
-                content: "\n\n[Cancelled by user]".to_string(),
-                done: true,
-                brief: None,
-            }).ok();
+            emit_stream_quiet(&app, &chat_id, "\n\n[Cancelled by user]".to_string(), true, None);
             return Ok(());
         }
 
@@ -345,15 +345,11 @@ pub async fn chat_claude(
             .cloned()
             .collect();
 
-        let result = match stream_once(&app, &api_key, &system, &conversation, &tool_schemas, &model).await {
+        let result = match stream_once(&app, &chat_id, &api_key, &system, &conversation, &tool_schemas, &model).await {
             Ok(r) => r,
             Err(e) if e == "CANCELLED" => {
                 hide_overlay(&app);
-                app.emit("ollama-stream", StreamPayload {
-                    content: "\n\n[Cancelled by user]".to_string(),
-                    done: true,
-                    brief: None,
-                }).ok();
+                emit_stream_quiet(&app, &chat_id, "\n\n[Cancelled by user]".to_string(), true, None);
                 return Ok(());
             }
             Err(e) => {
@@ -362,21 +358,22 @@ pub async fn chat_claude(
             }
         };
 
-        app.emit("agent-status", AgentStatusPayload {
-            message: format!(
+        emit_status(
+            &app,
+            &chat_id,
+            format!(
                 "[round {round}] tool_calls={} content_len={}",
                 result.tool_calls.len(),
                 result.text.len()
             ),
-        }).ok();
+        );
 
         if result.tool_calls.is_empty() {
             hide_overlay(&app);
 
             let brief = extract_brief(&result.text);
 
-            app.emit("ollama-stream", StreamPayload { content: String::new(), done: true, brief })
-                .map_err(|e| e.to_string())?;
+            emit_stream(&app, &chat_id, String::new(), true, brief)?;
             return Ok(());
         }
 
@@ -402,17 +399,11 @@ pub async fn chat_claude(
         for call in &result.tool_calls {
             if should_cancel(&app) {
                 hide_overlay(&app);
-                app.emit("ollama-stream", StreamPayload {
-                    content: "\n\n[Cancelled by user]".to_string(),
-                    done: true,
-                    brief: None,
-                }).ok();
+                emit_stream_quiet(&app, &chat_id, "\n\n[Cancelled by user]".to_string(), true, None);
                 return Ok(());
             }
 
-            app.emit("agent-status", AgentStatusPayload {
-                message: format!("Running tool: {}", call.name),
-            }).ok();
+            emit_status(&app, &chat_id, format!("Running tool: {}", call.name));
 
             let output = execute_tool_with_context(&app, &call.name, &call.input, &tool_context)
                 .await

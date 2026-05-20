@@ -6,7 +6,7 @@ use tauri::AppHandle;
 
 use crate::session::store;
 use super::exec::exec_handler;
-use super::types::{CharacterImportRequest, ChatImportRequest, OllamaModelImportRequest, OllamaModelPayload, PersonaImportRequest, PingQuery, PingResponse, RegisterRequest, ToolRequest, ToolResponse, UnpairRequest};
+use super::types::{CharacterImportRequest, ChatImportRequest, OllamaModelImportRequest, OllamaModelPayload, OverlayRequest, PcPermissionsImportRequest, PcPermissionsPayload, PersonaImportRequest, PersonaPayload, PersonaSettingImportRequest, PingQuery, PingResponse, RegisterRequest, ToolRequest, ToolResponse, UnpairRequest};
 
 // ── Server state ─────────────────────────────────────────────────────────────
 
@@ -95,11 +95,13 @@ async fn register_handler(
     let peer_for_char = peer.clone();
     let peer_for_persona = peer.clone();
     let peer_for_settings = peer.clone();
+    let peer_for_sse = peer.clone();
     tauri::async_runtime::spawn(async move {
         super::sync::chat::sync_after_pair(&app_for_sync, &peer).await;
         super::sync::character::sync_after_pair(&app_for_sync, &peer_for_char).await;
         super::sync::skills::sync_after_pair(&app_for_sync, &peer_for_persona).await;
         super::sync::settings::sync_after_pair(&app_for_sync, &peer_for_settings).await;
+        super::sse_subscriber::ensure_subscriber(&app_for_sync, peer_for_sse);
     });
 
     // Notify frontend immediately: new device added + it's now online.
@@ -157,6 +159,7 @@ async fn unpair_handler(
         return StatusCode::UNAUTHORIZED;
     }
     let _ = store::remove_peer(&app, &body.device_id);
+    super::sse_subscriber::stop_subscriber(&body.device_id);
     use tauri::Emitter;
     app.emit("session-changed", serde_json::json!({})).ok();
     StatusCode::OK
@@ -272,6 +275,92 @@ async fn ollama_model_import_handler(
     }
 }
 
+/// GET /settings/persona?key=<hash_key> — return this device's selected persona.
+async fn persona_setting_export_handler(
+    State(app): State<BridgeState>,
+    Query(query): Query<PingQuery>,
+) -> Result<Json<PersonaPayload>, StatusCode> {
+    let cfg = store::bootstrap(&app);
+    if query.key != cfg.hash_key {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    Ok(Json(PersonaPayload { persona: cfg.persona }))
+}
+
+/// POST /settings/persona — peer pushes its selected persona to us.
+async fn persona_setting_import_handler(
+    State(app): State<BridgeState>,
+    Json(body): Json<PersonaSettingImportRequest>,
+) -> StatusCode {
+    let cfg = store::bootstrap(&app);
+    if body.key != cfg.hash_key {
+        return StatusCode::UNAUTHORIZED;
+    }
+    // Use the silent setter to avoid re-broadcasting back to the sender.
+    match store::set_persona_quiet(&app, &body.persona) {
+        Ok(_) => {
+            use tauri::Emitter;
+            let _ = app.emit("session-changed", serde_json::json!({}));
+            StatusCode::OK
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+/// GET /settings/pc_permissions?key=<hash_key>
+async fn pc_permissions_export_handler(
+    State(app): State<BridgeState>,
+    Query(query): Query<PingQuery>,
+) -> Result<Json<PcPermissionsPayload>, StatusCode> {
+    let cfg = store::bootstrap(&app);
+    if query.key != cfg.hash_key {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    Ok(Json(PcPermissionsPayload { permissions: cfg.pc_permissions }))
+}
+
+/// POST /settings/pc_permissions — peer pushes new permission flags to us.
+async fn pc_permissions_import_handler(
+    State(app): State<BridgeState>,
+    Json(body): Json<PcPermissionsImportRequest>,
+) -> StatusCode {
+    let cfg = store::bootstrap(&app);
+    if body.key != cfg.hash_key {
+        return StatusCode::UNAUTHORIZED;
+    }
+    match store::set_pc_permissions_quiet(&app, body.permissions) {
+        Ok(_) => {
+            use tauri::Emitter;
+            let _ = app.emit("session-changed", serde_json::json!({}));
+            StatusCode::OK
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+/// POST /overlay — a paired peer asks us to show/hide the recording-dot overlay.
+/// Only meaningful on Android; on desktop this is silently a no-op.
+async fn overlay_handler(
+    State(app): State<BridgeState>,
+    Json(body): Json<OverlayRequest>,
+) -> StatusCode {
+    let cfg = store::bootstrap(&app);
+    if body.key != cfg.hash_key {
+        return StatusCode::UNAUTHORIZED;
+    }
+    match body.action.as_str() {
+        "show" => {
+            crate::device::phone::show_overlay_local(&app);
+            StatusCode::OK
+        }
+        "hide" => {
+            crate::device::phone::hide_overlay_local(&app);
+            StatusCode::OK
+        }
+        _ => StatusCode::BAD_REQUEST,
+    }
+}
+
 // ── Ollama proxy ─────────────────────────────────────────────────────────────
 
 /// Proxy any request to the local Ollama instance, forwarding method/headers/body.
@@ -335,6 +424,7 @@ pub fn start_bridge_server(app: AppHandle) {
             cfg.bridge_port
         };
 
+        let app_for_sse = app.clone();
         let state: BridgeState = Arc::new(app);
 
         let router = Router::new()
@@ -349,6 +439,10 @@ pub fn start_bridge_server(app: AppHandle) {
             .route("/personas/export", get(persona_export_handler))
             .route("/personas/import", post(persona_import_handler))
             .route("/settings/ollama_model", get(ollama_model_export_handler).post(ollama_model_import_handler))
+            .route("/settings/persona", get(persona_setting_export_handler).post(persona_setting_import_handler))
+            .route("/settings/pc_permissions", get(pc_permissions_export_handler).post(pc_permissions_import_handler))
+            .route("/overlay", post(overlay_handler))
+            .route("/events", get(super::sse::events_handler))
             .route("/exec", post(exec_handler))
             .route("/proxy/ollama/*path", any(ollama_proxy_handler))
             .with_state(state);
@@ -401,6 +495,11 @@ pub fn start_bridge_server(app: AppHandle) {
         };
 
         eprintln!("[bridge] listening on {}", listener.local_addr().unwrap());
+
+        // Open SSE subscribers to every paired peer so we mirror their stream/
+        // status/settings events in real time. New pairings will spawn their
+        // own subscriber via `ensure_subscriber` after pairing completes.
+        super::sse_subscriber::start_subscribers(&app_for_sse);
 
         if let Err(e) = axum::serve(
             listener,

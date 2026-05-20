@@ -8,6 +8,11 @@ type CharacterOverride = { id?: string; name: string; persona: string; backgroun
 /**
  * Manages the full Ollama agentic chat lifecycle.
  * Persists messages per chat ID; creates a new chat on first send when chatId is null.
+ *
+ * Listens for both local stream events (this device triggered the chat) and
+ * remote events broadcast by a paired peer via SSE — events whose `chat_id`
+ * matches the active chat are applied in real time so the two devices stay
+ * mirrored while an LLM is talking on either side.
  */
 export function useOllamaChat(
   model: string,
@@ -44,9 +49,6 @@ export function useOllamaChat(
       currentChatIdRef.current = chatId;
       return;
     }
-    unlistenStreamRef.current?.();
-    unlistenStatusRef.current?.();
-    unlistenInjectedRef.current?.();
     currentChatIdRef.current = chatId;
     setMessages(initialMessages);
     messagesRef.current = initialMessages;
@@ -55,99 +57,130 @@ export function useOllamaChat(
     setAgentStatus(null);
   }, [chatId]);
 
+  // ── Global listeners (mounted once for the hook's lifetime) ───────────────
+  // The listeners stay active across multiple `runChat` calls so that streams
+  // broadcast by a paired peer (where this device isn't the one driving the
+  // chat loop) still update the UI in real time.
   useEffect(() => {
+    let cancelled = false;
+
+    const handleStream = (payload: StreamPayload) => {
+      const { content, done, brief, chat_id, remote } = payload;
+      const targetChatId = chat_id ?? currentChatIdRef.current;
+      // Ignore events for other chats (the active one is the only one we render).
+      if (targetChatId !== currentChatIdRef.current) return;
+
+      if (content) {
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (last?.role === 'assistant') {
+            copy[copy.length - 1] = { ...last, content: last.content + content };
+          } else {
+            // Remote stream began without a local placeholder — append one.
+            copy.push({ role: 'assistant', content });
+          }
+          messagesRef.current = copy;
+          return copy;
+        });
+        if (remote) {
+          // Mirror the "thinking" indicator while the peer is generating so
+          // the UI doesn't look idle.
+          setIsThinking(true);
+        }
+      }
+
+      if (done) {
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (last?.role === 'assistant' && last.content === '') {
+            copy[copy.length - 1] = { ...last, content: '(無回應)' };
+          }
+          if (brief) {
+            for (let i = copy.length - 1; i >= 0; i--) {
+              if (copy[i].role === 'assistant') {
+                copy[i] = { ...copy[i], brief };
+                break;
+              }
+            }
+          }
+          messagesRef.current = copy;
+          // Only the originating device saves to disk; the peer relies on the
+          // post-completion chat sync push to overwrite local state.
+          if (!remote && targetChatId) {
+            onSaveRef.current(targetChatId, copy);
+          }
+          return copy;
+        });
+        setIsThinking(false);
+        setAgentStatus(null);
+      }
+    };
+
+    const handleStatus = (payload: AgentStatusPayload) => {
+      const targetChatId = payload.chat_id ?? currentChatIdRef.current;
+      if (targetChatId !== currentChatIdRef.current) return;
+      setAgentStatus(payload.message);
+    };
+
+    const handleInjected = (content: string) => {
+      setMessages((prev) => {
+        const copy = [...prev];
+        const last = copy[copy.length - 1];
+        if (last?.role === 'assistant' && last.content === '') {
+          copy[copy.length - 1] = { role: 'assistant', content };
+        } else {
+          copy.push({ role: 'assistant', content });
+        }
+        copy.push({ role: 'assistant', content: '' });
+        messagesRef.current = copy;
+        return copy;
+      });
+    };
+
+    (async () => {
+      const stream = await listen<StreamPayload>('ollama-stream', (e) => handleStream(e.payload));
+      const status = await listen<AgentStatusPayload>('agent-status', (e) => handleStatus(e.payload));
+      const injected = await listen<{ content: string }>('ollama-injected-message',
+        (e) => handleInjected(e.payload.content));
+      if (cancelled) {
+        stream(); status(); injected();
+        return;
+      }
+      unlistenStreamRef.current = stream;
+      unlistenStatusRef.current = status;
+      unlistenInjectedRef.current = injected;
+    })();
+
     return () => {
+      cancelled = true;
       unlistenStreamRef.current?.();
       unlistenStatusRef.current?.();
       unlistenInjectedRef.current?.();
+      unlistenStreamRef.current = null;
+      unlistenStatusRef.current = null;
+      unlistenInjectedRef.current = null;
     };
   }, []);
 
-  // Shared stream runner — sets up listeners and invokes chat_ollama.
-  // Caller is responsible for updating messages state + messagesRef before calling.
+  // Shared stream runner — invokes chat_ollama / chat_claude.
+  // Listener wiring lives in the mount-time effect above so peer-driven
+  // streams continue to flow even when this device isn't the driver.
   const runChat = async (historyMessages: Message[], activeChatId: string) => {
     setError(null);
     setAgentStatus(null);
     setIsThinking(true);
 
     try {
-      unlistenStreamRef.current?.();
-      unlistenStatusRef.current?.();
-      unlistenInjectedRef.current?.();
-
-      unlistenStreamRef.current = await listen<StreamPayload>('ollama-stream', (event) => {
-        const { content, done, brief } = event.payload;
-
-        if (content) {
-          setMessages((prev) => {
-            const copy = [...prev];
-            const last = copy[copy.length - 1];
-            if (last?.role === 'assistant') {
-              copy[copy.length - 1] = { ...last, content: last.content + content };
-            }
-            messagesRef.current = copy;
-            return copy;
-          });
-        }
-
-        if (done) {
-          // Replace trailing empty assistant placeholder with a hint so the user
-          // sees that the round finished even when the model produced no text.
-          // (Previously this pop'd the bubble; that hid silent failures completely.)
-          setMessages((prev) => {
-            const copy = [...prev];
-            const last = copy[copy.length - 1];
-            if (last?.role === 'assistant' && last.content === '') {
-              copy[copy.length - 1] = { ...last, content: '(無回應)' };
-            }
-            // Attach brief to the last assistant message for history compression
-            if (brief) {
-              for (let i = copy.length - 1; i >= 0; i--) {
-                if (copy[i].role === 'assistant') {
-                  copy[i] = { ...copy[i], brief };
-                  break;
-                }
-              }
-            }
-            messagesRef.current = copy;
-            onSaveRef.current(activeChatId, copy);
-            return copy;
-          });
-          setIsThinking(false);
-          setAgentStatus(null);
-          unlistenStreamRef.current?.();
-          unlistenStatusRef.current?.();
-          unlistenInjectedRef.current?.();
-        }
-      });
-
-      unlistenStatusRef.current = await listen<AgentStatusPayload>('agent-status', (event) => {
-        setAgentStatus(event.payload.message);
-      });
-
-      // Listen for messages injected mid-loop via the send_message tool.
-      // Each injected message replaces the current empty placeholder and adds a new one.
-      unlistenInjectedRef.current = await listen<{ content: string }>('ollama-injected-message', (event) => {
-        const { content } = event.payload;
-        setMessages((prev) => {
-          const copy = [...prev];
-          const last = copy[copy.length - 1];
-          // Fill the current placeholder (or append if last isn't an empty placeholder)
-          if (last?.role === 'assistant' && last.content === '') {
-            copy[copy.length - 1] = { role: 'assistant', content };
-          } else {
-            copy.push({ role: 'assistant', content });
-          }
-          // Add a fresh placeholder for any subsequent streaming or injected messages
-          copy.push({ role: 'assistant', content: '' });
-          messagesRef.current = copy;
-          return copy;
-        });
-      });
-
       const provider = localStorage.getItem('phoneclaw_provider') ?? 'ollama';
       const command = provider === 'claude' ? 'chat_claude' : 'chat_ollama';
-      await invoke(command, { messages: historyMessages, model, character: character ?? null });
+      await invoke(command, {
+        chatId: activeChatId,
+        messages: historyMessages,
+        model,
+        character: character ?? null,
+      });
     } catch (err) {
       setIsThinking(false);
       setAgentStatus(null);
@@ -158,9 +191,6 @@ export function useOllamaChat(
         messagesRef.current = copy;
         return copy;
       });
-      unlistenStreamRef.current?.();
-      unlistenStatusRef.current?.();
-      unlistenInjectedRef.current?.();
     }
   };
 

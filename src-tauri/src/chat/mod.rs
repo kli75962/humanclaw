@@ -8,6 +8,11 @@ pub use fs::{export_chat_sync_payload, import_chat_sync_payload, ChatSyncChat, C
 fn emit_and_sync(app: &tauri::AppHandle) {
     use tauri::Emitter;
     let _ = app.emit("chat-sync-updated", serde_json::json!({}));
+    // Real-time hint to subscribed peers — the full snapshot still goes via the
+    // HTTP push below so offline peers catch up when they reconnect.
+    crate::network::sse::broadcast(crate::network::sse::SyncEvent::ChatUpdated {
+        chat_id: String::new(),
+    });
     let app_clone = app.clone();
     tauri::async_runtime::spawn(async move {
         crate::network::sync::chat::sync_to_all_peers(&app_clone).await;

@@ -11,8 +11,16 @@ pub struct CharacterOverride {
 }
 
 /// Payload emitted via the `ollama-stream` Tauri event for every token.
+///
+/// `chat_id` identifies which chat the stream belongs to so that listeners on
+/// the peer device can route the chunk to the correct conversation. `remote=true`
+/// means the chunk originated on a paired device (received via SSE).
 #[derive(Clone, Serialize)]
 pub struct StreamPayload {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chat_id: Option<String>,
+    #[serde(default)]
+    pub remote: bool,
     pub content: String,
     pub done: bool,
     /// LLM-generated brief of the response (included when `done=true`).
@@ -23,6 +31,10 @@ pub struct StreamPayload {
 /// Status update emitted while the agent is executing tools.
 #[derive(Clone, Serialize)]
 pub struct AgentStatusPayload {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chat_id: Option<String>,
+    #[serde(default)]
+    pub remote: bool,
     pub message: String,
 }
 

@@ -44,6 +44,7 @@ pub fn remove_paired_device(app: AppHandle, device_id: String) -> Result<Session
     let my_device_id = cfg.device.device_id.clone();
 
     let result = store::remove_peer(&app, &device_id)?;
+    crate::network::sse_subscriber::stop_subscriber(&device_id);
 
     // Fire-and-forget: tell the removed peer to drop us from its list too.
     if let Some(peer) = peer {
@@ -79,6 +80,10 @@ pub fn set_ollama_model(app: AppHandle, model: String) -> Result<SessionConfig, 
     tauri::async_runtime::spawn(async move {
         crate::network::sync::settings::push_ollama_model_to_all_peers(&app_for_push, &model_for_push).await;
     });
+    crate::network::sse::broadcast(crate::network::sse::SyncEvent::SettingsChanged {
+        field: "ollama_model".to_string(),
+        value: serde_json::Value::String(model),
+    });
     Ok(cfg)
 }
 
@@ -90,14 +95,35 @@ pub fn list_personas(app: AppHandle) -> Vec<String> {
     names
 }
 
-/// Set selected persona by skill name.
+/// Set selected persona by skill name. Pushed to paired peers in the background.
 #[tauri::command]
 pub fn set_persona(app: AppHandle, persona: String) -> Result<SessionConfig, String> {
-    store::set_persona(&app, &persona)
+    let cfg = store::set_persona(&app, &persona)?;
+    let app_for_push = app.clone();
+    let persona_for_push = persona.clone();
+    tauri::async_runtime::spawn(async move {
+        crate::network::sync::settings::push_persona_to_all_peers(&app_for_push, &persona_for_push).await;
+    });
+    crate::network::sse::broadcast(crate::network::sse::SyncEvent::SettingsChanged {
+        field: "persona".to_string(),
+        value: serde_json::Value::String(persona),
+    });
+    Ok(cfg)
 }
 
-/// Update PC control tool permissions.
+/// Update PC control tool permissions. Pushed to paired peers in the background.
 #[tauri::command]
 pub fn set_pc_permissions(app: AppHandle, permissions: PcPermissions) -> Result<SessionConfig, String> {
-    store::set_pc_permissions(&app, permissions)
+    let cfg = store::set_pc_permissions(&app, permissions.clone())?;
+    let app_for_push = app.clone();
+    let perms_for_push = permissions.clone();
+    tauri::async_runtime::spawn(async move {
+        crate::network::sync::settings::push_pc_permissions_to_all_peers(&app_for_push, &perms_for_push).await;
+    });
+    let value = serde_json::to_value(&permissions).unwrap_or(serde_json::Value::Null);
+    crate::network::sse::broadcast(crate::network::sse::SyncEvent::SettingsChanged {
+        field: "pc_permissions".to_string(),
+        value,
+    });
+    Ok(cfg)
 }

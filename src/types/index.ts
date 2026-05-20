@@ -163,6 +163,10 @@ export interface Message {
 
 /** Payload emitted by the `ollama-stream` Tauri event for every token. */
 export interface StreamPayload {
+  /** ID of the chat this chunk belongs to — used to route streams across devices. */
+  chat_id?: string;
+  /** True when the chunk originated on a paired device (received via SSE). */
+  remote?: boolean;
   content: string;
   done: boolean;
   /** LLM-generated brief, included when done=true. */
@@ -171,6 +175,8 @@ export interface StreamPayload {
 
 /** Emitted by `agent-status` when the LLM is executing a tool. */
 export interface AgentStatusPayload {
+  chat_id?: string;
+  remote?: boolean;
   message: string;
 }
 

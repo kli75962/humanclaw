@@ -3,6 +3,7 @@ pub mod ollama;
 pub(crate) mod types;
 pub(crate) mod prompt;
 pub(crate) mod history;
+pub(crate) mod emit;
 mod explain;
 
 use std::sync::atomic::{AtomicBool, Ordering};

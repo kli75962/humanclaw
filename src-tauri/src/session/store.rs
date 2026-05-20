@@ -184,7 +184,10 @@ pub fn set_ollama_model(app: &AppHandle, model: &str) -> Result<SessionConfig, S
 }
 
 /// Set the selected persona skill.
-pub fn set_persona(app: &AppHandle, persona: &str) -> Result<SessionConfig, String> {
+///
+/// `_quiet` variant is used by the bridge import handler — it persists the change
+/// without re-broadcasting to peers (which would echo back to the original sender).
+pub fn set_persona_quiet(app: &AppHandle, persona: &str) -> Result<SessionConfig, String> {
     let persona = persona.trim();
     if persona.is_empty() {
         return Err("Persona is required".to_string());
@@ -204,10 +207,21 @@ pub fn set_persona(app: &AppHandle, persona: &str) -> Result<SessionConfig, Stri
     Ok(cfg)
 }
 
+pub fn set_persona(app: &AppHandle, persona: &str) -> Result<SessionConfig, String> {
+    set_persona_quiet(app, persona)
+}
+
 /// Update PC control tool permissions.
-pub fn set_pc_permissions(app: &AppHandle, permissions: PcPermissions) -> Result<SessionConfig, String> {
+///
+/// `_quiet` variant is used by the bridge import handler — it persists the change
+/// without re-broadcasting to peers.
+pub fn set_pc_permissions_quiet(app: &AppHandle, permissions: PcPermissions) -> Result<SessionConfig, String> {
     let mut cfg = load(app).ok_or("Session not initialised")?;
     cfg.pc_permissions = permissions;
     save(app, &cfg)?;
     Ok(cfg)
+}
+
+pub fn set_pc_permissions(app: &AppHandle, permissions: PcPermissions) -> Result<SessionConfig, String> {
+    set_pc_permissions_quiet(app, permissions)
 }
