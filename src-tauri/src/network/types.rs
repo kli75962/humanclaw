@@ -136,3 +136,10 @@ pub struct OverlayRequest {
     pub key: String,
     pub action: String,
 }
+
+/// Request body for `POST /cancel` — a paired phone is signalling that the user
+/// tapped the overlay cancel button while a peer was driving the agent loop.
+#[derive(Deserialize)]
+pub struct CancelRequest {
+    pub key: String,
+}

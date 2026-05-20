@@ -39,6 +39,10 @@ pub enum SyncEvent {
         field: String,
         value: serde_json::Value,
     },
+    /// The user tapped the cancel button on a paired phone's overlay while a
+    /// peer was running the agent loop on its behalf — peers receiving this
+    /// should stop their currently running chat.
+    Cancel,
 }
 
 fn channel() -> &'static broadcast::Sender<SyncEvent> {

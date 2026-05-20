@@ -8,7 +8,7 @@ use crate::chat::bootstrap_memory;
 use crate::device::phone::{hide_overlay, show_overlay};
 use crate::skills::load_tool_schemas;
 use crate::tools::{execute_tool_with_context, ToolExecutionContext};
-use crate::ai::prompt::{build_base_prompt, prepare_system, should_cancel};
+use crate::ai::prompt::{build_base_prompt, prepare_system, should_cancel, wait_until_cancelled};
 use crate::ai::types::MAX_AGENT_LOOPS;
 use crate::ai::history::{
     compress_text_history, extract_brief, memory_instruction,
@@ -100,7 +100,16 @@ async fn stream_once(
     let mut blocks: HashMap<usize, InFlightBlock> = HashMap::new();
     let mut stop_reason = String::new();
 
-    while let Some(chunk_result) = byte_stream.next().await {
+    loop {
+        let chunk_result = tokio::select! {
+            next = byte_stream.next() => match next {
+                Some(r) => r,
+                None => break,
+            },
+            _ = wait_until_cancelled(app.clone()) => {
+                return Err("CANCELLED".to_string());
+            }
+        };
         if should_cancel(app) {
             return Err("CANCELLED".to_string());
         }
@@ -405,9 +414,15 @@ pub async fn chat_claude(
 
             emit_status(&app, &chat_id, format!("Running tool: {}", call.name));
 
-            let output = execute_tool_with_context(&app, &call.name, &call.input, &tool_context)
-                .await
-                .output;
+            let tool_fut = execute_tool_with_context(&app, &call.name, &call.input, &tool_context);
+            let output = tokio::select! {
+                r = tool_fut => r.output,
+                _ = wait_until_cancelled(app.clone()) => {
+                    hide_overlay(&app);
+                    emit_stream_quiet(&app, &chat_id, "\n\n[Cancelled by user]".to_string(), true, None);
+                    return Ok(());
+                }
+            };
 
             result_blocks.push(ClaudeBlock::ToolResult {
                 tool_use_id: call.id.clone(),

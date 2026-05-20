@@ -133,6 +133,9 @@ fn apply_event(app: &AppHandle, event: SyncEvent) {
             apply_setting_locally(app, &field, &value);
             let _ = app.emit("session-changed", serde_json::json!({}));
         }
+        SyncEvent::Cancel => {
+            crate::ai::CHAT_CANCEL.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
     }
 }
 

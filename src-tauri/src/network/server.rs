@@ -6,7 +6,7 @@ use tauri::AppHandle;
 
 use crate::session::store;
 use super::exec::exec_handler;
-use super::types::{CharacterImportRequest, ChatImportRequest, OllamaModelImportRequest, OllamaModelPayload, OverlayRequest, PcPermissionsImportRequest, PcPermissionsPayload, PersonaImportRequest, PersonaPayload, PersonaSettingImportRequest, PingQuery, PingResponse, RegisterRequest, ToolRequest, ToolResponse, UnpairRequest};
+use super::types::{CancelRequest, CharacterImportRequest, ChatImportRequest, OllamaModelImportRequest, OllamaModelPayload, OverlayRequest, PcPermissionsImportRequest, PcPermissionsPayload, PersonaImportRequest, PersonaPayload, PersonaSettingImportRequest, PingQuery, PingResponse, RegisterRequest, ToolRequest, ToolResponse, UnpairRequest};
 
 // ── Server state ─────────────────────────────────────────────────────────────
 
@@ -338,6 +338,21 @@ async fn pc_permissions_import_handler(
     }
 }
 
+/// POST /cancel — a paired phone reports its overlay cancel button was tapped.
+/// We set the local chat-cancel flag so any agent loop running on this device
+/// exits on the next round check.
+async fn cancel_handler(
+    State(app): State<BridgeState>,
+    Json(body): Json<CancelRequest>,
+) -> StatusCode {
+    let cfg = store::bootstrap(&app);
+    if body.key != cfg.hash_key {
+        return StatusCode::UNAUTHORIZED;
+    }
+    crate::ai::CHAT_CANCEL.store(true, std::sync::atomic::Ordering::Relaxed);
+    StatusCode::OK
+}
+
 /// POST /overlay — a paired peer asks us to show/hide the recording-dot overlay.
 /// Only meaningful on Android; on desktop this is silently a no-op.
 async fn overlay_handler(
@@ -442,6 +457,7 @@ pub fn start_bridge_server(app: AppHandle) {
             .route("/settings/persona", get(persona_setting_export_handler).post(persona_setting_import_handler))
             .route("/settings/pc_permissions", get(pc_permissions_export_handler).post(pc_permissions_import_handler))
             .route("/overlay", post(overlay_handler))
+            .route("/cancel", post(cancel_handler))
             .route("/events", get(super::sse::events_handler))
             .route("/exec", post(exec_handler))
             .route("/proxy/ollama/*path", any(ollama_proxy_handler))

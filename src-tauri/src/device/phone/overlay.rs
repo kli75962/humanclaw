@@ -2,6 +2,10 @@ use tauri::AppHandle;
 #[cfg(target_os = "android")]
 use serde::Deserialize;
 #[cfg(target_os = "android")]
+use std::sync::{Mutex, OnceLock};
+#[cfg(target_os = "android")]
+use tauri::async_runtime::JoinHandle;
+#[cfg(target_os = "android")]
 use tauri::Manager;
 
 /// Used to deserialize the `{ "value": bool }` response from isCancelled.
@@ -50,6 +54,7 @@ pub fn show_overlay_local(app: &AppHandle) {
         use crate::device::phone::plugin::PhoneControlHandle;
         let handle = app.state::<PhoneControlHandle<tauri::Wry>>();
         let _ = handle.0.run_mobile_plugin::<serde_json::Value>("showOverlay", NoArgs {});
+        start_cancel_poller(app);
     }
     let _ = app;
 }
@@ -60,8 +65,67 @@ pub fn hide_overlay_local(app: &AppHandle) {
         use crate::device::phone::plugin::PhoneControlHandle;
         let handle = app.state::<PhoneControlHandle<tauri::Wry>>();
         let _ = handle.0.run_mobile_plugin::<serde_json::Value>("hideOverlay", NoArgs {});
+        stop_cancel_poller();
     }
     let _ = app;
+}
+
+/// Background task that polls the Kotlin overlay's `isCancelled` flag every
+/// 200 ms while the overlay is visible. When the user taps the red dot, we
+/// broadcast a `Cancel` SSE event to every paired peer so a PC that is currently
+/// driving the agent loop will stop. Also sets the local cancel flag so chat
+/// loops running on this device exit on the next round check.
+#[cfg(target_os = "android")]
+fn poller_slot() -> &'static Mutex<Option<JoinHandle<()>>> {
+    static SLOT: OnceLock<Mutex<Option<JoinHandle<()>>>> = OnceLock::new();
+    SLOT.get_or_init(|| Mutex::new(None))
+}
+
+#[cfg(target_os = "android")]
+fn start_cancel_poller(app: &AppHandle) {
+    let mut slot = poller_slot().lock().unwrap();
+    if let Some(existing) = slot.take() {
+        existing.abort();
+    }
+    let app = app.clone();
+    let handle = tauri::async_runtime::spawn(async move {
+        loop {
+            if is_cancelled(&app) {
+                crate::ai::CHAT_CANCEL.store(true, std::sync::atomic::Ordering::Relaxed);
+                // Belt-and-braces: SSE for subscribed peers, plus a direct POST
+                // so even peers whose SSE connection is mid-reconnect still hear
+                // the cancel without waiting for the stream to re-establish.
+                crate::network::sse::broadcast(crate::network::sse::SyncEvent::Cancel);
+                push_cancel_to_peers(&app);
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    });
+    *slot = Some(handle);
+}
+
+#[cfg(target_os = "android")]
+fn stop_cancel_poller() {
+    if let Some(existing) = poller_slot().lock().unwrap().take() {
+        existing.abort();
+    }
+}
+
+#[cfg(target_os = "android")]
+fn push_cancel_to_peers(app: &AppHandle) {
+    let cfg = crate::session::store::bootstrap(app);
+    if cfg.paired_devices.is_empty() { return; }
+    let key = cfg.hash_key;
+    let peers = cfg.paired_devices;
+    tauri::async_runtime::spawn(async move {
+        let client = crate::network::bridge_client();
+        for peer in &peers {
+            let url = format!("http://{}/cancel", peer.address);
+            let body = serde_json::json!({ "key": key });
+            let _ = client.post(&url).json(&body).send().await;
+        }
+    });
 }
 
 #[cfg(not(target_os = "android"))]

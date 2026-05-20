@@ -71,3 +71,13 @@ pub fn should_cancel(app: &AppHandle) -> bool {
     crate::ai::CHAT_CANCEL.load(std::sync::atomic::Ordering::Relaxed)
         || crate::device::phone::is_cancelled(app)
 }
+
+/// Future that resolves the moment `should_cancel` becomes true. Use inside
+/// `tokio::select!` to abort an in-flight tool call or HTTP request the instant
+/// the user cancels — no waiting for the next agent-round checkpoint.
+pub async fn wait_until_cancelled(app: AppHandle) {
+    loop {
+        if should_cancel(&app) { return; }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+}

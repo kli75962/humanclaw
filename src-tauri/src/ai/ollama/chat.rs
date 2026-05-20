@@ -9,7 +9,7 @@ use crate::device::phone::{hide_overlay, show_overlay};
 use crate::skills::load_tool_schemas;
 use crate::tools::{execute_tool_with_context, ToolExecutionContext};
 use crate::ai::ollama::types::tool_message;
-use crate::ai::prompt::{build_base_prompt, prepare_system, should_cancel};
+use crate::ai::prompt::{build_base_prompt, prepare_system, should_cancel, wait_until_cancelled};
 use crate::ai::types::MAX_AGENT_LOOPS;
 use crate::ai::history::{
     compress_text_history, extract_brief, memory_instruction,
@@ -69,11 +69,20 @@ async fn stream_once(
     const CHUNK_IDLE_SECS: u64 = 120;
 
     loop {
-        let next = timeout(Duration::from_secs(CHUNK_IDLE_SECS), byte_stream.next()).await;
-        let chunk_result = match next {
-            Ok(Some(r)) => r,
-            Ok(None) => break,                       // stream ended normally
-            Err(_) => return Err(format!("Ollama stream timed out after {CHUNK_IDLE_SECS}s — model may be too slow or stalled")),
+        // Race the chunk wait against the cancel future so a tap on the phone
+        // overlay aborts the stream immediately rather than after the next
+        // Ollama chunk lands.
+        let chunk_result = tokio::select! {
+            next = timeout(Duration::from_secs(CHUNK_IDLE_SECS), byte_stream.next()) => {
+                match next {
+                    Ok(Some(r)) => r,
+                    Ok(None) => break,
+                    Err(_) => return Err(format!("Ollama stream timed out after {CHUNK_IDLE_SECS}s — model may be too slow or stalled")),
+                }
+            }
+            _ = wait_until_cancelled(app.clone()) => {
+                return Err("CANCELLED".to_string());
+            }
         };
 
         if should_cancel(app) {
@@ -363,9 +372,15 @@ pub async fn chat_ollama(
             emit_status(&app, &chat_id, format!("Running tool: {tool_name}"));
 
             eprintln!("[chat] tool start: {tool_name}");
-            let output = execute_tool_with_context(&app, tool_name, tool_args, &tool_context)
-                .await
-                .output;
+            let tool_fut = execute_tool_with_context(&app, tool_name, tool_args, &tool_context);
+            let output = tokio::select! {
+                r = tool_fut => r.output,
+                _ = wait_until_cancelled(app.clone()) => {
+                    hide_overlay(&app);
+                    emit_stream_quiet(&app, &chat_id, "\n\n[Cancelled by user]".to_string(), true, None);
+                    return Ok(());
+                }
+            };
             eprintln!("[chat] tool end:   {tool_name} output_len={}", output.len());
 
             tool_history.push(tool_message(truncate_tool_output(tool_name, output)));
