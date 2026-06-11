@@ -1,42 +1,8 @@
-use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 #[cfg(target_os = "android")]
 use tauri::Manager;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InstalledApp {
-    pub name: String,
-    pub package_name: String,
-    pub is_system: bool,
-}
 
-impl InstalledApp {
-    /// Format entries into a compact list line for the system prompt.
-    pub fn prompt_line(&self) -> String {
-        format!("- {} ({})", self.name, self.package_name)
-    }
-}
-
-/// Fetch all installed apps.
-/// On Android this calls the Kotlin PhoneControlPlugin directly.
-/// On desktop it forwards the request to the paired Android device via the bridge.
-pub async fn get_installed_apps(app: &AppHandle) -> Vec<InstalledApp> {
-    #[cfg(target_os = "android")]
-    {
-        fetch_from_plugin(app).await.unwrap_or_default()
-    }
-
-    #[cfg(not(target_os = "android"))]
-    {
-        fetch_from_bridge(app).await.unwrap_or_default()
-    }
-}
-
-#[cfg(not(target_os = "android"))]
-async fn fetch_from_bridge(_app: &AppHandle) -> Result<Vec<InstalledApp>, String> {
-    // App list is only available on-device; desktop sessions have no access.
-    Ok(vec![])
-}
 
 #[cfg(target_os = "android")]
 async fn fetch_from_plugin(app: &AppHandle) -> Result<Vec<InstalledApp>, String> {

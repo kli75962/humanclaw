@@ -293,15 +293,6 @@ pub async fn increment_verified_count(app: &AppHandle, pkg: &str, name: &str) {
 
 // ── Local packages with maps (for system prompt) ──────────────────────────────
 
-pub fn list_packages_with_maps(app: &AppHandle) -> Vec<String> {
-    let root = app.path().app_data_dir().unwrap_or_default().join("gesture_maps");
-    let Ok(entries) = std::fs::read_dir(&root) else { return vec![] };
-    entries
-        .flatten()
-        .filter(|e| e.path().is_dir())
-        .map(|e| e.file_name().to_string_lossy().to_string())
-        .collect()
-}
 
 // ── Tool routing ──────────────────────────────────────────────────────────────
 
