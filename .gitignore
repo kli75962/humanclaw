@@ -31,5 +31,8 @@ dist-ssr
 # Live2D model files (redistribution prohibited)
 src-tauri/live2d-src/
 src-tauri/live2d-encrypted/
+!src-tauri/live2d-encrypted/
+src-tauri/live2d-encrypted/*
+!src-tauri/live2d-encrypted/placeholder.txt
 src-tauri/src/live2d_key.rs
 scripts/
